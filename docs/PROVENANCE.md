@@ -11,6 +11,11 @@ No project-wide redistribution licence is selected in this initial private build
 The detailed ledgers linked here are part of this register and enumerate exact
 files, licences, usage and limits for each component.
 
+[AS2 global baseline](AS2_GLOBAL_BASELINE.md) records the private native bootstrap
+inventory, deferred binding identities and later conditional host submissions.
+Its source is the owner-held retail executable studied through REA; these static
+observations do not establish a live initialized namespace.
+
 | Source | Licence / identity | Used for | Detailed file register |
 | --- | --- | --- | --- |
 | [MHServerEmu](https://github.com/Crypto137/MHServerEmu), read-only `/home/blizz/dev/marvel-heroes/MHServerEmu` | AGPL-3.0; observed HEAD `8fedb1a35922adfc9bff77e54f5fc3b6956073c9` | SIP fields, raw LZ4 designation, Calligraphy v11 metadata layout; source/docs studied, implementation written here | [SIP](SIP_FORMAT.md), [Calligraphy](CALLIGRAPHY_FORMAT.md) |

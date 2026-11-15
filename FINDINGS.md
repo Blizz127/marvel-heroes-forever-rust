@@ -445,3 +445,12 @@ Receipts: `evidence/build-0.1.0-dev.8-smoke.json`,
 `evidence/avm1-runtime/host-object-fields-evidence.json` and
 `evidence/animation-timing/validation.json`. Dependency notices cover 114 packages
 and 217 texts without collection issues. Publication remains unconfirmed.
+
+**VERIFIED (private dev.8 staging, 2026-11-15 09:42 UTC):** All 296 packaged file
+hashes and packaged version/Original checks pass at clean source
+`f4340908a55a64a0a3966be05011081296b6a970`. Only findings/provenance prose differs
+from the tested source; the binary is identical. Artifact:
+`builds/0.1.0-dev.8` under the private project root. Receipt:
+`evidence/build-0.1.0-dev.8-package-validation.json`. The coordinator intake is
+queued and supersedes dev.7's Rust diagnostic only. Staging does not confirm
+publication or owner-device validation.
