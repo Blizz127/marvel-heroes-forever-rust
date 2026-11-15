@@ -211,3 +211,130 @@ skill/native guidance (MIT toolkit); Rizin (LGPL-3.0-only); Python standard
 library (PSF) for original PE/span/receipt validation and unwind-boundary
 navigation. No outside VM or SDK implementation was read or copied. Raw
 native code, tables, assets and extracted source remain private outside git.
+
+## Follow-up: concrete level-root name assignment
+
+**VERIFIED bounded static producer:** the AS2 root setup path has an explicit
+name assignment before level-zero publication. This is separate from the lazy
+`instance{0}` generator above. It still does **not** establish the name currently
+read by the actual manager movie.
+
+Retained complete root setup **`0x140210180..0x14021034d`** obtains its case-3
+target through the concrete source factory `0x140178440`. It then calls
+`0x1400b5150(target,1)`, derives the actual AVM owner from target `+0x6d`, and
+calls **`0x1401871a0(owner,0)` at `0x1402102e8`**. Only afterward does it call
+`0x14005fdb0(MovieImpl,0,target)` to publish level zero. The binding is grounded
+in the original root/factory evidence described in
+[REA_DISPLAY_LIFECYCLE.md](REA_DISPLAY_LIFECYCLE.md), not a function-name guess.
+
+Complete `0x1401871a0..0x140187407` retains the supplied level integer in ESI
+and the actual owner in R12. Its earlier work inserts the target's render node
+using the existing level ordering. At **`0x14018726e`** it stores the level in
+owner `+0x1d0`, then prepares a formatting buffer and supplies authenticated
+literal **`_level{0}`** at `0x14250fa28`. The helper chain supplies the retained
+integer at `0x140187347` to `0x1400804c0`, binds that formatting item through
+`0x140080c60`, and finalizes through `0x140081dc0`/`0x140082820`.
+
+At **`0x1401873b3`**, `0x140097410` interns the resulting buffer using the
+owner's embedded Environment/String-manager chain. The routine passes that
+exact StringNode to target virtual **`+0x3f0` at `0x1401873cb`**. The concrete
+case-3 slot **`0x142506dc0`** is **`0x1400b56f0`**, whose complete body calls
+the native name setter **`0x14009e930`** and clears target `+0xf8` afterward.
+
+This establishes the **level-zero input, exact template, output-buffer route
+and actual name-field assignment**. The formatter bodies and their precise
+integer substitution/termination semantics have not been recovered by this
+bounded study. `_level0` is therefore a plausible **INFERRED formatted result**,
+not a VERIFIED current manager-root name or an admitted default.
+
+### Native name field update
+
+Complete setter `0x14009e930..0x14009ea15` receives the actual target and
+StringNode reference. If the input node's `+0x20` length is nonzero, it clears
+target `+0x88` mask 2. For an existing public handle, it tail-calls complete
+**`0x14009a410..0x14009a537`** with the target's parent pointer. This helper
+retains the supplied StringNode, releases the prior one and stores it at
+**handle `+0x10` at `0x14009a441`**. Its conditional parent-path construction
+updates the separate handle `+0x18`; it does not replace the assigned name.
+
+For a missing handle, the setter allocates a 40-byte handle and calls the
+previously recovered `0x14009a2c0` with the supplied name, parent and target.
+That constructor stores this name at handle `+0x10` at `0x14009a2d8`.
+The setter publishes the resulting handle at target `+0x70` at
+`0x14009ea06`. Allocation failure and reference lifetimes remain real branches.
+This path does not invoke the generated-name helper merely because the handle
+was initially absent.
+
+The ordinary native `_name` setter case at `0x1401a926c..0x1401a929d` also
+converts its RHS through `0x1401a2920`, then calls this same name setter at
+`0x1401a928e`. This identifies a concrete later rename mechanism. It is not
+an implementation or a claim that such a rename occurred in the manager.
+
+The separately examined wrapper `0x14009f990` first uses this name setter,
+then updates handle `+0x20`; it must not be confused with the getter's
+`+0x10` field. Source-child attachment uses that wrapper, whereas the selected
+root level-name path uses target `+0x3f0`. The alternative factory
+`0x1402e7b40` does not establish the concrete AS2 root binding and is not used
+as a root-name witness.
+
+### Counter checkpoint and limits after naming
+
+Complete MovieImpl constructor `0x140065080..0x140065830` has a named store
+at **`0x140065743`** setting DWORD `+0x3b90` to zero from its preserved zero
+register. This is a constructor checkpoint, not the counter at a later getter
+or a proof of a generated ordinal for the root. The explicit level-name
+routine has no call to `0x14005ef90`, so its level parameter must not be
+substituted for that generator's counter.
+
+The level attachment helper invokes target `+0x3e0`, concretely complete
+`0x1400b3140`, before storing level-zero target at MovieImpl `+0x50`. This
+virtual updates status and dispatches further target helpers; it is not the
+explicit level-name formatter identified above. Root setup subsequently calls
+root virtuals `+0x110` and `+0x118`. The latter resolves to `0x140196a30`,
+which can process pending path-associated member assignments through a normal
+setter. These later operations, other resource calls, host work and queued
+original script are not a proved name-preservation closure.
+
+There is still no native capture showing the actual manager's current name,
+no complete game-to-this-root-setup invocation witness, and no verified absence
+of later renaming. The honest integration gate remains a coherently supplied
+current-name witness, or further proof that constructs and preserves that
+state. A filename, a literal template or a fresh counter is insufficient.
+
+### Follow-up evidence
+
+Seven new canonical records are retained in the private directory
+`evidence/rea-attached-root-name/`:
+
+| Record prefix | Selected evidence |
+| --- | --- |
+| `ev_4bffdd8a...` | Native `_name` setter entry case |
+| `ev_e5e22dd2...` | Complete target name setter and direct caller wrappers |
+| `ev_2305fce8...` | Complete existing-handle rename helper; alternative factory candidate |
+| `ev_149d3f95...` | Complete MovieImpl constructor and zero-counter store |
+| `ev_34376a91...` | Concrete level-attachment virtual slot and body |
+| `ev_3661ebc6...` | Complete root-target flag wrapper and owner level-name routine |
+| `ev_66f0ce59...` | Exact level-name template and concrete name-setter virtual slot |
+
+`verification.json` records complete IDs/paths and byte-checks **2,126
+instruction spans, 48 table bytes and 10 literal bytes**, including reused root
+setup, source factory, level publication and handle-constructor evidence.
+The alternative factory's trailing inline switch data is excluded from code
+coverage; candidate direct-call scans are discovery aids, not exhaustive xrefs.
+All seven new calls completed untruncated with exit zero and unchanged target
+hash; both investigation batches were exported/reset with no retained target.
+
+- Verification SHA-256:
+  `9a97153f71dacdc513d70b8d1c1e1cabb00206365a53a237097151d0a8b15b46`.
+- `checkpoint.bundle.json` SHA-256:
+  `d46a707c795b76b3ef146a2e19362ea86cf2ab8961fee6cb5d99945c05dd5191`.
+- `root-producer.bundle.json` SHA-256:
+  `428530bcd4bf390346856a3ebef6a83dc420e0442762c355471576d92200674d`.
+- `finding-summary.json` SHA-256:
+  `18eae4aa6eccaf2deabd1ec0f412fdb758d6f99553e5469c730f044ecae25023`.
+
+Additional sources read for this follow-up: original project lifecycle,
+target-initialization, class-registry and source-version documents and their
+private retained receipts. Executable/tool licences and private-only source
+handling are the same as above. No outside implementation or new external
+reference was read, and no native client or callback was executed.
