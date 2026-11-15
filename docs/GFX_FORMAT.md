@@ -67,6 +67,12 @@ no instruction interpretation or action validation is claimed. Unknown tags
 retain exact code/offset/length. Placement references are not fully resolved
 across imported movies by this module.
 
+Subsequent original readers now decode selected retained bodies separately:
+[shapes](GFX_SHAPES.md), [fonts/text](GFX_TEXT.md) and [AVM1 actions](AVM1_FORMAT.md).
+The envelope/static-frame API above still does not execute those instructions or
+compose their geometry. [Frontend binding](FRONTEND_READER.md) resolves saved
+external-image references against explicitly supplied package archives.
+
 ## Inferred GFX external image encoding
 
 **INFERRED from the owner's files:** All 716 tag-1009 payloads fit one exact

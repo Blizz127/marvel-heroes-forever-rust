@@ -128,3 +128,9 @@ identity and rendering are separate from the recorded range/decode checks.
 original font/glyph/static/editable-text parsing, plus the exact private Startup
 font movie and frontend samples. Glyph source spans are retained; font routing
 and native typography are not inferred from successful parsing.
+
+[Dependency notice collection](DEPENDENCIES.md) records Cargo-selected primary
+crate metadata and exact upstream supplementary notice sources, including the
+explicitly absent hexf-parse upstream notice and its separately identified CC0
+declaration/standard terms. These are build dependencies and attribution records,
+not proprietary game data or copied game-client implementations.

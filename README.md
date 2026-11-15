@@ -35,6 +35,9 @@ Private distribution preservation helpers are in `tools/`. Run the read-only
 inventory on the source install, copy only that manifest's selected files, then
 run `verify_pin.py` against the private copy. `package_build.py` stages the built
 original executable and documentation, with hashes; it does not publish a channel.
+It also accepts `--binary /absolute/path/to/mhf --profile dev` for an already
+checked development build. Renderer packages require `--dependency-notices`
+pointing to a complete collection from `tools/dependency_notices.py`.
 
 UE3 metadata inspection is also available for the observed version 868/3:
 
