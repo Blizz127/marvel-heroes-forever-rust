@@ -89,9 +89,34 @@ explicit QA option is active.
 
 ## Validation scope
 
-Focused feature compilation and task-local Xvfb execution are recorded below
-when complete. No user display, launcher, server session, account or Wine prefix
-is touched by this lane. Native runtime libraries copied for previous Ubuntu
+**VERIFIED:** The integrated window-feature build passes. A private fixture using
+the actual saved manager presents two frames; pointer/resize testing presents six
+frames and checks stage-center mapping, margin invalidation and a 1000x1000 to
+1000x800 resize. Exactly one GPU generation and one asset texture upload remain
+resident (16,384 bytes); normal frames upload no assets. A deliberately returned
+controller error is preserved, and the existing image API still presents two
+frames. A fixture's exact fractional f64 comparison was corrected to a 1e-6-twip
+tolerance, preserving the initial failure. Records and source hashes are in
+`evidence/native-scene-checks/result.json`, `attempt1/result.json`, `sources.json`
+and `outside-sources.json`. No suspend/resume or compositor pixel parity was run.
+
+**VERIFIED (integrated original handler):** The final dev.6 CLI's separate fresh
+Xvfb check sends movements through the original manager handler, resizes to
+1000x1000, and checks the cursor at (9600,12000) twips after surface point (250,500).
+The following margin movement leaves it there. The scene retains one texture and
+one GPU generation and presents multiple frames. `--seconds 10` closes through
+the native host deadline. Receipt: `evidence/dev6-native-pointer-attempt2/receipt.json`.
+This is XWarpPointer/XResizeWindow event delivery on llvmpipe, not physical-input,
+owner-device, native-retail visual or general initialized frontend parity.
+
+An earlier root check reached its window but synthetic XSendEvent Escape did not
+close it. Its timeout is retained in `evidence/dev6-native-pointer/receipt.json`.
+Winit requires a focused active window for key handling; absent focus on bare
+Xvfb is a supported explanation, not a proven diagnosis or physical Escape defect.
+The subsequent check uses the explicit QA deadline without synthetic key input.
+
+No user display, launcher, server session, account or Wine prefix
+was touched. Native runtime libraries copied for previous Ubuntu
 smokes stay under private `evidence/runtime-libs`; only test-child environment
 variables select them. They are not assumed portable to the owner's other OS.
 
@@ -108,6 +133,8 @@ reused as the native lifecycle/API foundation. Cached registry roots below are
 | Original project `src/window.rs`, `src/frontend/preview.rs`, `src/render.rs`, `gfx::scene::SceneNode`, `docs/{WINDOW,FRONTEND_PREVIEW,RENDERER}.md` | Original project source; component provenance already registered | Existing native format selection and diagnostics, reusable GPU assets, exact stage mapping and immutable scene identity contract |
 | Private pinned frontend/MarvelGame/MarvelFonts packages and prior original preparation/readback evidence | Proprietary owner-provided data for authorized compatibility study | Actual manager scene used only in private smoke fixtures; no asset or capture enters source commits |
 | Existing private `evidence/runtime-libs` manifests/notices and `docs/WINDOW.md` | Verified cached official Ubuntu runtime packages; notices retained privately | Reuse prior isolated native-test runtime without shared installation or portability assumptions |
+| `x11-dl-2.21.0/{Cargo.toml,src/xlib.rs,src/xtest.rs}` | MIT | C ABI declarations for the original private Xvfb driver; XTest signature was inspected but not invoked |
+| `winit-0.30.13/{src/window.rs,src/platform_impl/linux/x11/event_processor.rs}` | Apache-2.0 | Focus requirement and targeted synthetic-key diagnostic; exact hashes retained in the private source ledger |
 
 The root integrator owns CLI/controller wiring, build numbering, native player
 QA handoff and the global provenance ledger. This lane adds no dependency.
