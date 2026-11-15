@@ -49,6 +49,7 @@ fn usage() {
     );
     println!("  mhf upk class-defaults <package.upk> <logical-package-name> <1-based-class-index>");
     println!("  mhf upk model-geometry <package.upk> <1-based-model> [0-based-node ...]");
+    println!("  mhf upk model-resource <package.upk> <1-based-model> [0-based-record ...]");
     println!(
         "  mhf upk model-binding <package.upk> <1-based-level> <1-based-model> [1-based-component ...]"
     );
@@ -165,6 +166,51 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     ));
                 }
             }
+        }
+        "upk" if args.len() >= 4 && args[1] == "model-resource" => {
+            use marvel_heroes_forever::upk::model_render_resource::{Limits, ModelRenderResource};
+            let limits = Limits::default();
+            if args.len() - 4 > limits.records {
+                return Err(invalid("too many explicit Model resource selections"));
+            }
+            let export = text(&args[3])?
+                .parse::<usize>()
+                .ok()
+                .and_then(|number| number.checked_sub(1))
+                .ok_or_else(|| invalid("Model export index must be a positive integer"))?;
+            let selected = args[4..]
+                .iter()
+                .map(|value| {
+                    text(value)?
+                        .parse::<usize>()
+                        .map_err(|_| invalid("Model resource indices must be nonnegative integers"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let archive = PackageArchive::open(Path::new(&args[2]))?;
+            let bytes = archive.read_export(export)?;
+            let resource = ModelRenderResource::parse_export(
+                archive.package(),
+                export,
+                &bytes,
+                limits,
+            )?;
+            let records = selected
+                .iter()
+                .map(|&index| resource.record(index))
+                .collect::<std::io::Result<Vec<_>>>()?;
+            println!(
+                "VERIFIED saved Model resource: {} records, {} bytes each; {} selected occurrences",
+                resource.records.count, resource.records.stride, records.len(),
+            );
+            for record in records {
+                let [x, y, z] = record.position_bits;
+                let [u, v] = record.coordinate_bits;
+                println!(
+                    "Record {} at {}: position bits [{x:08x}, {y:08x}, {z:08x}], coordinate bits [{u:08x}, {v:08x}], basis {:02x?}, paired {:02x?}",
+                    record.index, record.span.offset, record.basis_bytes, record.paired_bytes,
+                );
+            }
+            println!("Explicit selections preserve order and duplicates. No runtime resources, materials or draw indices bound.");
         }
         "upk" if args.len() >= 4 && args[1] == "model-geometry" => {
             use marvel_heroes_forever::upk::model_node_geometry::{Limits, ModelNodeGeometry};

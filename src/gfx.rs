@@ -26,6 +26,10 @@ pub mod native_scale9_geometry;
 pub mod native_scale9_fill;
 #[path = "gfx/native_scale9_tessellation.rs"]
 pub mod native_scale9_tessellation;
+#[path = "gfx/native_scale9_antialias.rs"]
+pub mod native_scale9_antialias;
+#[path = "gfx/native_vertex_format.rs"]
+pub mod native_vertex_format;
 #[path = "gfx/scene.rs"]
 pub mod scene;
 #[path = "gfx/shapes.rs"]
