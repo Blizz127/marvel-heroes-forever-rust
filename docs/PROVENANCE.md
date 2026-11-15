@@ -519,3 +519,8 @@ case-3 ordinary-property fallback separately from TextField layout behavior.
 placement-loader evidence to retain each original record's source, mask and
 installation identity. Its 34-handler original-data check executes no scripts;
 runtime state, delivery and constructor scheduling remain separate requirements.
+
+[World payloads](UPK_WORLD.md) records the owned native serializers and original
+map comparisons used for ordered package-local links and preserved raw records.
+The parser and inspection command do not load the referenced Level or infer
+meaning for the remaining native fields.

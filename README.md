@@ -49,12 +49,17 @@ UE3 metadata inspection is also available for the observed version 868/3:
 mhf upk summary /private/path/MarvelFrontEndMap.upk
 mhf upk inspect /private/path/MarvelFrontEnd_SF.upk
 mhf upk exports /private/path/MarvelFrontEnd_SF.upk
+mhf upk world /private/path/MarvelEntry.upk theworld
 mhf frontend startup-map /private/path/MarvelFrontEndMap.upk
 ```
 
 This reads object tables and supported property/native payloads through bounded
 LZO decoding. Static and skeletal mesh geometry can be read through the library; material/world
 rendering and the playable frontend remain unimplemented.
+
+`upk world` reads the supported Engine.World native links and preserves its
+seven-word records exactly. It reports opaque trailing bytes and does not load
+or execute the linked Level. See [World payloads](docs/UPK_WORLD.md).
 
 `frontend startup-map` reports saved LevelLoaded links in their original order,
 OpenMovie resources, variable links and explicit flag origins. Missing serialized

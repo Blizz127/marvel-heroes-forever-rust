@@ -108,6 +108,15 @@ package decompression and dictionary extraction are shared provenance. Both
 original arrays are empty: nonempty-array behavior is backed by the native
 loop and synthetic checks, not an observed nonempty retail array.
 
+**VERIFIED integrated CLI:** `mhf upk world <package> <export>` reads both
+original World exports through the integrated module and reports their exact
+three-link/four-record layout, zero array entries and zero trailing bytes.
+PersistentLevel resolves to reference 1 in Entry and 11 in FrontEndMap. Selecting
+Entry's Level export rejects the wrong class. All three focused commands pass,
+both package hashes stay unchanged, and the default-feature build passes.
+Receipt: `evidence/world-cli-dev15/receipt.json`. This command does not load the
+Level or execute an object.
+
 Private evidence root: `evidence/entry-world-native/`.
 
 - `rea-evidence-bundle.json`: five REA records exported, then investigation

@@ -7,6 +7,7 @@ use marvel_heroes_forever::{
     upk::{
         Package, PackageArchive, Summary,
         objects::{ObjectProperties, supports_asset_class},
+        world::WorldObject,
     },
 };
 use std::{error::Error, ffi::OsString, io, path::Path, process::ExitCode};
@@ -43,6 +44,7 @@ fn usage() {
     println!("  mhf prototype verify <archive.sip>");
     println!("  mhf upk summary|inspect|exports <package.upk>");
     println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
+    println!("  mhf upk world <package.upk> <export-name|1-based-index>");
     println!("  mhf upk verify-objects <package.upk>");
     println!(
         "  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]"
@@ -157,7 +159,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             }
         }
-        "upk" if args.len() == 4 && args[1] == "properties" => {
+        "upk" if args.len() == 4 && (args[1] == "properties" || args[1] == "world") => {
             let archive = PackageArchive::open(Path::new(&args[2]))?;
             let package = archive.package();
             let selector = text(&args[3])?;
@@ -188,6 +190,19 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             };
             let bytes = archive.read_export(index)?;
+            if args[1] == "world" {
+                let world = WorldObject::parse_export(package, index, &bytes)?;
+                println!(
+                    "VERIFIED World payload: {} links, {} preserved seven-word records, {} array entries, {} opaque trailing bytes",
+                    world.links.len(), world.records.len(), world.reference_array_count,
+                    world.unknown_tail.length
+                );
+                for link in world.links.iter().take(100) {
+                    println!("{:?}: reference {} at export byte {}", link.slot, link.reference, link.span.offset);
+                }
+                println!("References remain package-local; records retain exact bits without inferred scalar types. No level loading or execution performed.");
+                return Ok(());
+            }
             let object = ObjectProperties::parse_export(package, index, &bytes)?;
             println!(
                 "VERIFIED {} property stream: {} tags, {} native payload bytes",

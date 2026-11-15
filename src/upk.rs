@@ -12,6 +12,8 @@ mod lzo;
 pub(crate) use lzo::decompress as decompress_lzo;
 #[path = "upk/objects.rs"]
 pub mod objects;
+#[path = "upk/world.rs"]
+pub mod world;
 
 pub const PACKAGE_TAG: u32 = 0x9e2a_83c1;
 pub const FILE_VERSION: u16 = 868;
