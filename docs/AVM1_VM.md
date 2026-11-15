@@ -860,6 +860,71 @@ handler is claimed. Private `avm1-runtime/external-interface-evidence.json`,
 `run-owned-external-interface.rs`, `owned-external-interface.tsv` and
 `vm-tests-external-interface.txt` retain these results.
 
+## Retained deferred builtin values
+
+`Value::DeferredBuiltin(DeferredBuiltinName)` represents native tag 11 separately
+from Undefined and an already materialized function. The opaque wrapper retains
+only a validated name; it carries neither a factory nor a creation Environment.
+One VM admits one AS2 context. Its name-keyed registry/cache is separate from
+script properties, and `bind_builtin_context_target(ObjectId)` requires an explicit
+host association before any resolution, including cached resolution. A direct
+native `Vm::call` supplies no Environment and cannot infer one from `this`.
+
+`register_deferred_builtin(namespace, name, factory, flags)` installs an actual
+token without invoking its factory. The first profile accepts bounded ASCII
+identifiers, flags 0/1, and an ordinary namespace with original Object-parent,
+descriptor and resolver-history guards. An existing registry name leaves its entry
+and namespace unchanged. `BuiltinFactory::Unsupported` preserves real existence
+and scalar behavior but stops at materialization; it never reports a missing/null
+factory. The supported ExternalInterface registration requires its exact name and
+flags 0. It builds the fresh graph, performs guarded ordinary namespace publication,
+then caches the callable. Existing retained aliases stay tokens; later namespace
+reads see the published callable. Failed unpublished allocation is not cached.
+
+**VERIFIED static:** A retained token is Boolean true, TypeOf string `undefined`,
+ToString `[type Function]`, and numeric positive zero without factory lookup. String
+conversion requires an active Environment for its builtin string. Two tokens compare
+equal under both equality opcodes even when their names differ; Rust name equality
+remains a separate registry/inspection operation. Token-left Equals2 against a
+non-token is false without resolution. Boolean/Number/String-left against a token
+on the right attempts materialization and then returns false on normal completion.
+The opcode preserves native lower-stack-left/top-stack-right order. StrictEquals
+never materializes a token. Details and exact evidence are in
+`docs/DEFERRED_BUILTIN_VALUES.md` and
+`rea-deferred-builtin-values/combined-proof-receipt.json`.
+
+Ordinary reads and copies retain tokens. Explicit member receivers, named-call
+receivers and selected callees resolve with the active context. NewObject/NewMethod
+resolve selected callable/prototype metadata before applying their existing
+construction gates. Qualified lookup retains a terminal token; its existing
+namespace-kind/activation guards still limit intermediate use. Unnamed CallMethod
+token receiver binding, Function conversion of a token, deferred accessor arguments,
+Add2/relational primitive-conversion order, reentrant factories and multiple AS2
+contexts remain explicit errors. No eager universal global bootstrap is installed.
+
+**OBSERVED:** Ten focused registry/executor checks pass. They cover scalar and
+equality non-materialization, observable reversed-operand factory effects, real
+named-call resolution, retained aliases and stable cached identity, current-target
+admission, namespace mutations, unsupported factories, allocation rollback/retry
+and fresh registration limits. Private `avm1-runtime/vm-tests-deferred.txt` retains
+the report. These tests alone do not establish native startup behavior.
+
+**OBSERVED original selected code:** A separate frozen seven-source-file probe
+registers ExternalInterface lazily and binds the controlled root context before
+executing the unchanged localization functions. Registration leaves object count
+19 unchanged, and the namespace retains its token through definition setup.
+The first 40-instruction caller publishes constructor 28, methods 29/30 and
+prototype 31 at its original named CallMethod path (110311). Both retained aliases
+(a Rust value and a script property) stay tokens. Repeated 25-instruction wrappers
+reuse those graph identities and return distinct result objects 35/38, allocating
+only their three ordinary invocation/result objects each. All three callbacks
+validate original origin 110311, root context 1 and distinct constructor receiver 28.
+Intermediate operand stacks were not instrumented. Private
+`avm1-deferred-localization-probe/verification.json`, `sources.json` and `run.stdout`
+retain the source hashes, native-free compile/run and exact observations. The
+surrounding namespace and locale payload remain controlled; no actual engine
+handler, complete global baseline, full initializer or native process is claimed.
+
 ## Fresh Object results from native hosts
 
 `Host::call_result` is backward compatible: its default calls the existing `call`

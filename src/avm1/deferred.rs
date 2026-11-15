@@ -8,7 +8,7 @@
 //! bootstrap namespace and supported ordinary publication. It does not emulate
 //! native missing/null factories, reentrant factories, watch state or resolvers.
 
-use super::{text, ErrorKind, Kind, ObjectId, Property, Result, Text, Value, Vm};
+use super::{ErrorKind, Kind, ObjectId, Property, Result, Text, Value, Vm, text};
 
 /// A retained name, without a factory, namespace or originating Environment.
 ///
@@ -388,12 +388,15 @@ mod tests {
         let namespace = vm.alloc(Kind::Plain, Some(parent)).unwrap();
         vm.raw_member(parent, text("Stage"), Property::Data(Value::Number(4.0)), 4)
             .unwrap();
-        assert!(vm
-            .register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 0)
-            .is_err());
-        assert!(!vm.objects[namespace.0]
-            .properties
-            .contains_key(&text("Stage")));
+        assert!(
+            vm.register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 0)
+                .is_err()
+        );
+        assert!(
+            !vm.objects[namespace.0]
+                .properties
+                .contains_key(&text("Stage"))
+        );
         vm.raw_member(
             parent,
             text("unrelated"),
@@ -404,9 +407,10 @@ mod tests {
             0,
         )
         .unwrap();
-        assert!(vm
-            .register_deferred_builtin(namespace, "Array", BuiltinFactory::Unsupported, 0)
-            .is_err());
+        assert!(
+            vm.register_deferred_builtin(namespace, "Array", BuiltinFactory::Unsupported, 0)
+                .is_err()
+        );
         assert!(vm.builtin_registry.is_empty());
     }
 
@@ -436,34 +440,45 @@ mod tests {
     fn admission_rejects_invalid_names_flags_targets_and_partial_registration() {
         let (mut vm, namespace) = setup();
         for name in ["", "a.b", "\u{e9}", "__proto__", "__resolve"] {
-            assert!(vm
-                .register_deferred_builtin(namespace, name, BuiltinFactory::Unsupported, 0)
-                .is_err());
+            assert!(
+                vm.register_deferred_builtin(namespace, name, BuiltinFactory::Unsupported, 0)
+                    .is_err()
+            );
         }
-        assert!(vm
-            .register_deferred_builtin(namespace, &"a".repeat(129), BuiltinFactory::Unsupported, 0)
-            .is_err());
-        assert!(vm
-            .register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 2)
-            .is_err());
-        assert!(vm
-            .register_deferred_builtin(
+        assert!(
+            vm.register_deferred_builtin(
+                namespace,
+                &"a".repeat(129),
+                BuiltinFactory::Unsupported,
+                0
+            )
+            .is_err()
+        );
+        assert!(
+            vm.register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 2)
+                .is_err()
+        );
+        assert!(
+            vm.register_deferred_builtin(
                 namespace,
                 "ExternalInterface",
                 BuiltinFactory::ExternalInterface { call_binding: 1 },
                 1,
             )
-            .is_err());
+            .is_err()
+        );
         let native = vm.native(1).unwrap();
         assert!(vm.bind_builtin_context_target(native).is_err());
-        assert!(vm
-            .bind_builtin_context_target(ObjectId(usize::MAX))
-            .is_err());
+        assert!(
+            vm.bind_builtin_context_target(ObjectId(usize::MAX))
+                .is_err()
+        );
         let before = (vm.properties, vm.string_units);
         vm.limits.string_units = vm.string_units;
-        assert!(vm
-            .register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 0)
-            .is_err());
+        assert!(
+            vm.register_deferred_builtin(namespace, "Stage", BuiltinFactory::Unsupported, 0)
+                .is_err()
+        );
         assert_eq!((vm.properties, vm.string_units), before);
         assert!(vm.builtin_registry.is_empty());
         assert!(vm.objects[namespace.0].properties.is_empty());

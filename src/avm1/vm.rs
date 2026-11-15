@@ -9,6 +9,8 @@ use std::sync::Arc;
 mod attached;
 #[path = "attached_events.rs"]
 mod attached_events;
+#[path = "deferred.rs"]
+mod deferred;
 #[path = "external_interface.rs"]
 mod external_interface;
 pub use attached::{
@@ -16,6 +18,7 @@ pub use attached::{
     AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
+pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 pub use external_interface::ExternalInterfaceObjects;
 
 pub type Text = Arc<[u16]>;
@@ -41,6 +44,8 @@ pub enum Value {
     Object(ObjectId),
     /// A supported live display reference, distinct from its owner and storage.
     DisplayClip(AttachedClipId),
+    /// Retained native tag11 name; factory/cache belong to the active context.
+    DeferredBuiltin(DeferredBuiltinName),
 }
 impl Value {
     pub fn string(value: &str) -> Self {
@@ -52,7 +57,7 @@ impl Value {
             Self::Bool(v) => *v,
             Self::Number(v) => *v != 0.0 && !v.is_nan(),
             Self::String(v) => !v.is_empty(),
-            Self::Object(_) | Self::DisplayClip(_) => true,
+            Self::Object(_) | Self::DisplayClip(_) | Self::DeferredBuiltin(_) => true,
         }
     }
 }
@@ -97,6 +102,7 @@ pub enum ErrorKind {
     Unsupported(&'static str),
     UnsupportedOpcode(u8),
     UnsupportedNativeFunction(&'static str),
+    UnsupportedDeferredBuiltin(Text),
     StackUnderflow,
     InvalidObject(ObjectId),
     InvalidAttachedClip(AttachedClipId),
@@ -389,6 +395,8 @@ pub struct Vm {
     limits: Limits,
     movie_version: u8,
     loaded_movie_targets: BTreeMap<ObjectId, u8>,
+    builtin_registry: BTreeMap<Text, deferred::BuiltinEntry>,
+    builtin_targets: BTreeMap<ObjectId, ()>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
     objects: Vec<Object>,
@@ -425,6 +433,8 @@ impl Vm {
             limits,
             movie_version: version,
             loaded_movie_targets: BTreeMap::new(),
+            builtin_registry: BTreeMap::new(),
+            builtin_targets: BTreeMap::new(),
             code: Vec::new(),
             code_bytes: 0,
             objects: Vec::new(),
@@ -831,6 +841,7 @@ impl Vm {
             Some(id) => self.get(id, "constructor")?,
             None => Value::Undefined,
         };
+        let selected = self.materialize_value(selected)?;
         let clip = self.movie_clip_constructor;
         let selects_clip = clip.is_some_and(|id| selected == Value::Object(id));
         if has_movie_clip || selects_clip || clip == Some(constructor) {
@@ -1274,7 +1285,14 @@ impl Vm {
     }
     /// Explicit member access may use a display owner's interface; generic
     /// object coercion deliberately does not manufacture an Object value.
-    fn member_owner(&self, value: Value) -> Result<ObjectId> {
+    fn materialize_value(&mut self, value: Value) -> Result<Value> {
+        match value {
+            Value::DeferredBuiltin(name) => self.resolve_deferred_builtin(&name).map(Value::Object),
+            value => Ok(value),
+        }
+    }
+    fn member_owner(&mut self, value: Value) -> Result<ObjectId> {
+        let value = self.materialize_value(value)?;
         match value {
             Value::DisplayClip(id) => self.attached_owner(id),
             value => self.object_id(value),
@@ -1731,6 +1749,7 @@ impl Vm {
     fn number(&self, value: &Value) -> Result<f64> {
         match value {
             Value::Number(v) => Ok(*v),
+            Value::DeferredBuiltin(_) => Ok(0.0),
             Value::Bool(v) => Ok(if *v { 1.0 } else { 0.0 }),
             Value::Undefined => Ok(f64::NAN),
             Value::Null => self.fail(ErrorKind::Unsupported(
@@ -1772,6 +1791,14 @@ impl Vm {
     fn to_text(&mut self, value: &Value) -> Result<Text> {
         match value {
             Value::String(s) => Ok(s.clone()),
+            Value::DeferredBuiltin(_) => {
+                if self.current_target.is_none() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "deferred builtin string conversion requires active Environment",
+                    ));
+                }
+                Ok(text("[type Function]"))
+            }
             Value::Undefined => Ok(text("undefined")),
             Value::Null => Ok(text("null")),
             Value::Bool(v) => Ok(text(if *v { "true" } else { "false" })),
@@ -1902,6 +1929,7 @@ impl Vm {
                 return self.fail(ErrorKind::Budget("qualified variable member visits"));
             }
             self.member_visits += 1;
+            value = self.materialize_value(value)?;
             let Value::Object(owner) = value else {
                 return self.fail(ErrorKind::Unsupported(
                     "qualified variable primitive/missing segment",
@@ -1922,6 +1950,10 @@ impl Vm {
                     ));
                 }
             };
+        }
+        if matches!(value, Value::DeferredBuiltin(_)) {
+            // Terminal ordinary member copies retain the token unchanged.
+            return Ok(value);
         }
         if let Value::Object(id) = value {
             if matches!(self.objects[id.0].kind, Kind::Script(_)) {
@@ -2170,6 +2202,7 @@ impl Vm {
         for arg in args {
             self.check_value(arg)?;
         }
+        let callable = self.materialize_value(callable)?;
         let Value::Object(id) = callable else {
             return self.fail(ErrorKind::UnboundCall);
         };
@@ -2304,6 +2337,15 @@ impl Vm {
                 return Ok(Value::Bool(accepted));
             }
             Kind::AddProperty => {
+                if args
+                    .iter()
+                    .skip(1)
+                    .any(|value| matches!(value, Value::DeferredBuiltin(_)))
+                {
+                    return self.fail(ErrorKind::Unsupported(
+                        "addProperty deferred callable conversion",
+                    ));
+                }
                 if args.iter().skip(1).any(|value| {
                     matches!(value, Value::Object(id)
                     if matches!(self.objects[id.0].kind, Kind::FunctionPrototype | Kind::ConstructorSuper { .. }))
@@ -2387,6 +2429,11 @@ impl Vm {
                 if constructor_context.is_some() || args.len() != 1 {
                     return self.fail(ErrorKind::Unsupported(
                         "Function conversion arity/construction profile",
+                    ));
+                }
+                if matches!(args[0], Value::DeferredBuiltin(_)) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Function conversion deferred builtin profile",
                     ));
                 }
                 if let Value::Object(argument) = args[0] {
@@ -2663,9 +2710,26 @@ impl Vm {
         Ok(value.truthy())
     }
     fn strict_equal(&self, a: &Value, b: &Value) -> bool {
+        if matches!(a, Value::DeferredBuiltin(_)) || matches!(b, Value::DeferredBuiltin(_)) {
+            return matches!(
+                (a, b),
+                (Value::DeferredBuiltin(_), Value::DeferredBuiltin(_))
+            );
+        }
         a == b
     }
-    fn equal(&self, a: &Value, b: &Value) -> Result<bool> {
+    fn equal(&mut self, a: &Value, b: &Value) -> Result<bool> {
+        if matches!(a, Value::DeferredBuiltin(_)) {
+            return Ok(matches!(b, Value::DeferredBuiltin(_)));
+        }
+        if let Value::DeferredBuiltin(name) = b {
+            if matches!(a, Value::Bool(_) | Value::Number(_) | Value::String(_)) {
+                // Native primitive conversion may create/publish the callable,
+                // but yields a nonprimitive and comparison is still false.
+                self.resolve_deferred_builtin(name)?;
+            }
+            return Ok(false);
+        }
         if matches!(a, Value::DisplayClip(_)) || matches!(b, Value::DisplayClip(_)) {
             return self.fail(ErrorKind::Unsupported(
                 "attached display equality semantics",
@@ -2932,22 +2996,35 @@ impl Vm {
                     }
                     0x3d => {
                         let name = self.pop(frame)?;
-                        let name = self.to_text(&name)?;
+                        let key = if matches!(name, Value::DeferredBuiltin(_)) {
+                            None
+                        } else {
+                            Some(self.to_text(&name)?)
+                        };
                         let args = self.args(frame)?;
-                        let callable = self.variable(frame, &name, host)?;
+                        let callable = match key {
+                            Some(key) => self.variable(frame, &key, host)?,
+                            None => name,
+                        };
                         let value =
                             self.invoke(callable, self.target_value(frame.target), &args, host)?;
                         self.push(frame, value)?;
                     }
                     0x52 => {
                         let method = self.pop(frame)?;
-                        let receiver = self.pop(frame)?;
+                        let mut receiver = self.pop(frame)?;
                         let args = self.args(frame)?;
                         let callable = if matches!(method, Value::Undefined)
                             || matches!(&method,Value::String(s) if s.is_empty())
                         {
+                            if matches!(receiver, Value::DeferredBuiltin(_)) {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "unnamed CallMethod deferred this binding",
+                                ));
+                            }
                             receiver.clone()
                         } else {
+                            receiver = self.materialize_value(receiver)?;
                             let key = self.to_text(&method)?;
                             let object = self.member_owner(receiver.clone())?;
                             self.read_member(object, &key, host)?
@@ -2974,6 +3051,7 @@ impl Vm {
                             }
                         };
                         let args = self.args(frame)?;
+                        let callable = self.materialize_value(callable)?;
                         let constructor = self.object_id(callable.clone())?;
                         if matches!(self.objects[constructor.0].kind, Kind::FunctionConversion) {
                             return self.fail(ErrorKind::Unsupported(
@@ -2988,7 +3066,8 @@ impl Vm {
                                 "ExternalInterface construction profile",
                             ));
                         }
-                        let prototype = match self.get(constructor, "prototype")? {
+                        let prototype = self.get(constructor, "prototype")?;
+                        let prototype = match self.materialize_value(prototype)? {
                             Value::Object(id) => Some(id),
                             Value::Undefined | Value::Null => None,
                             _ => {
@@ -3151,8 +3230,10 @@ impl Vm {
                         let a = self.pop(frame)?;
                         let b = self.pop(frame)?;
                         let value = if instruction.opcode == 0x66 {
-                            if matches!(a, Value::DisplayClip(_))
-                                || matches!(b, Value::DisplayClip(_))
+                            if !matches!(a, Value::DeferredBuiltin(_))
+                                && !matches!(b, Value::DeferredBuiltin(_))
+                                && (matches!(a, Value::DisplayClip(_))
+                                    || matches!(b, Value::DisplayClip(_)))
                             {
                                 return self.fail(ErrorKind::Unsupported(
                                     "attached display strict equality semantics",
@@ -3160,13 +3241,22 @@ impl Vm {
                             }
                             self.strict_equal(&a, &b)
                         } else {
-                            self.equal(&a, &b)?
+                            // Native left is the lower operand, right is top;
+                            // token materialization makes this order observable.
+                            self.equal(&b, &a)?
                         };
                         self.push(frame, Value::Bool(value))?;
                     }
                     0x47 => {
                         let a = self.pop(frame)?;
                         let b = self.pop(frame)?;
+                        if matches!(a, Value::DeferredBuiltin(_))
+                            || matches!(b, Value::DeferredBuiltin(_))
+                        {
+                            return self.fail(ErrorKind::Unsupported(
+                                "Add2 deferred primitive conversion order",
+                            ));
+                        }
                         let value = if matches!(a, Value::String(_))
                             || matches!(b, Value::String(_))
                         {
@@ -3189,6 +3279,13 @@ impl Vm {
                     0x48 | 0x67 => {
                         let a = self.pop(frame)?;
                         let b = self.pop(frame)?;
+                        if matches!(a, Value::DeferredBuiltin(_))
+                            || matches!(b, Value::DeferredBuiltin(_))
+                        {
+                            return self.fail(ErrorKind::Unsupported(
+                                "comparison deferred primitive conversion order",
+                            ));
+                        }
                         let value = if let (Value::String(a), Value::String(b)) = (&a, &b) {
                             if instruction.opcode == 0x48 {
                                 b < a
@@ -3261,6 +3358,7 @@ impl Vm {
                     0x44 => {
                         let value = self.pop(frame)?;
                         let name = match value {
+                            Value::DeferredBuiltin(_) => "undefined",
                             Value::Undefined => "undefined",
                             Value::Null => "null",
                             Value::Bool(_) => "boolean",
@@ -4019,6 +4117,170 @@ mod tests {
         bytes.extend(push(&[Value::string(method)]));
         bytes.push(0x52);
         bytes
+    }
+    fn variable_bytes(name: &str) -> Vec<u8> {
+        let mut bytes = push(&[Value::string(name)]);
+        bytes.push(0x1c);
+        bytes
+    }
+    #[test]
+    fn deferred_scalars_and_token_equality_do_not_materialize() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let a = vm
+            .register_deferred_builtin(vm.global(), "Stage", BuiltinFactory::Unsupported, 1)
+            .unwrap();
+        let b = vm
+            .register_deferred_builtin(vm.global(), "Mouse", BuiltinFactory::Unsupported, 1)
+            .unwrap();
+        assert_ne!(a, b); // Stored-name inspection is not ActionStrictEquals.
+        let before = vm.object_count();
+        for (opcode, expected) in [
+            (0x44, Value::string("undefined")),
+            (0x4a, Value::Number(0.0)),
+            (0x4b, Value::string("[type Function]")),
+            (0x12, Value::Bool(false)),
+        ] {
+            let mut bytes = variable_bytes("Stage");
+            bytes.push(opcode);
+            let result = execute(&mut vm, &bytes).unwrap();
+            assert_eq!(result.stack, vec![expected]);
+            assert_eq!(result.host_calls, 0);
+        }
+        let mut branch = variable_bytes("Stage");
+        let mut false_branch = push(&[Value::Bool(false)]);
+        false_branch.push(0x3e);
+        branch.extend(action(0x9d, &(false_branch.len() as i16).to_le_bytes()));
+        branch.extend(false_branch);
+        branch.extend(push(&[Value::Bool(true)]));
+        branch.push(0x3e);
+        assert_eq!(execute(&mut vm, &branch).unwrap().value, Value::Bool(true));
+        for opcode in [0x49, 0x66] {
+            let mut bytes = variable_bytes("Stage");
+            bytes.extend(variable_bytes("Mouse"));
+            bytes.push(opcode);
+            assert_eq!(
+                execute(&mut vm, &bytes).unwrap().stack,
+                vec![Value::Bool(true)]
+            );
+            let mut bytes = variable_bytes("Stage");
+            bytes.extend(push(&[Value::Number(0.0)]));
+            bytes.push(opcode);
+            assert_eq!(
+                execute(&mut vm, &bytes).unwrap().stack,
+                vec![Value::Bool(false)]
+            );
+        }
+        assert_eq!(vm.object_count(), before);
+        assert_eq!(vm.get(vm.global(), "Stage").unwrap(), a);
+        assert_eq!(vm.get(vm.global(), "Mouse").unwrap(), b);
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        let mut reversed = push(&[Value::Number(0.0)]);
+        reversed.extend(variable_bytes("Stage"));
+        reversed.push(0x49);
+        assert!(matches!(
+            execute(&mut vm, &reversed).unwrap_err().kind,
+            ErrorKind::UnsupportedDeferredBuiltin(_)
+        ));
+        // Strict comparison of the same operands has no factory side effect.
+        *reversed.last_mut().unwrap() = 0x66;
+        assert_eq!(
+            execute(&mut vm, &reversed).unwrap().stack,
+            vec![Value::Bool(false)]
+        );
+    }
+    #[test]
+    fn deferred_receiver_resolution_caches_without_rewriting_retained_tokens() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let namespace = vm.object().unwrap();
+        let token = vm
+            .register_deferred_builtin(
+                namespace,
+                "ExternalInterface",
+                BuiltinFactory::ExternalInterface { call_binding: 17 },
+                0,
+            )
+            .unwrap();
+        vm.set(vm.global(), "receiver", token.clone()).unwrap();
+        let mut bytes = push(&[Value::Number(7.0), Value::Number(1.0)]);
+        bytes.extend(variable_bytes("receiver"));
+        bytes.extend(push(&[Value::string("call")]));
+        bytes.push(0x52);
+        assert!(matches!(
+            execute(&mut vm, &bytes).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
+        assert_eq!(vm.get(namespace, "ExternalInterface").unwrap(), token);
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let before = vm.object_count();
+        let mut host = BoundHost { calls: 0 };
+        assert_eq!(
+            vm.execute(code, vm.root(), &mut host).unwrap().stack,
+            vec![Value::Number(42.0)]
+        );
+        let resolved = vm.get(namespace, "ExternalInterface").unwrap();
+        assert!(matches!(resolved, Value::Object(_)));
+        assert_eq!(vm.get(vm.global(), "receiver").unwrap(), token);
+        assert_eq!(vm.object_count(), before + 4);
+        vm.execute(code, vm.root(), &mut host).unwrap();
+        assert_eq!(vm.object_count(), before + 4);
+        assert_eq!(host.calls, 2);
+        assert!(!vm.strict_equal(&token, &resolved));
+        // Direct native API calls do not invent an Environment from `this`.
+        assert!(
+            vm.call(token.clone(), Value::Object(vm.root()), &[], &mut host)
+                .is_err()
+        );
+        let mut direct = push(&[Value::Number(0.0)]);
+        direct.extend(variable_bytes("receiver"));
+        direct.push(0x3d);
+        assert_eq!(
+            execute(&mut vm, &direct).unwrap().stack,
+            vec![Value::Undefined]
+        );
+        assert_eq!(vm.object_count(), before + 4);
+    }
+    #[test]
+    fn deferred_primitive_left_equality_materializes_before_returning_false() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let namespace = vm.object().unwrap();
+        let token = vm
+            .register_deferred_builtin(
+                namespace,
+                "ExternalInterface",
+                BuiltinFactory::ExternalInterface { call_binding: 17 },
+                0,
+            )
+            .unwrap();
+        vm.set(vm.global(), "token", token.clone()).unwrap();
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        let before = vm.object_count();
+        let mut bytes = variable_bytes("token");
+        bytes.extend(push(&[Value::Number(0.0)]));
+        bytes.push(0x49);
+        assert_eq!(
+            execute(&mut vm, &bytes).unwrap().stack,
+            vec![Value::Bool(false)]
+        );
+        assert_eq!(vm.object_count(), before);
+        let mut bytes = push(&[Value::Number(0.0)]);
+        bytes.extend(variable_bytes("token"));
+        bytes.push(0x49);
+        assert_eq!(
+            execute(&mut vm, &bytes).unwrap().stack,
+            vec![Value::Bool(false)]
+        );
+        assert_eq!(vm.object_count(), before + 4);
+        assert!(matches!(
+            vm.get(namespace, "ExternalInterface").unwrap(),
+            Value::Object(_)
+        ));
+        assert_eq!(vm.get(vm.global(), "token").unwrap(), token);
     }
     #[test]
     fn host_context_tracks_active_target_not_receiver_or_definition_origin() {
