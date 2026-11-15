@@ -24,6 +24,22 @@ The next original manager replay is separate. Receipt:
 `evidence/avm1-runtime/point-checks.json`, SHA-256
 `75a97225e7b27a08d6180121114b1ecdb8a1cd14c17f4933f2e06471f423c37d`.
 
+**OBSERVED later original-script replay in Rust:** with only the newly supplied
+native-backed namespace and explicit builtin-context association added, all 452
+initializers complete and the manager frame reaches 226 instructions. Its real
+`movieSize` Point is created with supported reads x=0/y=0. The next stop is
+Rectangle `NewMethod` at 168768. Point descriptor-flag inspection remains
+unsupported and is recorded separately. No Rectangle stub, visibility profile,
+saved-call adoption or retry was introduced. Receipt:
+`evidence/avm1-attached-manager-frame-action-increment9/receipt.json`, SHA-256
+`853e24d433968440095219c79e347f0566c9acc550e3eadfa05d7bfd7b3291cf`.
+
+**VERIFIED combined type check:** the window-feature check passes without
+warnings at `550346a9b41e0d34eab9ffabc9907e2dd4a39a73`, covering current-frame
+preparation, Point, shared saved calls and Model/Polys prefixes. Receipt:
+`evidence/dev17-point-current-scene-check.json`. This is not a dev17 binary
+startup or native execution result.
+
 Dev16 remains the latest staged diagnostic package. The combined dev17 build,
 native startup, login and gameplay remain unverified.
 
