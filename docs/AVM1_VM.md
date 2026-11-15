@@ -18,8 +18,9 @@ from the VM's profile. The integration must also validate every registered movie
 header; registering raw Program bytes cannot establish that relationship. Failed
 loads, empty definitions and arbitrary objects must not be bound. Function bodies
 retain their captured movie target separately from `this`, and nested invocation
-restores the caller target. This metadata alone does not yet select a property-flag
-default; the native header-producer evidence remains required.
+restores the caller target. This context permits the verified loaded-header
+property-flag default below; unbound or native/direct-call contexts retain the
+outcome-equality gate. An arbitrary receiver does not confer loaded-target status.
 
 `execute(code, target, host)` runs an action stream. `call(callable, this, args,
 host)` invokes an already created function. `Execution` reports the return value,
@@ -76,10 +77,11 @@ paths, super and parent preloads, automatic
 primitive boxing, and uninstalled standard-library/native functions. Missing
 ordinary properties correctly yield undefined; attempting to call that value
 stops with `UnboundCall`. The optional `install_object_constructor()` installs the documented Object
-constructor, prototype, documented `Object.prototype.addProperty`, and the
-`Object.registerClass` host seam.
-Primitive boxing remains unsupported. It does not install other native methods or
-Function, MovieClip, Stage, Mouse or Scaleform libraries.
+constructor, prototype, documented `Object.prototype.addProperty`, the
+`Object.registerClass` host seam, and a shared Function-prototype intermediate
+with the supported call/apply methods. Primitive boxing remains unsupported.
+It does not install a global Function conversion, MovieClip, Stage, Mouse or
+Scaleform libraries.
 
 Primitive conversion is deliberately narrower than the eventual compatibility
 profile. It supports modern Boolean behavior, ordinary decimal numeric strings,
@@ -131,7 +133,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Twenty-one focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twenty-two focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -265,15 +267,24 @@ stored `__proto__` and `__constructor__` entries with flags 3. These entries are
 therefore included by the null selector even though they are hidden by default.
 No symbolic behavior is claimed for upper flag bits.
 
-The exact three-argument default remains a native evidence dependency. Native code
-uses clear 7 only when a target-derived cached environment byte equals 5, otherwise
-clear 0. The cache's producer has not yet been fully connected to the parsed movie
-header. The VM therefore does **not** equate its SWF version with that byte. Before
-mutating anything, it compares both possible outcomes for every selected member.
-An outcome-independent call executes; otherwise `AmbiguousPropertyFlags { old,
-set }` stops at the original script callsite. Explicit four-argument calls do not
-need this gate. The failing ASSet operation itself is atomic, while earlier actions
-in the stream still remain visible.
+**VERIFIED, static REA:** For the traced successfully loaded target class, the
+cached environment byte is the parsed movie-header version. The parser reads the
+fourth validated FWS/CWS/GFX/CFX header byte; the loader copies it into the
+DataDef state; concrete definition/target virtual getters supply the cache. The
+native three-argument call uses clear 7 for version 5 and clear 0 otherwise. The
+VM's accepted profile is 7–19, so an explicitly bound loaded activation target
+uses clear 0. No version-5 execution support is claimed.
+
+This rule follows the captured script target, independently of its receiver.
+Nested accessor/function calls restore the caller context. Raw Program registration
+alone supplies no target provenance. Empty definitions can still contain a -1
+version, and failed/import/native contexts outside the traced loaded path are not
+promoted to loaded status. For an unbound target or a direct intrinsic call with no
+script activation, the VM compares both possible defaults for every selected
+member before any mutation. Outcome-independent calls run; otherwise
+`AmbiguousPropertyFlags { old, set }` stops at the original callsite. Explicit
+four-argument calls bypass this ambiguity. The failing flag operation is atomic;
+earlier actions in the stream still remain visible.
 
 `own_property_flags()` and `own_enumerable_names()` expose stored state for focused
 integration checks without executing getters. The latter uses lexical inspection
@@ -287,8 +298,9 @@ SetMember path discards its false result. Inherited ReadOnly and flagged-accesso
 write ordering, prototype writes after its metadata flags change, and addProperty
 replacement of flagged members remain explicit gaps.
 
-**OBSERVED:** With the intrinsic installed, the unmodified first manager
-initializer still reaches source 12374 after 218 instructions, now stopping at
+**OBSERVED baseline before loaded-target binding:** With the intrinsic installed,
+the unmodified first manager initializer reaches source 12374 after 218
+instructions, stopping at
 `AmbiguousPropertyFlags { old: 3, set: 1 }`. Both metadata entries remain flags 3;
 ordinary entries remain untouched. This is more precise execution evidence, not a
 completed initializer or a claim of native parity. No later initializer runs.
@@ -319,8 +331,55 @@ Native evidence is retained under the private evidence root:
 - `rea-asflags-followup-return/finding-summary.json` and `final.bundle.json`:
   native registration, wrapper, caller-initialized Undefined and untouched return
   slot, bridged to raw Push type 3.
-- `rea-asflags-followup-version/finding-summary.json`: target-derived cached byte
-  and the unresolved concrete virtual-dispatch/header producer.
+- `rea-asflags-followup-version/finding-summary.json`: original partial cache
+  investigation, superseded for the concrete loaded target by the following chain.
+- `rea-asflags-followup-version-proof/finding-summary.json`: concrete target
+  factory, constructors, definition getter and cache association.
+- `rea-movie-header/finding-summary.json`: validated header parsing and loader
+  descriptor forwarding.
+- `rea-native-alternative/movie-version-proof-receipt.json` and
+  `movie-version-final.bundle.json`: definition/state getter
+  chain and final descriptor version copy, including evidence
+  `ev_d37bdccbdab5682db5e6270ea46dc77ec4ccc20dda3863619e3b3b6a1940fbf8`.
+
+## Loaded startup and Function inheritance
+
+**OBSERVED:** Binding the actual loaded manager root (GFX version 15) makes the
+first initializer complete all 220 instructions. With the real bounded Selection
+listener host, the next initializer registers one listener and initially stops at
+16355: the constructor function cannot find inherited `addProperty`. This is a
+separate prototype-chain gap, not a missing native success callback.
+
+The [Adobe Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html)
+identifies Function's Object inheritance and inherited `addProperty`. The VM now
+creates one shared Function-prototype intermediate linked to Object.prototype;
+script and builtin function values link through it. Existing call/apply method
+values are installed there. The function object's separate `prototype` member
+continues to describe constructed instances. No Function global or string-based
+function construction is fabricated. Invocation and typeof of the intermediate
+prototype itself remain explicit unsupported cases pending exact native metadata.
+Object construction must be installed before script function definitions; late
+installation is rejected rather than silently retrofitting script-modified state.
+
+**OBSERVED:** The same unmodified ordered manager probe now completes seven
+initializers, retaining one coherent global/root/heap state. FocusHandler's
+instance accessor returns the exact listener object retained by SelectionHost;
+reading it does not register another listener. This read also exposed object/null
+Equals2 at13730: ECMA abstract equality returns false without object coercion, so
+null/undefined checks now precede the unsupported object-to-primitive path. Its
+four Selection extension flags, `gfxExtensions`, and `_focusrect` are stored, but
+this probe does not implement or claim their eventual input/focus effects. The
+next stop is DataProvider's Extends at30980 (CodeId7) because Array is not installed.
+Normal root actions and later initializers do not run after that failure.
+
+`run-init-order-selection.rs`, `init-order-selection.tsv` (the earlier function
+inheritance stop), `init-order-function-prototype.tsv`,
+`vm-tests-loaded-default.txt`, `vm-tests-function-prototype.txt`, and
+`loaded-target-startup-evidence.json` retain this progression privately. Focused
+checks also cover loaded target versus receiver identity, restoration after a
+getter from an unbound target, version mismatch, direct intrinsic ambiguity and
+the shared intermediate prototype identity. These are original-Rust observations,
+not execution of the retail client.
 
 ## Indexed movie-property host seam
 
@@ -368,8 +427,13 @@ CodeId and movie source offset; offsets alone are not unique across movies.
 `HostCall`, `PropertyRequest` and VM errors also expose this origin while retaining
 their earlier offset field. Caller origins are restored after accessor/function
 calls, so a getter in another program cannot misattribute the eventual native
-request. Hosts associate CodeIds with loaded movie identities; this provenance is
-not a substitute for establishing the native registration namespace rules.
+request. Hosts associate CodeIds with loaded movie identities for provenance.
+The native registry belongs to the current AS2 root context; call-site SWF and
+constructor-definition origin do not select separate registries. The integrating
+host owns that context. Static evidence is retained in
+`rea-class-registry/{entry,helpers,owner,lookup}.bundle.json`, including owner
+`ev_5d1d7b7e92625bf40b5f3383c74badbe7bba1b79b7f85184dfb845c411084d9a`
+and lookup `ev_6a3ef294e0f93be00362ab76b3f85adad17bf1242bc644ad9fa95b6009d76dc4`.
 
 **OBSERVED:** Two original owned registration snippets each execute eight
 instructions against a real controlled in-memory registry:

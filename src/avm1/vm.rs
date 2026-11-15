@@ -190,7 +190,7 @@ pub struct ClassRegistration {
     pub name: Text,
     /// None means explicit null/unregister; undefined is never converted to it.
     pub constructor: Option<ObjectId>,
-    /// Registration call site identifies the movie whose linkage namespace applies.
+    /// Call-site provenance only; the current AS2 root owns the registry context.
     pub origin: Option<CodeOrigin>,
     /// Definition may belong to an earlier-loaded movie. None for native/builtin functions.
     pub constructor_origin: Option<CodeOrigin>,
@@ -268,6 +268,21 @@ enum Kind {
     RegisterClass,
     SetPropertyFlags,
     FunctionMethod(FunctionMethod),
+    FunctionPrototype,
+}
+impl Kind {
+    fn function_value(&self) -> bool {
+        matches!(
+            self,
+            Self::Native(_)
+                | Self::Script(_)
+                | Self::ObjectConstructor
+                | Self::AddProperty
+                | Self::RegisterClass
+                | Self::SetPropertyFlags
+                | Self::FunctionMethod(_)
+        )
+    }
 }
 #[derive(Debug, Clone)]
 enum Property {
@@ -319,6 +334,7 @@ pub struct Vm {
     global: ObjectId,
     root: ObjectId,
     object_constructor: Option<ObjectId>,
+    function_prototype: Option<ObjectId>,
 }
 impl Vm {
     /// This execution profile supports SWF 7+; legacy coercions are not guessed.
@@ -342,6 +358,7 @@ impl Vm {
             global: ObjectId(0),
             root: ObjectId(0),
             object_constructor: None,
+            function_prototype: None,
         };
         if !(7..=19).contains(&version) {
             return vm.fail(ErrorKind::Unsupported(
@@ -410,6 +427,11 @@ impl Vm {
         }
     }
     fn alloc(&mut self, kind: Kind, prototype: Option<ObjectId>) -> Result<ObjectId> {
+        let prototype = prototype.or_else(|| {
+            kind.function_value()
+                .then_some(self.function_prototype)
+                .flatten()
+        });
         if self.objects.len() >= self.limits.objects {
             return self.fail(ErrorKind::Budget("objects"));
         }
@@ -454,8 +476,43 @@ impl Vm {
         if self.has_key(self.global, &text("Object"))? {
             return self.fail(ErrorKind::Unsupported("Object binding already exists"));
         }
+        if self
+            .objects
+            .iter()
+            .any(|object| matches!(object.kind, Kind::Script(_)))
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "install Object before defining script functions",
+            ));
+        }
         let constructor = self.alloc(Kind::ObjectConstructor, None)?;
         let prototype = self.object()?;
+        let function_prototype = self.alloc(Kind::FunctionPrototype, Some(prototype))?;
+        self.function_prototype = Some(function_prototype);
+        let prior_functions: Vec<_> = self
+            .objects
+            .iter()
+            .enumerate()
+            .filter(|(_, object)| {
+                object.kind.function_value()
+                    && object.prototype.is_none()
+                    && !object.properties.contains_key(&text("__proto__"))
+            })
+            .map(|(index, _)| ObjectId(index))
+            .collect();
+        for id in prior_functions {
+            self.raw_member(
+                id,
+                text("__proto__"),
+                Property::Data(Value::Object(function_prototype)),
+                3,
+            )?;
+            self.objects[id.0].prototype = Some(function_prototype);
+        }
+        let call = self.function_method(FunctionMethod::Call)?;
+        let apply = self.function_method(FunctionMethod::Apply)?;
+        self.set(function_prototype, "call", Value::Object(call))?;
+        self.set(function_prototype, "apply", Value::Object(apply))?;
         self.set(constructor, "prototype", Value::Object(prototype))?;
         self.set(prototype, "constructor", Value::Object(constructor))?;
         let add_property = self.alloc(Kind::AddProperty, None)?;
@@ -564,10 +621,18 @@ impl Vm {
             return self.fail(ErrorKind::Unsupported("ASSetPropFlags non-null selector"));
         }
         let set = self.flag_mask(&args[2])?;
-        let clear = args.get(3).map(|value| self.flag_mask(value)).transpose()?;
+        let clear = args
+            .get(3)
+            .map(|value| self.flag_mask(value))
+            .transpose()?
+            .or_else(|| {
+                self.current_target
+                    .and_then(|target| self.loaded_movie_targets.get(&target))
+                    .map(|version| if *version == 5 { 7 } else { 0 })
+            });
         self.visit_members(self.objects[target.0].properties.len().saturating_mul(2))?;
-        // No choice between unproved native environment defaults. Check every
-        // selected property before mutation; only outcome-independent calls run.
+        // REA connects the cache to the header only for validated loaded targets.
+        // Unbound/native/direct-call contexts retain outcome-independent gating.
         if clear.is_none() {
             for key in self.objects[target.0].properties.keys() {
                 let old = self.own_flags(target, key);
@@ -1240,6 +1305,11 @@ impl Vm {
         };
         self.check_object(id)?;
         let function = match self.objects[id.0].kind.clone() {
+            Kind::FunctionPrototype => {
+                return self.fail(ErrorKind::Unsupported(
+                    "Function prototype invocation semantics",
+                ))
+            }
             Kind::Native(binding) => {
                 self.host_budget()?;
                 let value = host
@@ -1349,6 +1419,14 @@ impl Vm {
                 return Ok(Value::Bool(accepted));
             }
             Kind::AddProperty => {
+                if args.iter().skip(1).any(|value| {
+                    matches!(value, Value::Object(id)
+                    if matches!(self.objects[id.0].kind, Kind::FunctionPrototype))
+                }) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Function prototype accessor callability",
+                    ));
+                }
                 if args.len() != 3 {
                     return self.fail(ErrorKind::Unsupported("addProperty argument count"));
                 }
@@ -1560,13 +1638,13 @@ impl Vm {
         ) {
             return Ok(true);
         }
-        if matches!(a, Value::Object(_)) || matches!(b, Value::Object(_)) {
-            return self.fail(ErrorKind::Unsupported("object abstract equality coercion"));
-        }
         if matches!(a, Value::Null | Value::Undefined)
             || matches!(b, Value::Null | Value::Undefined)
         {
             return Ok(false);
+        }
+        if matches!(a, Value::Object(_)) || matches!(b, Value::Object(_)) {
+            return self.fail(ErrorKind::Unsupported("object abstract equality coercion"));
         }
         Ok(self.number(a)? == self.number(b)?)
     }
@@ -2079,6 +2157,11 @@ impl Vm {
                             Value::String(_) => "string",
                             Value::Object(id) => {
                                 self.check_object(id)?;
+                                if matches!(self.objects[id.0].kind, Kind::FunctionPrototype) {
+                                    return self.fail(ErrorKind::Unsupported(
+                                        "Function prototype typeof semantics",
+                                    ));
+                                }
                                 if matches!(
                                     self.objects[id.0].kind,
                                     Kind::Script(_)
@@ -2229,6 +2312,10 @@ mod tests {
         assert!(vm.strict_equal(&Value::Number(0.0), &Value::Number(-0.0)));
         assert!(!vm.strict_equal(&Value::Number(f64::NAN), &Value::Number(f64::NAN)));
         assert!(vm.equal(&Value::Null, &Value::Undefined).unwrap());
+        let object = Value::Object(vm.object().unwrap());
+        assert!(!vm.equal(&object, &Value::Null).unwrap());
+        assert!(!vm.equal(&Value::Undefined, &object).unwrap());
+        assert!(vm.equal(&object, &Value::Number(0.0)).is_err());
         assert!(vm
             .equal(&Value::string("12.5"), &Value::Number(12.5))
             .unwrap());
@@ -2460,6 +2547,24 @@ mod tests {
         let object = vm.install_object_constructor().unwrap();
         assert_eq!(vm.install_object_constructor().unwrap(), object);
         let root = vm.root();
+        let Value::Object(function_prototype) = vm.get(object, "__proto__").unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            vm.get(function_prototype, "__proto__").unwrap(),
+            vm.get(object, "prototype").unwrap()
+        );
+        assert!(matches!(
+            vm.call(
+                Value::Object(function_prototype),
+                Value::Object(root),
+                &[],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Unsupported(_)
+        ));
         let made = vm
             .call(
                 Value::Object(object),
@@ -2490,6 +2595,16 @@ mod tests {
         let Value::Object(sub) = vm.get(root, "Sub").unwrap() else {
             panic!()
         };
+        assert_eq!(
+            vm.get(sub, "__proto__").unwrap(),
+            Value::Object(function_prototype)
+        );
+        assert_eq!(
+            vm.get(sub, "addProperty").unwrap(),
+            vm.get(function_prototype, "addProperty").unwrap()
+        );
+        assert_eq!(vm.own_property_flags(sub, "addProperty").unwrap(), None);
+        assert_eq!(vm.get(vm.global(), "Function").unwrap(), Value::Undefined);
         let Value::Object(prototype) = vm.get(sub, "prototype").unwrap() else {
             panic!()
         };
@@ -3051,6 +3166,78 @@ mod tests {
         .unwrap();
         assert_eq!(vm.own_property_flags(object, "locked").unwrap(), Some(1));
         assert_eq!(vm.own_property_flags(object, "visible").unwrap(), Some(1));
+    }
+    #[test]
+    fn loaded_target_default_follows_captured_activation_not_receiver_or_nested_getter() {
+        let mut vm = setup();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let root = vm.root();
+        vm.bind_loaded_movie_target(root, 15).unwrap();
+        assert!(vm.bind_loaded_movie_target(root, 14).is_err());
+        assert!(vm
+            .bind_loaded_movie_target(ObjectId(usize::MAX), 15)
+            .is_err());
+        let other = vm.object().unwrap();
+        let parent = vm.object().unwrap();
+        let victim = vm.alloc(Kind::Plain, Some(parent)).unwrap();
+        vm.set(victim, "field", Value::Number(42.0)).unwrap();
+        vm.set(vm.global(), "victim", Value::Object(victim))
+            .unwrap();
+        let getter_code = vm
+            .register(Arc::new(Program::parse(&function("getter", &[0])).unwrap()))
+            .unwrap();
+        vm.execute(getter_code, other, &mut RejectHost).unwrap();
+        let getter = vm.get(other, "getter").unwrap();
+        vm.raw_member(
+            victim,
+            text("probe"),
+            Property::Accessor {
+                getter,
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        let mut flags = push(&[Value::Number(1.0), Value::Null, Value::string("victim")]);
+        flags.push(0x1c);
+        flags.extend(push(&[Value::Number(3.0), Value::string("ASSetPropFlags")]));
+        flags.extend([0x3d, 0x3e]);
+        let mut body = push(&[Value::string("victim")]);
+        body.push(0x1c);
+        body.extend(push(&[Value::string("probe")]));
+        body.extend([0x4e, 0x17]);
+        body.extend(&flags);
+        execute(&mut vm, &function("bound", &body)).unwrap();
+        let callable = vm.get(root, "bound").unwrap();
+        vm.call(callable, Value::Object(other), &[], &mut RejectHost)
+            .unwrap();
+        assert_eq!(vm.own_property_flags(victim, "field").unwrap(), Some(1));
+        assert_eq!(vm.own_property_flags(victim, "__proto__").unwrap(), Some(3));
+        assert_eq!(vm.get(victim, "field").unwrap(), Value::Number(42.0));
+        let foreign_code = vm
+            .register(Arc::new(
+                Program::parse(&function("foreign", &flags)).unwrap(),
+            ))
+            .unwrap();
+        vm.execute(foreign_code, other, &mut RejectHost).unwrap();
+        let foreign = vm.get(other, "foreign").unwrap();
+        assert!(matches!(
+            vm.call(foreign, Value::Object(root), &[], &mut RejectHost)
+                .unwrap_err()
+                .kind,
+            ErrorKind::AmbiguousPropertyFlags { old: 3, set: 1 }
+        ));
+        assert!(matches!(
+            vm.call(
+                Value::Object(intrinsic),
+                Value::Object(root),
+                &[Value::Object(victim), Value::Null, Value::Number(1.0)],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::AmbiguousPropertyFlags { old: 3, set: 1 }
+        ));
     }
     #[test]
     fn ambiguous_default_flag_clearing_is_atomic_and_member_work_is_bounded() {
