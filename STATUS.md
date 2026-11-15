@@ -3,7 +3,7 @@
 Task `a3d58c579542` remains **working**, updated 2026-11-15 13:14 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
-retail parity. The current source version is `0.1.0-dev.20`.
+retail parity. The current source version is `0.1.0-dev.21`.
 
 ## Latest private diagnostic
 
