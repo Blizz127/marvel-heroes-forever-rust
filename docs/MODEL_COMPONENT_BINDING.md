@@ -6,6 +6,12 @@ their saved links and maps each component/element node index to its retained
 Model Nodes record span. This prepares saved relationships; it does not
 initialize components, resolve materials, build geometry or draw a scene.
 
+The diagnostic command `mhf upk model-binding <package.upk> <1-based-level>
+<1-based-model> [1-based-component ...]` exposes this exact selection contract.
+An empty component list is explicit; omission is rejected when the saved Level
+contains components. The command prints retained counts without discovering
+missing selections or evaluating materials/geometry.
+
 ## Request and archive identity
 
 ```rust,ignore

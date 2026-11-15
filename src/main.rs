@@ -48,6 +48,9 @@ fn usage() {
         "  mhf upk world|model|model-component|polys|class <package.upk> <export-name|1-based-index>"
     );
     println!("  mhf upk class-defaults <package.upk> <logical-package-name> <1-based-class-index>");
+    println!(
+        "  mhf upk model-binding <package.upk> <1-based-level> <1-based-model> [1-based-component ...]"
+    );
     println!("  mhf upk verify-objects <package.upk>");
     println!(
         "  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]"
@@ -161,6 +164,61 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     ));
                 }
             }
+        }
+        "upk" if args.len() >= 5 && args[1] == "model-binding" => {
+            use marvel_heroes_forever::frontend::{
+                AssetLocation, AssetSet,
+                model_component_binding::{self, Request},
+            };
+            let limits = model_component_binding::Limits::default();
+            if args.len() - 5 > limits.components {
+                return Err(invalid("too many explicit component selections"));
+            }
+            let location = |value: &OsString| -> Result<AssetLocation> {
+                let export = text(value)?
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|number| number.checked_sub(1))
+                    .ok_or_else(|| invalid("export selections must be positive integers"))?;
+                Ok(AssetLocation { package: 0, export })
+            };
+            let components = args[5..].iter().map(location).collect::<Result<Vec<_>>>()?;
+            let assets = AssetSet::new(vec![PackageArchive::open(Path::new(&args[2]))?])?;
+            let binding = model_component_binding::prepare(
+                &assets,
+                Request {
+                    level: location(&args[3])?,
+                    model: location(&args[4])?,
+                    components: &components,
+                },
+                limits,
+            )?;
+            println!(
+                "VERIFIED saved Model binding: Level +{}, Model +{}, {} component slots, {} Model Nodes",
+                binding.level().location.export + 1,
+                binding.model().location.export + 1,
+                binding.components().len(),
+                binding.model_nodes().count,
+            );
+            println!(
+                "Retained {} serialized bytes, {} properties, {} elements and {} node-index mappings",
+                binding.usage().serialized_bytes,
+                binding.usage().properties,
+                binding.usage().elements,
+                binding.usage().node_indices,
+            );
+            for component in binding.components() {
+                println!(
+                    "Component +{}: {} component-node mappings, {} elements; opaque suffix {} bytes",
+                    component.export.location.export + 1,
+                    component.nodes.len(),
+                    component.elements.len(),
+                    component.export.object.unparsed_native_tail.length,
+                );
+            }
+            println!(
+                "All selections and saved links are explicit. No runtime loading, materials or geometry evaluation performed."
+            );
         }
         "upk" if args.len() == 5 && args[1] == "class-defaults" => {
             use marvel_heroes_forever::frontend::{

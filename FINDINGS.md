@@ -20,6 +20,24 @@ follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
 
 Dev19 is the latest built and staged diagnostic; dev20 has not been built.
 
+**VERIFIED explicit Model binding:** one retained archive namespace now checks
+the complete ordered saved Level/Model/component relationships and maps both
+component and element node lists to exact Model record spans. Four focused
+tests and both actual-map comparisons pass: 14 retained exports, 11,155 original
+bytes and 24 node mappings across 81 comparison rows. Unknown fields, material
+imports and tails remain retained; no geometry evaluation follows. Receipt:
+`evidence/model-component-binding/final-receipt.json`, SHA-256
+`78fce9eb50a60b3b780c3abd587d60d48fc91e00032d156ebb1c0109781226bf`.
+
+**VERIFIED bounded native rectangle tessellation:** one admitted non-AA,
+zero-tolerance rectangular contour now follows recovered ordering, chain and
+triangle-generation operations. Five focused tests pass. A saved Shape72 probe
+matches 13 independent output/trace groups, producing four vertices, two
+triangles and the exact resource-mesh descriptors under explicitly supplied
+synthetic context/resource/options. Runtime input selection and renderer use
+remain unverified. Receipt: `evidence/scale9-tessellation/receipt.json`, SHA-256
+`b210c63dd382484ec8c12bfda1326077ce419ab4d27dd785e6ebc5ae1f1d6d83`.
+
 **VERIFIED static post-resource checkpoint:** under the recorded factory-return,
 receiver, valid-list and ordinary allocation/free profile, the exact caller
 checkpoint `0x1402102dd` preserves the three earlier fields and changes source

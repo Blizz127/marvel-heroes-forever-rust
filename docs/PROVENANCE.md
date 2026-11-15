@@ -729,3 +729,11 @@ records the selected owner-receiving constructor and remaining concrete update
 dispatch boundaries. Both extend private owner-binary evidence with original
 checking scripts; no native state, renderer defaults or external implementation
 was substituted for the remaining conditions.
+
+[Explicit ModelComponent binding](MODEL_COMPONENT_BINDING.md) joins original
+Level/Model/component readers through checked saved links, retained bytes and
+archive identity. Its owned-package comparisons use the existing private pins;
+no additional external implementation was read. [Bounded native rectangle
+tessellation](SCALE9_TESSELLATION.md) records exact owner-binary scan/triangle
+paths, independently checked native bytes and supplied-input oracle limits.
+Neither increment supplies current scene, material or renderer state.
