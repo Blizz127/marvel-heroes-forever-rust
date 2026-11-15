@@ -123,6 +123,12 @@ impl TextFieldHost {
         self.fields.get(&field).map(|b| &b.state)
     }
 
+    /// All currently bound instances in this host domain, without invoking any
+    /// getter or consuming pending invalidation. Numeric IDs remain VM-local.
+    pub fn bound_fields(&self) -> impl ExactSizeIterator<Item = AttachedTextFieldId> + '_ {
+        self.fields.keys().copied()
+    }
+
     fn context_owner(&self, vm: &Vm, clip: AttachedClipId) -> Result<ObjectId, String> {
         if vm.root() != self.root {
             return Err("TextField host VM root changed".into());

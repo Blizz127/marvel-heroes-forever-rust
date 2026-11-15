@@ -6,9 +6,10 @@ use crate::avm1::vm::{
     HostCommand, LoadedMovieSourceId, MovieProperty, ObjectId, PropertyRequest, Value, Vm,
 };
 use crate::gfx::{
-    CharacterKind,
-    scene::{Affine, MovieId, NodeId, NodeKind, Scene, SceneNode},
+    CharacterKind, Movie,
+    scene::{ActionNode, Affine, MovieId, NodeId, NodeKind, OpaqueNode, Scene, SceneNode, TagRef},
 };
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -20,6 +21,8 @@ pub struct Limits {
     pub max_depth: usize,
     pub max_source_items: usize,
     pub max_source_string_bytes: usize,
+    /// Total immutable movie bytes hashed for later current-scene projection.
+    pub max_source_movie_bytes: usize,
     pub max_bindings: usize,
     pub max_property_calls: usize,
     pub max_recomputed_nodes: usize,
@@ -31,6 +34,7 @@ impl Default for Limits {
             max_depth: 256,
             max_source_items: 2_000_000,
             max_source_string_bytes: 16 * 1024 * 1024,
+            max_source_movie_bytes: 256 * 1024 * 1024,
             max_bindings: 100_000,
             max_property_calls: 100_000,
             max_recomputed_nodes: 2_000_000,
@@ -46,6 +50,8 @@ pub enum DisplayError {
     },
     InvalidNode(NodeId),
     InvalidMovie(MovieId),
+    SourceMovieSet,
+    SourceMovieChanged(MovieId),
     UnboundSource(LoadedMovieSourceId),
     SourceBindingConflict {
         source: LoadedMovieSourceId,
@@ -133,6 +139,10 @@ pub struct DisplayState {
     node_bindings: BTreeMap<NodeId, ObjectId>,
     movie_versions: BTreeMap<MovieId, u8>,
     movie_tag_codes: BTreeMap<MovieId, Vec<u16>>,
+    source_movies: BTreeMap<MovieId, (usize, [u8; 32])>,
+    source_actions: Vec<ActionNode>,
+    source_opaque_nodes: Vec<OpaqueNode>,
+    source_unbound_action_tags: Vec<TagRef>,
     source_bindings: BTreeMap<LoadedMovieSourceId, MovieId>,
     movie_sources: BTreeMap<MovieId, LoadedMovieSourceId>,
     attached_bindings: BTreeMap<AttachedClipId, NodeId>,
@@ -166,6 +176,27 @@ impl DisplayState {
                 movie.tags.len(),
                 limits.max_source_items,
                 "source tag codes",
+            )?;
+        }
+        let mut movie_bytes = 0;
+        for movie in scene.movies.values() {
+            charge(
+                &mut movie_bytes,
+                movie.bytes().len(),
+                limits.max_source_movie_bytes,
+                "source movie bytes",
+            )?;
+        }
+        for count in [
+            scene.actions.len(),
+            scene.opaque_nodes.len(),
+            scene.unbound_action_tags.len(),
+        ] {
+            charge(
+                &mut items,
+                count,
+                limits.max_source_items,
+                "scene metadata items",
             )?;
         }
         for (id, source) in scene.nodes.iter().enumerate() {
@@ -340,6 +371,19 @@ impl DisplayState {
                 .iter()
                 .map(|(&id, movie)| (id, movie.tags.iter().map(|tag| tag.code).collect()))
                 .collect(),
+            source_movies: scene
+                .movies
+                .iter()
+                .map(|(&id, movie)| {
+                    (
+                        id,
+                        (movie.bytes().len(), Sha256::digest(movie.bytes()).into()),
+                    )
+                })
+                .collect(),
+            source_actions: scene.actions.clone(),
+            source_opaque_nodes: scene.opaque_nodes.clone(),
+            source_unbound_action_tags: scene.unbound_action_tags.clone(),
             source_bindings: BTreeMap::new(),
             movie_sources: BTreeMap::new(),
             attached_bindings: BTreeMap::new(),
@@ -529,6 +573,39 @@ impl DisplayState {
                 node
             })
             .collect()
+    }
+
+    /// Snapshot the current render geometry with this state's retained source
+    /// metadata. Supply the exact immutable movies from the original Scene.
+    /// Hashes verify content, not native instance lifetime or VM completion.
+    ///
+    /// This does not execute actions, acknowledge text invalidation or rebuild
+    /// DisplayState from changed derived geometry. Raw placement stays original;
+    /// world transforms/effective visibility come from current host state.
+    pub fn snapshot_scene<'movie>(
+        &self,
+        movies: BTreeMap<MovieId, &'movie Movie>,
+    ) -> Result<Scene<'movie>> {
+        if movies.len() != self.source_movies.len() {
+            return Err(DisplayError::SourceMovieSet);
+        }
+        for (&id, &(length, digest)) in &self.source_movies {
+            let movie = movies.get(&id).ok_or(DisplayError::SourceMovieSet)?;
+            if movie.bytes().len() != length
+                || self.movie_versions.get(&id) != Some(&movie.header.version)
+                || <[u8; 32]>::from(Sha256::digest(movie.bytes())) != digest
+            {
+                return Err(DisplayError::SourceMovieChanged(id));
+            }
+        }
+        Ok(Scene {
+            root: self.root,
+            movies,
+            nodes: self.snapshot_nodes(),
+            actions: self.source_actions.clone(),
+            opaque_nodes: self.source_opaque_nodes.clone(),
+            unbound_action_tags: self.source_unbound_action_tags.clone(),
+        })
     }
 
     fn target(&self, request: &PropertyRequest) -> Result<NodeId> {
@@ -1373,6 +1450,142 @@ mod tests {
                 .last_write,
             display.traces()[0].request.origin
         );
+    }
+
+    #[test]
+    fn current_scene_projection_preserves_source_metadata_after_host_and_input_changes() {
+        use crate::gfx::{Span, scene::ActionKind};
+        let mut scene = fixture(false);
+        scene.actions.push(ActionNode {
+            owner: 1,
+            movie_id: 37,
+            source_tag: None,
+            bytes: Span {
+                offset: 0,
+                length: 0,
+            },
+            kind: ActionKind::Clip {
+                event_flags: 8,
+                key_code: None,
+            },
+        });
+        let tag = TagRef {
+            movie_id: 37,
+            tag_index: 0,
+        };
+        scene.opaque_nodes.push(OpaqueNode {
+            owner: 2,
+            source: tag,
+            code: 999,
+            body: Span {
+                offset: 0,
+                length: 0,
+            },
+        });
+        scene.unbound_action_tags.push(tag);
+        let mut state = DisplayState::from_scene(&scene, Limits::default()).unwrap();
+        state.bind_object(ObjectId(11), 1).unwrap();
+        state
+            .write_property(request(11, MovieProperty::X), Value::Number(7.0))
+            .unwrap();
+        state
+            .write_property(request(11, MovieProperty::Visible), Value::Bool(false))
+            .unwrap();
+        let before = (state.stats(), state.traces().len());
+        let current = state.snapshot_scene(scene.movies.clone()).unwrap();
+        assert_eq!(current.actions, scene.actions);
+        assert_eq!(current.opaque_nodes, scene.opaque_nodes);
+        assert_eq!(current.unbound_action_tags, scene.unbound_action_tags);
+        for (source, node) in scene.nodes.iter().zip(&current.nodes) {
+            assert_eq!(source.raw, node.raw);
+            assert_eq!(source.kind, node.kind);
+            assert_eq!(source.children, node.children);
+            assert_eq!(source.actions, node.actions);
+            assert_eq!(source.parent, node.parent);
+            assert_eq!(source.scaling_grids, node.scaling_grids);
+            assert_eq!(source.world_color, node.world_color);
+        }
+        assert_ne!(current.nodes[2].world_matrix, scene.nodes[2].world_matrix);
+        assert_eq!(
+            current.nodes[2].world_matrix,
+            state.node(2).unwrap().world_matrix
+        );
+        assert!(!current.nodes[1].effective_visible && !current.nodes[2].effective_visible);
+        assert!(current.nodes[3].effective_visible);
+        assert!(scene.nodes[1].raw.as_ref().unwrap().visible);
+        scene.actions.clear();
+        scene.opaque_nodes.clear();
+        scene.unbound_action_tags.clear();
+        let later = state.snapshot_scene(scene.movies.clone()).unwrap();
+        assert_eq!(later.actions, current.actions);
+        assert_eq!(later.opaque_nodes, current.opaque_nodes);
+        assert_eq!(later.unbound_action_tags, current.unbound_action_tags);
+        assert_eq!((state.stats(), state.traces().len()), before);
+    }
+
+    fn projection_movie(red: u8) -> Movie {
+        let mut bytes = vec![b'G', b'F', b'X', 15, 0, 0, 0, 0, 8, 0, 0, 24, 1, 0];
+        bytes.extend(((9u16 << 6) | 3).to_le_bytes());
+        bytes.extend([red, 0, 0]);
+        bytes.extend((1u16 << 6).to_le_bytes());
+        bytes.extend(0u16.to_le_bytes());
+        let len = bytes.len() as u32;
+        bytes[4..8].copy_from_slice(&len.to_le_bytes());
+        Movie::parse(&bytes).unwrap()
+    }
+
+    #[test]
+    fn current_scene_projection_requires_exact_movie_set_content_and_version() {
+        use crate::gfx::scene::{MovieRef, NoImports};
+        let movie = projection_movie(7);
+        let changed = projection_movie(8);
+        assert_eq!(movie.bytes().len(), changed.bytes().len());
+        let scene =
+            Scene::first_frame(MovieRef::new(37, &movie), &NoImports, Default::default()).unwrap();
+        let state = DisplayState::from_scene(&scene, Limits::default()).unwrap();
+        assert!(matches!(
+            state.snapshot_scene(BTreeMap::new()),
+            Err(DisplayError::SourceMovieSet)
+        ));
+        assert!(matches!(
+            state.snapshot_scene(BTreeMap::from([(38, &movie)])),
+            Err(DisplayError::SourceMovieSet)
+        ));
+        assert!(matches!(
+            state.snapshot_scene(BTreeMap::from([(37, &movie), (38, &movie)])),
+            Err(DisplayError::SourceMovieSet)
+        ));
+        assert!(matches!(
+            state.snapshot_scene(BTreeMap::from([(37, &changed)])),
+            Err(DisplayError::SourceMovieChanged(37))
+        ));
+        let mut copy = Movie::parse(movie.bytes()).unwrap();
+        assert!(state.snapshot_scene(BTreeMap::from([(37, &copy)])).is_ok());
+        copy.header.version = 14;
+        assert!(matches!(
+            state.snapshot_scene(BTreeMap::from([(37, &copy)])),
+            Err(DisplayError::SourceMovieChanged(37))
+        ));
+        assert_eq!(state.stats().revision, 0);
+        assert!(state.traces().is_empty());
+    }
+
+    #[test]
+    fn current_scene_projection_source_hashing_is_bounded_before_adoption() {
+        use crate::gfx::scene::{MovieRef, NoImports};
+        let movie = projection_movie(7);
+        let scene =
+            Scene::first_frame(MovieRef::new(37, &movie), &NoImports, Default::default()).unwrap();
+        let mut limits = Limits {
+            max_source_movie_bytes: movie.bytes().len(),
+            ..Limits::default()
+        };
+        assert!(DisplayState::from_scene(&scene, limits).is_ok());
+        limits.max_source_movie_bytes -= 1;
+        assert!(matches!(
+            DisplayState::from_scene(&scene, limits),
+            Err(DisplayError::Budget("source movie bytes"))
+        ));
     }
 
     #[test]
