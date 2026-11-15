@@ -244,6 +244,9 @@ color, spacing and kerning attributes. Its unsupported wrapping and alpha cases
 remain explicit rather than rendered through a substitute plain-text path.
 [Action scheduling](FRONTEND_ACTION_QUEUE.md) applies the owned-binary REA
 cursor, token and nested-drain evidence in an original bounded queue, without
-claiming a runtime executor. [Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
+claiming a runtime executor. [Initializer submission](FRONTEND_INIT_LEDGER.md)
+applies the per-instance/frame native ledger with explicit bounded-failure policy;
+it is separate from actual loader triggers and bytecode execution.
+[Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
 records read-only local Wine/capture-tool inspection and an isolated Python-only
 namespace check; retail execution and reference capture have not run.

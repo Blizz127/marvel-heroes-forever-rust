@@ -26,6 +26,8 @@ pub mod class_registry;
 pub mod display_state;
 #[path = "frontend/host.rs"]
 pub mod host;
+#[path = "frontend/init_ledger.rs"]
+pub mod init_ledger;
 #[path = "frontend/library.rs"]
 pub mod library;
 #[path = "frontend/localized_data.rs"]
