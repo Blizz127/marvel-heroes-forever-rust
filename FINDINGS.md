@@ -549,3 +549,14 @@ from the tested source, with identical binary bytes. Artifact:
 `evidence/build-0.1.0-dev.9-package-validation.json`. The coordinator's queued
 intake supersedes dev.8's Rust diagnostic only. Publication and owner-device
 validation remain unconfirmed.
+
+## Dev10 private staging receipt
+
+**VERIFIED 2026-11-15 10:15 UTC:** private
+`builds/0.1.0-dev.10` contains 310 original-only selected files. Every manifest
+size/hash and the complete file set match; its binary reports the correct
+version. Packaged source is `f205c53b1ebee392fcc06995e76049c709981887`; tested
+code remains `49aa8b6a60b99f5f10f43066deadbfd4879cfbd1`. The immutable validation
+receipt is `evidence/build-0.1.0-dev.10-package-validation.json`.
+Coordinator intake was queued, superseding the dev9 Rust diagnostic only.
+No launcher upload/publication or coordinator acknowledgement is claimed.
