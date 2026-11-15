@@ -433,3 +433,13 @@ EditText loader through fresh HTML document formatting and layout consumers.
 The recovered scalar style/effect values remain conditional on that specific
 runtime path; current font selection and effective layout flags are separate
 inputs. Raw tables, disassembly and all extracted movie data stay private.
+
+[Ordinary applied super calls](REA_APPLIED_SUPER.md) records receiver-derived
+prototype traversal separately from construction context in the owned native
+client. Its original bounded VM implementation retains the typed receiver and
+independent source/Environment identities.
+
+[Known-splash continuation](NATIVE_SPLASH_CONTINUATION.md) records the completed
+same-snapshot offline run and complete post-run hashes. Its original passive
+window observer studied `/usr/include/X11/Xlib.h` API signatures under the
+header's Open Group permissive licence; no Xlib implementation was copied.

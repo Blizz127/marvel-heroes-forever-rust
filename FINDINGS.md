@@ -5,6 +5,34 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev13 startup work in progress
+
+**VERIFIED Rust checks:** typed attached `Function.apply` and bounded ordinary
+`super` calls are integrated. The latter retains receiver identity separately
+from its prototype cursor and from construction context. Eight focused checks
+include existing construction regressions; the integrated window-feature check
+passes at `598b2e4`. [Applied-super evidence](docs/REA_APPLIED_SUPER.md) records
+the native contract and admitted runtime profile.
+
+[Persistent saved-action state](docs/SAVED_ACTION_STATE.md) adds explicit
+per-installation constant pools and per-owner operand/register storage. Three
+focused standalone state tests pass. Central saved-mode frame, activation and
+dispatch integration remains outstanding; generic execution is still diagnostic.
+[Native text-format mapping](docs/TEXTFIELD_FORMAT_MAPPING.md) closes the scalar
+style derivation for the qualified fresh HTML path while retaining explicit
+font-selection and effective runtime-state requirements.
+
+**OBSERVED retail reference:** the full same-snapshot continuation remained on
+the original loading splash at its 45-second deadline. Both visible windows
+reported the isolated owned retail PID. All 16,490 input hashes passed the
+completed post-run check, no UI input was sent and owned cleanup finished.
+[Continuation evidence](docs/NATIVE_SPLASH_CONTINUATION.md) preserves the exact
+scope; loading artwork does not establish a rendered login frontend.
+
+Dev13 is source work, not a staged or published release. The latest verified
+private package remains dev12 below. Gate 1 retail behavior/visual parity is
+not yet verified; Gate 2 exposes no finished upgrades yet.
+
 ## 2026-11-15 dev12 diagnostic increment
 
 **VERIFIED Rust execution:** tested source
