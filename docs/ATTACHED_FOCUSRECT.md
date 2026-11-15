@@ -3,9 +3,9 @@
 **VERIFIED static path:** on the pinned build's concrete case-3 attached
 MovieClip, normal assignment of Boolean `false` to `_focusrect` clears bit
 `0x80` and sets bit `0x100` in the receiver target's DWORD at **`+0xb8`**.
-The native getter subsequently returns Boolean false. The selected path has
-no root/child distinction, parent traversal, global-state access, ordinary
-member insertion, or script callback. This proves a bounded native contract,
+The native getter subsequently returns Boolean false. The selected state
+update has no root/child distinction, parent traversal, global focus-default
+lookup, ordinary member insertion, or script callback. This proves a bounded native contract,
 not executed retail behavior or complete frontend initialization.
 
 **The field is not `AttachedEventState.target_flags`.** That existing field
