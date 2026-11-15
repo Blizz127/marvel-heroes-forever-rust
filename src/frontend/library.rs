@@ -5,6 +5,7 @@ use crate::gfx::TagData;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io,
+    sync::Arc,
 };
 
 pub type MovieId = usize;
@@ -99,6 +100,7 @@ pub struct Entry {
 }
 
 pub struct MovieLibrary {
+    asset_identity: Arc<()>,
     entries: Vec<Entry>,
     by_location: BTreeMap<AssetLocation, MovieId>,
     by_path: BTreeMap<String, Vec<MovieId>>,
@@ -155,6 +157,7 @@ impl MovieLibrary {
             }
         }
         let mut library = Self {
+            asset_identity: Arc::clone(&assets.identity),
             entries: Vec::new(),
             by_location: BTreeMap::new(),
             by_path: BTreeMap::new(),
@@ -288,6 +291,13 @@ impl MovieLibrary {
             }
         }
         Ok(library)
+    }
+
+    /// True only for the archive-index namespace from which this library loaded.
+    /// Moving either value preserves identity; reopening identical files creates
+    /// a different namespace and requires a separately loaded library.
+    pub fn matches_assets(&self, assets: &AssetSet) -> bool {
+        Arc::ptr_eq(&self.asset_identity, &assets.identity)
     }
 
     pub fn entries(&self) -> &[Entry] {
@@ -458,6 +468,24 @@ pub fn logical_movie_path(source_object_path: &str, url: &str) -> io::Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn asset_identity_survives_moves_and_retains_the_source_namespace() {
+        let assets = AssetSet::new(vec![]).unwrap();
+        let first = MovieLibrary::load(&assets, &[], &[], Limits::default()).unwrap();
+        let second = MovieLibrary::load(&assets, &[], &[], Limits::default()).unwrap();
+        let moved = Box::new(assets);
+        assert!(first.matches_assets(&moved));
+        assert!(second.matches_assets(&moved));
+        let other = AssetSet::new(vec![]).unwrap();
+        assert!(!first.matches_assets(&other));
+        drop(moved);
+        // The libraries retain their token after the original archive set is
+        // dropped. A new allocation cannot inherit that namespace identity.
+        let replacement = AssetSet::new(vec![]).unwrap();
+        assert!(!first.matches_assets(&replacement));
+        assert!(!second.matches_assets(&replacement));
+    }
+
     #[test]
     fn logical_paths_preserve_movie_names_and_never_open_urls() {
         assert_eq!(

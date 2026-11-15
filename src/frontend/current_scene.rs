@@ -621,6 +621,32 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn asset_identity_rejects_a_separately_loaded_identical_package() {
+        let f = Fixture::new(true);
+        let (other_assets, other_library) = synthetic_fixture().unwrap();
+        let original = &f.library.entry(0).unwrap().asset.movie;
+        let other = &other_library.entry(0).unwrap().asset.movie;
+        assert_eq!(original.bytes(), other.bytes());
+        let before = f.observe();
+        let error = prepare(
+            &f.host,
+            BTreeMap::from([(0, original)]),
+            &other_assets,
+            &f.library,
+            &f.fields,
+            &f.formats,
+            Limits::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(&error, Error::Content(e)
+            if e.kind() == io::ErrorKind::InvalidData
+                && e.to_string() == "scene-content library and AssetSet identity differ"));
+        assert_eq!(before, f.observe());
+        // The original association still prepares all current fields.
+        assert!(f.prepare(&f.fields, &f.formats, Limits::default()).is_ok());
+    }
+
     use fixture_source::synthetic_fixture;
     mod fixture_source {
         // Original constructed UPK/SWF fixture; no retail bytes.

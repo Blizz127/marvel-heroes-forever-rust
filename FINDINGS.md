@@ -7,6 +7,13 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev18 integration in progress
 
+**VERIFIED archive association:** each MovieLibrary retains the identity of the
+AssetSet it loaded from. Content preparation rejects a different set even when
+its package bytes are identical, closing the previous caller-only association
+contract. Two focused tests pass, covering moves, original-set lifetime, wrong
+association rejection and unchanged host state. Receipt:
+`evidence/asset-set-identity/focused-check.json`.
+
 **VERIFIED bounded Rectangle construction:** the VM now supports deferred
 Rectangle registration alongside Point and zero-argument Rectangle NewMethod.
 Constructor, prototype and instance identities remain distinct; computed

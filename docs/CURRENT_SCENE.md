@@ -24,9 +24,13 @@ projects current transforms and effective visibility while retaining original
 source placement, action, opaque and unbound-action metadata. The content
 preparer independently checks the library entry's movie pointer identity.
 Matching bytes alone therefore do not admit a different library association.
-The supplied AssetSet must be the one used to construct that library; the
-existing library API does not retain an AssetSet identity token, so this remains
-a caller association contract rather than an additional check in this adapter.
+The supplied AssetSet must be the one used to construct that library. Each set
+now owns a private identity token retained by its libraries; scene-content
+preparation checks that identity before resolving any content. Moves preserve
+the association, while reopening even identical package bytes creates a new
+archive-index namespace. Keeping the token alive also prevents a later set from
+inheriting the identity after the original set is dropped. This is original
+client resource bookkeeping, not a native pointer or file-immutability claim.
 
 For an attached TextFieldHost, the existing
 `runtime_text::snapshot_overrides` validates supplied field identities,
@@ -71,6 +75,13 @@ inputs without a TextFieldHost, incomplete coverage, display-source mismatch,
 text error or content error returns a typed error without a partial frame.
 
 ## Focused validation
+
+**VERIFIED later asset association check:** two focused tests pass: library
+identity survives moves and outlives the original set without matching a new
+set; current-frame preparation rejects a separately loaded identical synthetic
+package, leaves host state unchanged and still accepts the original association.
+Private receipt: `evidence/asset-set-identity/focused-check.json`. This checks
+original resource ownership, not external file mutation or native identity.
 
 **VERIFIED:** four focused composition tests pass through real public
 UPK→MovieLibrary→Scene→TextFieldHost→glyph preparation APIs. The test package,

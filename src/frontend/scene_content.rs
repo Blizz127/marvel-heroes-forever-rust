@@ -348,6 +348,11 @@ pub fn prepare_with_text_overrides(
     overrides: &[RuntimeTextOverride],
     limits: Limits,
 ) -> io::Result<PreparedScene> {
+    if !library.matches_assets(assets) {
+        return Err(invalid(
+            "scene-content library and AssetSet identity differ",
+        ));
+    }
     if scene.nodes.len() > limits.max_nodes || limits.max_import_hops > 256 {
         return Err(invalid("scene-content node/import budget exceeded"));
     }

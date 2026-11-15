@@ -14,6 +14,7 @@ use crate::{
 use std::{
     collections::{BTreeMap, BTreeSet},
     io,
+    sync::Arc,
 };
 
 #[path = "frontend/action_queue.rs"]
@@ -51,12 +52,12 @@ pub mod pointer;
 pub mod preview;
 #[path = "frontend/runtime_text.rs"]
 pub mod runtime_text;
-#[path = "frontend/saved_handlers.rs"]
-pub mod saved_handlers;
 #[path = "frontend/saved_dispatch.rs"]
 pub mod saved_dispatch;
 #[path = "frontend/saved_dynamic.rs"]
 pub mod saved_dynamic;
+#[path = "frontend/saved_handlers.rs"]
+pub mod saved_handlers;
 #[path = "frontend/saved_scene_handlers.rs"]
 pub mod saved_scene_handlers;
 #[path = "frontend/scene_adoption.rs"]
@@ -69,12 +70,12 @@ pub mod selection;
 pub mod stage_state;
 #[path = "frontend/startup_map.rs"]
 pub mod startup_map;
-#[path = "frontend/textfield_state.rs"]
-pub mod textfield_state;
 #[path = "frontend/textfield_format.rs"]
 pub mod textfield_format;
 #[path = "frontend/textfield_host.rs"]
 pub mod textfield_host;
+#[path = "frontend/textfield_state.rs"]
+pub mod textfield_state;
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
@@ -88,6 +89,9 @@ pub struct AssetLocation {
 }
 
 pub struct AssetSet {
+    // Held by each dependent MovieLibrary so moves and allocator address reuse
+    // cannot change the identity of this archive-index namespace.
+    identity: Arc<()>,
     archives: Vec<PackageArchive>,
     textures: BTreeMap<String, Vec<AssetLocation>>,
 }
@@ -116,7 +120,11 @@ impl AssetSet {
                 }
             }
         }
-        Ok(Self { archives, textures })
+        Ok(Self {
+            identity: Arc::new(()),
+            archives,
+            textures,
+        })
     }
 
     pub fn archive(&self, package: usize) -> io::Result<&PackageArchive> {

@@ -635,3 +635,13 @@ allocation path used by the original bounded implementation. Its evidence ledger
 retains all exact native inputs and tool provenance privately. Unsupported native
 methods and computed instance properties remain explicit; synthetic checks do
 not establish full startup or retail behavior parity.
+
+The [current-frame resource association](CURRENT_SCENE.md) now retains an
+original Rust ownership token across AssetSet/MovieLibrary moves and checks it
+before content resolution. Its focused tests reuse constructed project fixtures;
+no external implementation or new native-state assumption was used.
+
+The dev18 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev18-linux/manifest.json`, SHA-256
+`6826bccc5a3305e8abff3d3712006772f80130a8b1c7248f997431c35cefaff0`.
