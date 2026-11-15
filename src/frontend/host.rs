@@ -9,8 +9,8 @@ use super::{
     textfield_host::TextFieldHost,
 };
 use crate::avm1::vm::{
-    ClassRegistration, Host, HostCall, HostCommand, HostResult, ObjectId, PropertyRequest,
-    TextFieldMemberRequest, Value, Vm,
+    AttachedVisibilityRequest, ClassRegistration, Host, HostCall, HostCommand, HostResult,
+    ObjectId, PropertyRequest, TextFieldMemberRequest, Value, Vm,
 };
 use std::{error::Error, io};
 
@@ -98,6 +98,19 @@ impl FrontendHost {
 }
 
 impl Host for FrontendHost {
+    fn prepare_attached_visibility(
+        &mut self,
+        request: AttachedVisibilityRequest,
+    ) -> Result<Box<dyn FnOnce() + '_>, String> {
+        if request.root != self.classes.context().root {
+            return Err("visibility request differs from the owning frontend root".into());
+        }
+        self.display
+            .as_mut()
+            .ok_or("frontend display is not attached")?
+            .prepare_attached_visibility(request)
+            .map_err(|error| error.to_string())
+    }
     fn call(&mut self, call: HostCall<'_>) -> Result<Value, String> {
         if call.binding == CALL_BINDING {
             return Err("frontend external calls require HostResult materialization".into());

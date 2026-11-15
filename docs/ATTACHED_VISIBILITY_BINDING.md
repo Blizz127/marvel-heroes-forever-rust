@@ -1,5 +1,31 @@
 # Bounded attached `_visible` binding proposal
 
+## Host implementation increment
+
+**VERIFIED Rust host checks:** `DisplayState` now retains the bound clip's
+root, owner, display target, source and parent identities. Its typed preparation
+method validates those associations, the caller's bound context and local-bit
+coherence before staging effective visibility for the subtree. The returned
+borrowed `FnOnce` publishes the result, trace and revision with no further
+fallible work. Dropping it changes no node, trace entry or revision; diagnostic
+attempt/work counters and reserved capacity can reflect preparation.
+
+Only visibility Booleans are recomputed. Matrix bits, descendant local flags,
+other branches and immutable saved metadata stay unchanged. The host rejects
+generic indexed/direct Visible writes to an attached node, including Object-ID
+and empty-path aliases, so that path cannot bypass the VM's authoritative bit.
+Plain diagnostic-object writes keep their existing behavior. `FrontendHost`
+also checks its owning root before forwarding the staged request.
+
+All seven focused DisplayState checks pass, including the existing geometry
+checks and three new staging/identity/coherence/error cases. The synthetic tests
+use actual VM attachment and saved-scene bindings, explicitly update the supplied
+VM bit between prepare and commit, and establish no native fresh-state defaults.
+Receipt: `evidence/attached-visibility-host/focused-checks.json`. The separate VM
+setter hook and its policy/base-operation admission are required before script
+execution can use this host path. No original constructor or GPU run is claimed
+by these host checks. The native scope and proposal below remain their basis.
+
 **INFERRED implementation contract, grounded in verified native instructions:**
 the original exact-Boolean `_visible` assignment can update a bound Rust display
 node when its caller supplies current native state and the native status branch

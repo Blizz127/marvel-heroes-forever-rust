@@ -531,3 +531,9 @@ state. [Service test entry](MHSERVEREMU_TEST_ENTRY.md) registers the read-only
 launcher/server/coordinator sources used to identify normal routes and the
 unresolved service hold; it does not authorize bypassing that hold. The root's
 single public HTTP SiteConfig read is retained privately and is not a wake call.
+
+The [visibility host transaction](ATTACHED_VISIBILITY_BINDING.md) implements the
+conditional native-to-render-state projection in original Rust. Prepared host
+updates preserve local/effective visibility separately and do not expose native
+allocator or backing-node internals as verified Rust behavior. [Attached names](REA_ATTACHED_NAME.md)
+requires an explicit current-name snapshot; no root name is inferred from a file.

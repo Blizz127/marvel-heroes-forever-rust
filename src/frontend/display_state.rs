@@ -2,8 +2,8 @@
 //! No MovieClip construction, path lookup, event dispatch, or startup execution.
 
 use crate::avm1::vm::{
-    AttachedClipId, Host, HostCall, HostCommand, LoadedMovieSourceId, MovieProperty, ObjectId,
-    PropertyRequest, Value, Vm,
+    AttachedClipId, AttachedClipSource, AttachedVisibilityRequest, DisplayTargetId, Host, HostCall,
+    HostCommand, LoadedMovieSourceId, MovieProperty, ObjectId, PropertyRequest, Value, Vm,
 };
 use crate::gfx::{
     CharacterKind,
@@ -114,6 +114,16 @@ pub struct Statistics {
     pub revision: u64,
 }
 
+/// Facts retained from the existing VM binding, not derived from instance names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AttachedIdentity {
+    root: ObjectId,
+    owner: ObjectId,
+    target: DisplayTargetId,
+    source: AttachedClipSource,
+    parent: Option<AttachedClipId>,
+}
+
 /// One explicit VM/Scene association domain. ObjectId is VM-local; the caller
 /// must not reuse these bindings with another VM or a rebuilt Scene.
 pub struct DisplayState {
@@ -126,6 +136,8 @@ pub struct DisplayState {
     source_bindings: BTreeMap<LoadedMovieSourceId, MovieId>,
     movie_sources: BTreeMap<MovieId, LoadedMovieSourceId>,
     attached_bindings: BTreeMap<AttachedClipId, NodeId>,
+    attached_nodes: BTreeMap<NodeId, AttachedClipId>,
+    attached_identities: BTreeMap<AttachedClipId, AttachedIdentity>,
     pointer_stage_twips: Option<[f64; 2]>,
     traces: Vec<PropertyTrace>,
     limits: Limits,
@@ -331,6 +343,8 @@ impl DisplayState {
             source_bindings: BTreeMap::new(),
             movie_sources: BTreeMap::new(),
             attached_bindings: BTreeMap::new(),
+            attached_nodes: BTreeMap::new(),
+            attached_identities: BTreeMap::new(),
             pointer_stage_twips: None,
             traces: Vec::new(),
             limits,
@@ -455,8 +469,33 @@ impl DisplayState {
         {
             return Err(mismatch("attached clip is already bound to another node"));
         }
+        if self
+            .attached_nodes
+            .get(&node)
+            .is_some_and(|old| *old != clip)
+        {
+            return Err(mismatch(
+                "scene node is already bound to another attached clip",
+            ));
+        }
+        let identity = AttachedIdentity {
+            root: vm.root(),
+            owner: info.owner,
+            target: info.target,
+            source: info.source,
+            parent: info.parent,
+        };
+        if self
+            .attached_identities
+            .get(&clip)
+            .is_some_and(|old| *old != identity)
+        {
+            return Err(mismatch("attached identity differs from retained binding"));
+        }
         self.bind_object(info.owner, node)?;
         self.attached_bindings.insert(clip, node);
+        self.attached_nodes.insert(node, clip);
+        self.attached_identities.insert(clip, identity);
         Ok(())
     }
 
@@ -556,6 +595,12 @@ impl DisplayState {
     pub fn write_property(&mut self, request: PropertyRequest, value: Value) -> Result<()> {
         self.request_budget()?;
         let node = self.target(&request)?;
+        if request.property == MovieProperty::Visible && self.attached_nodes.contains_key(&node) {
+            return Err(DisplayError::UnsupportedProperty {
+                property: MovieProperty::Visible,
+                write: true,
+            });
+        }
         let mut matrix = self.nodes[node].local_matrix;
         let mut visible = self.nodes[node].local_visible;
         match request.property {
@@ -596,6 +641,134 @@ impl DisplayState {
             operation: PropertyOperation::Write { before, after },
         });
         Ok(())
+    }
+
+    /// Validate/stage the host projection before the VM's raw local-bit write.
+    /// The returned borrow excludes intervening host mutation. Invoking it after
+    /// that VM write publishes prepared visibility/trace/revision infallibly.
+    /// Dropping it cancels semantic changes; attempted-work counters and vector
+    /// capacity can still reflect preparation. No native node layout is claimed.
+    pub fn prepare_attached_visibility(
+        &mut self,
+        request: AttachedVisibilityRequest,
+    ) -> Result<Box<dyn FnOnce() + '_>> {
+        self.request_budget()?;
+        let mismatch = |reason| DisplayError::AttachedMismatch {
+            clip: request.receiver,
+            reason,
+        };
+        let identity = self
+            .attached_identities
+            .get(&request.receiver)
+            .ok_or(DisplayError::UnboundAttached(request.receiver))?;
+        let node = *self
+            .attached_bindings
+            .get(&request.receiver)
+            .ok_or(DisplayError::UnboundAttached(request.receiver))?;
+        if identity.root != request.root
+            || identity.owner != request.owner
+            || identity.target != request.target
+            || self.bindings.get(&request.root) != Some(&self.root)
+            || self.node_bindings.get(&self.root) != Some(&request.root)
+            || self.bindings.get(&request.owner) != Some(&node)
+            || self.node_bindings.get(&node) != Some(&request.owner)
+            || self.attached_nodes.get(&node) != Some(&request.receiver)
+        {
+            return Err(mismatch(
+                "visibility receiver/root/owner/target association differs",
+            ));
+        }
+        if !self.bindings.contains_key(&request.context) {
+            return Err(DisplayError::UnboundObject(request.context));
+        }
+        let state = &self.nodes[node];
+        let (movie, sprite) = match state.source.kind {
+            NodeKind::Root => (state.source.placement_movie, 0),
+            _ => {
+                let definition = state
+                    .source
+                    .kind
+                    .definition()
+                    .ok_or_else(|| mismatch("visibility source definition absent"))?;
+                if definition.kind != CharacterKind::Sprite {
+                    return Err(mismatch("visibility receiver is not a Sprite"));
+                }
+                (definition.movie_id, definition.character_id)
+            }
+        };
+        if self.source_bindings.get(&identity.source.movie) != Some(&movie)
+            || identity.source.sprite_id != sprite
+            || self.movie_versions.get(&movie) != Some(&identity.source.header_version)
+            || state.source.parent
+                != identity
+                    .parent
+                    .and_then(|parent| self.attached_bindings.get(&parent).copied())
+        {
+            return Err(mismatch("visibility source/parent association differs"));
+        }
+        if state.local_visible != request.expected_local {
+            return Err(mismatch(
+                "host local visibility differs from current native bit",
+            ));
+        }
+        let end = state.subtree_end;
+        charge(
+            &mut self.stats.recomputed_nodes,
+            end - node,
+            self.limits.max_recomputed_nodes,
+            "descendant visibility work",
+        )?;
+        let revision = self
+            .stats
+            .revision
+            .checked_add(1)
+            .ok_or(DisplayError::Budget("revision"))?;
+        let mut visibility = Vec::new();
+        visibility
+            .try_reserve(end - node)
+            .map_err(|_| DisplayError::Budget("visibility update allocation"))?;
+        for id in node..end {
+            let state = &self.nodes[id];
+            let local = if id == node {
+                request.visible
+            } else {
+                state.local_visible
+            };
+            let parent = state.source.parent.map_or(true, |parent| {
+                if parent >= node {
+                    visibility[parent - node]
+                } else {
+                    self.nodes[parent].effective_visible
+                }
+            });
+            visibility.push(local && parent);
+        }
+        self.traces
+            .try_reserve(1)
+            .map_err(|_| DisplayError::Budget("visibility trace allocation"))?;
+        let trace = PropertyTrace {
+            request: PropertyRequest {
+                context: request.context,
+                target: Value::DisplayClip(request.receiver),
+                property: MovieProperty::Visible,
+                origin: request.origin,
+                source_offset: request.origin.map(|origin| origin.source_offset),
+            },
+            node,
+            pointer_stage_twips: self.pointer_stage_twips,
+            operation: PropertyOperation::Write {
+                before: Value::Bool(request.expected_local),
+                after: Value::Bool(request.visible),
+            },
+        };
+        Ok(Box::new(move || {
+            self.nodes[node].local_visible = request.visible;
+            for (state, visible) in self.nodes[node..end].iter_mut().zip(visibility) {
+                state.effective_visible = visible;
+            }
+            self.stats.revision = revision;
+            self.traces.push(trace);
+        }))
     }
     fn update_subtree(&mut self, node: NodeId, local: Affine, visible: bool) -> Result<()> {
         let end = self.nodes[node].subtree_end;
@@ -654,6 +827,12 @@ impl DisplayState {
     }
 }
 impl Host for DisplayState {
+    fn prepare_attached_visibility(
+        &mut self,
+        request: AttachedVisibilityRequest,
+    ) -> std::result::Result<Box<dyn FnOnce() + '_>, String> {
+        DisplayState::prepare_attached_visibility(self, request).map_err(|error| error.to_string())
+    }
     fn call(&mut self, _: HostCall<'_>) -> std::result::Result<Value, String> {
         Err("display state has no native function bindings".into())
     }
@@ -825,6 +1004,273 @@ mod tests {
         state.bind_object(ObjectId(10), 1).unwrap();
         state.bind_object(ObjectId(11), 2).unwrap();
         state
+    }
+
+    fn visibility_fixture() -> (Vm, DisplayState, Vec<AttachedClipId>) {
+        use crate::avm1::vm::{AttachedClipSpec, AttachedEventState};
+        use crate::gfx::{
+            Movie,
+            scene::{MovieRef, NoImports},
+        };
+        fn tag(code: u16, body: &[u8]) -> Vec<u8> {
+            assert!(body.len() < 63);
+            let mut bytes = ((code << 6) | body.len() as u16).to_le_bytes().to_vec();
+            bytes.extend(body);
+            bytes
+        }
+        fn place(id: u16, depth: u16) -> Vec<u8> {
+            let mut body = vec![6];
+            body.extend(depth.to_le_bytes());
+            body.extend(id.to_le_bytes());
+            body.push(0);
+            tag(26, &body)
+        }
+        fn sprite(id: u16, child: bool) -> Vec<u8> {
+            let mut body = id.to_le_bytes().to_vec();
+            body.extend(1u16.to_le_bytes());
+            if child {
+                body.extend(place(2, 1));
+            }
+            body.extend(tag(1, &[]));
+            body.extend(tag(0, &[]));
+            tag(39, &body)
+        }
+        let mut bytes = vec![b'G', b'F', b'X', 15, 0, 0, 0, 0, 8, 0, 0, 24, 1, 0];
+        bytes.extend(sprite(2, false));
+        bytes.extend(sprite(1, true));
+        bytes.extend(place(1, 1));
+        bytes.extend(place(2, 2));
+        bytes.extend(tag(1, &[]));
+        bytes.extend(tag(0, &[]));
+        let len = bytes.len() as u32;
+        bytes[4..8].copy_from_slice(&len.to_le_bytes());
+        let movie = Movie::parse(&bytes).unwrap();
+        let scene =
+            Scene::first_frame(MovieRef::new(37, &movie), &NoImports, Default::default()).unwrap();
+        assert_eq!(scene.nodes.len(), 4);
+        let mut state = DisplayState::from_scene(&scene, Default::default()).unwrap();
+        let mut vm = Vm::new(15, Default::default()).unwrap();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        state.bind_movie_source(LoadedMovieSourceId(5), 37).unwrap();
+        let mut clips = Vec::new();
+        for node in &scene.nodes {
+            let clip = vm
+                .create_attached_movie_clip(AttachedClipSpec {
+                    target: DisplayTargetId(700 + node.id as u64),
+                    source: AttachedClipSource {
+                        movie: LoadedMovieSourceId(5),
+                        sprite_id: node
+                            .kind
+                            .definition()
+                            .map_or(0, |definition| definition.character_id),
+                        header_version: 15,
+                    },
+                    parent: node.parent.map(|parent| clips[parent]),
+                    event_state: AttachedEventState {
+                        target_flags: 0x5200_4180,
+                        load_flags: 8,
+                        source_flags: 0,
+                    },
+                })
+                .unwrap();
+            if node.id == 0 {
+                vm.adopt_attached_root(clip).unwrap();
+            }
+            state.bind_attached(&vm, clip, node.id).unwrap();
+            clips.push(clip);
+        }
+        (vm, state, clips)
+    }
+    fn visibility_request(
+        vm: &Vm,
+        clip: AttachedClipId,
+        visible: bool,
+    ) -> AttachedVisibilityRequest {
+        let info = vm.attached_info(clip).unwrap();
+        AttachedVisibilityRequest {
+            root: vm.root(),
+            context: vm.root(),
+            receiver: clip,
+            owner: info.owner,
+            target: info.target,
+            expected_local: info.event_state.target_flags & 0x4000 != 0,
+            visible,
+            origin: None,
+        }
+    }
+    // Simulate only the documented VM/host transaction boundary. The native
+    // named setter/profile has its own VM tests; these tests create no defaults.
+    fn visibility_commit(
+        vm: &mut Vm,
+        state: &mut DisplayState,
+        request: AttachedVisibilityRequest,
+    ) {
+        let mut flags = vm.attached_event_state(request.receiver).unwrap();
+        flags.target_flags =
+            (flags.target_flags & !0x4000) | if request.visible { 0x4000 } else { 0 };
+        let clip = request.receiver;
+        let commit = state.prepare_attached_visibility(request).unwrap();
+        vm.update_attached_event_state(clip, flags).unwrap();
+        commit();
+    }
+
+    #[test]
+    fn staged_visibility_cancels_or_commits_without_changing_matrices_or_child_local_bits() {
+        let (mut vm, mut state, clips) = visibility_fixture();
+        let owner = vm.attached_owner(clips[1]).unwrap();
+        state
+            .write_property(request(owner.0, MovieProperty::X), Value::Number(10.25))
+            .unwrap();
+        let matrices: Vec<_> = state
+            .nodes
+            .iter()
+            .map(|n| (n.local_matrix, n.world_matrix))
+            .collect();
+        let before = state.stats();
+        let traces = state.traces().len();
+        let req = visibility_request(&vm, clips[1], false);
+        drop(state.prepare_attached_visibility(req.clone()).unwrap());
+        assert!(
+            state
+                .nodes
+                .iter()
+                .all(|n| n.local_visible && n.effective_visible)
+        );
+        assert_eq!(state.stats().revision, before.revision);
+        assert_eq!(state.traces().len(), traces);
+        visibility_commit(&mut vm, &mut state, req);
+        assert!(!state.nodes[1].local_visible);
+        assert!(!state.nodes[1].effective_visible);
+        assert!(state.nodes[2].local_visible);
+        assert!(!state.nodes[2].effective_visible);
+        assert!(state.nodes[0].effective_visible && state.nodes[3].effective_visible);
+        assert_eq!(state.stats().revision, before.revision + 1);
+        assert_eq!(state.traces().len(), traces + 1);
+        assert_eq!(
+            state
+                .nodes
+                .iter()
+                .map(|n| (n.local_matrix, n.world_matrix))
+                .collect::<Vec<_>>(),
+            matrices
+        );
+        // A hidden ancestor does not change the child's expected LOCAL bit.
+        let req = visibility_request(&vm, clips[2], true);
+        visibility_commit(&mut vm, &mut state, req);
+        assert!(state.nodes[2].local_visible && !state.nodes[2].effective_visible);
+        let req = visibility_request(&vm, clips[1], true);
+        visibility_commit(&mut vm, &mut state, req);
+        assert!(
+            state
+                .nodes
+                .iter()
+                .all(|n| n.local_visible && n.effective_visible)
+        );
+        assert_eq!(
+            state
+                .nodes
+                .iter()
+                .map(|n| (n.local_matrix, n.world_matrix))
+                .collect::<Vec<_>>(),
+            matrices
+        );
+        assert!(
+            state
+                .nodes
+                .iter()
+                .all(|n| n.source.raw.as_ref().is_none_or(|raw| raw.visible))
+        );
+    }
+
+    #[test]
+    fn visibility_preflight_rejects_identity_coherence_and_budget_errors_before_publish() {
+        let (vm, mut state, clips) = visibility_fixture();
+        let req = visibility_request(&vm, clips[1], false);
+        let bad = vec![
+            AttachedVisibilityRequest {
+                root: ObjectId(999),
+                ..req.clone()
+            },
+            AttachedVisibilityRequest {
+                context: ObjectId(999),
+                ..req.clone()
+            },
+            AttachedVisibilityRequest {
+                owner: vm.root(),
+                ..req.clone()
+            },
+            AttachedVisibilityRequest {
+                target: DisplayTargetId(999),
+                ..req.clone()
+            },
+            AttachedVisibilityRequest {
+                receiver: clips[2],
+                ..req.clone()
+            },
+            AttachedVisibilityRequest {
+                expected_local: false,
+                ..req.clone()
+            },
+        ];
+        for bad in bad {
+            assert!(state.prepare_attached_visibility(bad).is_err());
+            assert!(
+                state
+                    .nodes
+                    .iter()
+                    .all(|n| n.local_visible && n.effective_visible)
+            );
+            assert_eq!(state.stats().revision, 0);
+            assert!(state.traces().is_empty());
+        }
+        state.limits.max_recomputed_nodes = 1;
+        assert!(matches!(
+            state.prepare_attached_visibility(req.clone()),
+            Err(DisplayError::Budget("descendant visibility work"))
+        ));
+        state.limits.max_recomputed_nodes = 100;
+        state.stats.revision = u64::MAX;
+        assert!(matches!(
+            state.prepare_attached_visibility(req),
+            Err(DisplayError::Budget("revision"))
+        ));
+        assert!(
+            state
+                .nodes
+                .iter()
+                .all(|n| n.local_visible && n.effective_visible)
+        );
+        assert!(state.traces().is_empty());
+    }
+
+    #[test]
+    fn generic_visible_writes_cannot_bypass_bound_attached_state() {
+        let (vm, mut state, clips) = visibility_fixture();
+        let owner = vm.attached_owner(clips[1]).unwrap();
+        for target in [
+            Value::DisplayClip(clips[1]),
+            Value::Object(owner),
+            Value::string(""),
+        ] {
+            let mut req = request(owner.0, MovieProperty::Visible);
+            req.target = target;
+            assert!(matches!(
+                state.write_property(req, Value::Bool(false)),
+                Err(DisplayError::UnsupportedProperty {
+                    property: MovieProperty::Visible,
+                    write: true
+                })
+            ));
+        }
+        assert!(
+            state
+                .nodes
+                .iter()
+                .all(|n| n.local_visible && n.effective_visible)
+        );
+        assert_eq!(state.stats().revision, 0);
+        assert!(state.traces().is_empty());
     }
 
     #[test]
