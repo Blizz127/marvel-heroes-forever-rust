@@ -17,7 +17,7 @@ let frame = preview::render_static(&quad_renderer, &prepared, root_stage, policy
 ```
 
 `render_static_with_limits` also accepts explicit node, command, mask traversal,
-mask part and uploaded-byte budgets. `DiagnosticFrame` contains the RGBA
+mask part, uploaded-byte, text-glyph placement and owned text-geometry budgets. `DiagnosticFrame` contains the RGBA
 `Readback`, original stage rectangle, selected `PreviewPolicy`, any saved root
 background applied, submission coverage and typed limitations. Coverage means
 geometry submitted; it is not a visible-pixel or completed-feature count.
@@ -49,13 +49,53 @@ Images follow the stable prepared bitmap-to-texture indices and original
 character IDs. Actual RGBA is uploaded once per used texture. Missing data or
 unknown encoding produces an explicit omitted fill, never a substitute image.
 Solid/gradient meshes and direct Bitmap nodes are not converted to guessed
-textured rectangles. Direct bitmap geometry and all Text nodes remain omitted
-in this increment; subsequent CPU text assets can be consumed separately.
+textured rectangles. Direct bitmap geometry remains omitted. Supported saved
+plain EditText consumes the CPU bridge's actual font glyph meshes and placements;
+unsupported text retains its typed layout failure.
 
 The scene keeps original asset issues, strokes, inferred winding, script
 bindings and opaque tags. Those appear in the frame's limitations even where
 base geometry can be drawn. Saved transforms do not establish script-controlled
 runtime state or intermediate channel-clamping behavior.
+
+## Saved plain text
+
+Text preparation stays in `scene_content`; the GPU adapter performs no font
+lookup, text parsing, reflow or fallback. Each prepared glyph keeps its font
+identity, glyph index and EM coordinates. The local EM-to-field matrix composes
+with the saved node world matrix and stage mapping. No DefineText TextMatrix is
+applied to DefineEditText.
+
+The CPU cache's neutral white paint is replaced by the glyph's saved RGBA before
+the selected source-color interpretation and world color transform. Folding
+text RGB into world multipliers would incorrectly reorder additive/transfer
+operations and is not used. Small owned draw meshes are cached by glyph asset
+and saved color; original contour/source records remain in `PreparedScene`.
+Missing paint or glyph geometry is an explicit skipped placement.
+
+Each field's exact saved TextBounds becomes a two-triangle stencil clip under
+the same world transform, including rotation/shear. This source-defined
+rectangle is used only for clipping; it is never a visible control or invented
+background. The field clip nests inside the scene's validated masks and is
+popped before the next node. Unsupported scene masks still omit affected text.
+A field requiring more than the stencil's 255 active levels is omitted with a
+typed reason. Zero-area bounds yield empty coverage. Overflow is retained and
+clipped, never resized to fit.
+
+Coverage separately reports prepared/empty/omitted text instances, requested/
+submitted/omitted/empty-geometry glyph placements, text fill draws/triangles and
+fields actually clipped. Aggregate fills/triangles include both shape and text
+draws; shape instance counts do not include text. Space glyphs can have no fill
+geometry; a valid empty initial field draws nothing without being treated as a
+layout failure. Only a field actually clipped discharges its source
+`TextBoundsClippingNotApplied` limitation.
+
+Font-binding/font/glyph/text preparation issues, typed layout failures and
+overflow flags all survive in `DiagnosticFrame.limitations`. Saved-state-only,
+field-border, font-rasterization and selected glyph-fill-rule limitations
+remain. HTML, passwords, required wrapping, unsupported static text and missing
+font bindings receive no substitute text. There is no input editing, caret,
+selection, localization, VM string update, font hinting or retail AA claim.
 
 ## Mask handling
 
@@ -90,7 +130,7 @@ process selected the installed software ICD and two llvmpipe worker threads.
 extent using the original pinned frontend, MarvelGame and MarvelFonts packages.
 The private inspection library explicitly aliases `MarvelFonts.gfxfontlib` to
 `MarvelFonts.fonts_en`; this is an inspection selection, not a recovered native
-locale rule. No text is drawn by this adapter yet.
+locale rule. This first checkpoint predates the saved-text increment below.
 
 | Saved movie | Nodes | Shape instances submitted | Fills / triangles | Textures | Visible Text nodes omitted |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -138,8 +178,51 @@ Private evidence beneath
   original-source hashes, unsupported raw metadata and blank-frame investigation.
 
 No native window, interaction, authentication, server/world connection,
-physical GPU, retail screenshot comparison, text, effects, scale-nine, scripts
-or runtime manager scheduling is validated by this increment.
+physical GPU, retail screenshot comparison, effects, scale-nine, scripts
+or runtime manager scheduling is validated by the base checkpoint.
+
+## Saved-text increment validation
+
+**VERIFIED (2026-11-15):** The separate saved-text adapter build and all seven
+focused synthetic GPU groups pass on the same software Vulkan adapter. Checks
+cover saved RGBA before world multiply/add (including alpha addition), rotated
+and nonzero-origin field bounds, intersection with a source scene mask,
+rejection of an unsupported mask, valid empty fields versus unsupported empty
+HTML, missing paint/failed/empty glyph geometry, every text/font issue channel,
+invalid cache/layout identities and text geometry/placement budgets.
+
+**VERIFIED:** Fresh original-package snapshots retain the earlier explicit
+English alias and numerical policies. Shape submission counts are unchanged.
+
+| Saved movie | Text instances | Prepared (empty) | Omitted | Glyph placements / submitted | Text fills / triangles | Fields clipped |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `marvel_login_dialog` | 33 | 27 (5) | 6 | 243 / 232 | 232 / 95,848 | 22 |
+| `marvel_character_select` | 17 | 10 (3) | 7 | 101 / 92 | 92 / 50,760 | 7 |
+| `frontend_manager` | 0 | 0 (0) | 0 | 0 / 0 | 0 / 0 | 0 |
+
+The omitted login instances retain HTML-layout failures; character select
+retains HTML and required-wrapping failures. Eleven login and nine character
+placements have no fill geometry. Submitted glyph counts mean submitted source
+triangles, not necessarily visible characters after world alpha/depth.
+
+**OBSERVED:** The login image now includes original saved labels, including
+authored placeholder strings, and differs from the earlier frame in 8,600
+pixels. Nothing replaced those strings with guessed production labels. The
+character-select and manager outputs remain byte-identical opaque black/white
+to the base checkpoint. Their actual saved color/placement source diagnosis
+remains in `scene-preview-inputs/blank-frame-diagnosis.json`.
+
+Private evidence adds `frontend-preview-text/{login,character-select,manager}`
+RGBA/PNG and coverage files, `image-hashes.json`, `checks.json`,
+`preview-text-harness/` (exact sources/lockfile/binary),
+`preview-text-{build,build-final,actual-smoke}.log`, and
+`preview-text-checks/` (seven-group source, immutable input identities, build/
+smoke receipts and result). The login RGBA SHA256 is
+`16216eaf05514d9ee9b4b5d343ee253f469ec4f5080c283be71288f03557edb7`.
+
+These checks validate saved geometry/paint/clipping composition only. No native
+text renderer comparison, physical GPU, interactive text entry, runtime script
+state, effects, scale-nine or retail frontend parity was run for this increment.
 
 ## Source and licence register
 
@@ -148,7 +231,7 @@ implementation or proprietary SDK source was used.
 
 | Source read | Licence / provenance | Use |
 | --- | --- | --- |
-| Original project `frontend::{library,scene_content}`, `gfx::{scene,shapes,tessellate,text,glyphs}`, `texture`, `render::{mesh}` and their component docs | Original project code; external documentation already registered in those components | Respect stable asset IDs, scene traversal/transforms/limitations, exact mesh paint and readback contracts; glyph API feasibility only, no GPU-module font parser added |
+| Original project `frontend::{library,scene_content}`, `gfx::{scene,shapes,tessellate,text,glyphs,edit_layout}`, `texture`, `render::{mesh}` and their component docs | Original project code; external documentation already registered in those components | Respect stable asset IDs, scene traversal/transforms/limitations, exact mesh paint and readback contracts; saved glyph/layout paint and exact clipping contracts; no GPU-module font parser added |
 | Private pinned frontend/MarvelGame/MarvelFonts packages and original preparation/profiling evidence | Owner-provided proprietary game data; authorized compatibility study | Actual saved scene composition, serialized background/visibility/transforms, exact texture references and source-only uniform-frame diagnosis |
 | `scene-preview-inputs/{recipe.json,manifest.json,README.md}` and immutable original source snapshot | Original helper preparation/provenance, with proprietary inputs retained privately | Reproduce the three structural snapshots and inspect actual Text/mask/effect coverage without guessing missing content |
 | Previous `docs/RENDERER.md`, `docs/RENDERER_MESH.md` source/SDK register | wgpu MIT OR Apache-2.0; Adobe/Autodesk documentation terms recorded there | Existing device/readback and explicit stencil/color/UV limitations; no new library or algorithm implementation copied |

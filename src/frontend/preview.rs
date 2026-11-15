@@ -4,9 +4,11 @@
 use super::scene_content::{self, NodeContent, PreparationIssue, PreparedScene};
 use crate::{
     gfx::{
-        Rect,
+        Rect, Span,
+        edit_layout::EditLayoutError,
         scene::{NodeId, SceneNode},
-        shapes::Fill,
+        shapes::{Color, Fill, FillRule, FillStyle, StyleRef},
+        tessellate::{FillMesh, Position},
     },
     render::{
         self, BlendMode, GpuImage, ImageEncoding, ImageFilter, QuadRenderer, Readback,
@@ -56,6 +58,8 @@ pub struct Limits {
     pub max_mask_parts: usize,
     pub max_mask_visits: usize,
     pub max_uploaded_bytes: usize,
+    pub max_text_mesh_bytes: usize,
+    pub max_text_glyphs: usize,
 }
 impl Default for Limits {
     fn default() -> Self {
@@ -65,6 +69,8 @@ impl Default for Limits {
             max_mask_parts: 65_536,
             max_mask_visits: 2_000_000,
             max_uploaded_bytes: 256 * 1024 * 1024,
+            max_text_mesh_bytes: 64 * 1024 * 1024,
+            max_text_glyphs: 100_000,
         }
     }
 }
@@ -81,6 +87,9 @@ pub enum SkipReason {
     TextureUnavailable(usize),
     UnsupportedMask(NodeId),
     TextNotPrepared,
+    TextPaintUnavailable,
+    GlyphUnavailable(usize),
+    TextClipNestingExceeded,
     DirectBitmapGeometryNotPrepared,
     UnrenderedContent,
 }
@@ -118,6 +127,39 @@ pub enum Limitation {
     SourceTexture {
         texture: usize,
         issue: PreparationIssue,
+    },
+    SourceText {
+        text: usize,
+        issue: PreparationIssue,
+    },
+    SourceFontBinding {
+        text: usize,
+        issue: PreparationIssue,
+    },
+    SourceFont {
+        font: usize,
+        issue: PreparationIssue,
+    },
+    SourceGlyph {
+        glyph: usize,
+        issue: PreparationIssue,
+    },
+    TextLayoutError {
+        text: usize,
+        error: EditLayoutError,
+    },
+    TextOverflow {
+        text: usize,
+        x: bool,
+        y: bool,
+    },
+    GlyphFillRuleSelected {
+        rule: FillRule,
+    },
+    SkippedTextGlyph {
+        node: NodeId,
+        placement: usize,
+        reason: SkipReason,
     },
     SkippedNode {
         node: NodeId,
@@ -177,7 +219,18 @@ pub struct Coverage {
     pub mask_parts_submitted: usize,
     pub uploaded_textures: usize,
     pub uploaded_rgba_bytes: usize,
+    pub text_instances: usize,
+    pub text_instances_prepared: usize,
+    pub text_instances_with_submitted_fills: usize,
+    pub text_instances_empty: usize,
     pub text_instances_omitted: usize,
+    pub text_glyphs: usize,
+    pub text_glyphs_submitted: usize,
+    pub text_glyphs_omitted: usize,
+    pub text_glyphs_without_geometry: usize,
+    pub text_fill_draws: usize,
+    pub text_triangles: usize,
+    pub text_fields_clipped: usize,
     pub direct_bitmap_instances_omitted: usize,
     pub stroke_edges_unrendered: usize,
     pub source_actions_unexecuted: usize,
@@ -195,9 +248,15 @@ pub struct DiagnosticFrame {
     pub limitations: Vec<Limitation>,
 }
 
+enum PlannedGeometry {
+    Shape(usize, usize),
+    Glyph(usize),
+}
 struct PlannedDraw {
     node: NodeId,
-    mesh: usize,
+    geometry: PlannedGeometry,
+    local: Affine,
+    text_placement: Option<usize>,
     fill: usize,
     image: Option<usize>,
 }
@@ -241,6 +300,10 @@ pub fn render_static_with_limits(
         ..Default::default()
     };
     let mut draws = Vec::new();
+    let mut colored_glyphs: Vec<FillMesh> = Vec::new();
+    let mut glyph_cache: BTreeMap<(usize, [u8; 4]), Vec<usize>> = BTreeMap::new();
+    let mut text_clips: BTreeMap<NodeId, FillMesh> = BTreeMap::new();
+    let mut text_mesh_bytes = 0usize;
     let mut mask_cache: BTreeMap<NodeId, Result<MaskGeometry, MaskRejection>> = BTreeMap::new();
     let mut in_mask = vec![false; scene.nodes.len()];
     let mut effect_ancestor = vec![None; scene.nodes.len()];
@@ -268,15 +331,217 @@ pub fn render_static_with_limits(
             continue;
         }
         match node.content {
-            NodeContent::Group => {}
-            NodeContent::Text { .. } => {
-                coverage.text_instances_omitted += 1;
+            NodeContent::Text { .. } => coverage.text_instances += 1,
+            NodeContent::Shape { .. } => coverage.shape_instances += 1,
+            _ => {}
+        }
+        if matches!(
+            node.content,
+            NodeContent::Shape { .. } | NodeContent::Text { .. }
+        ) {
+            let mut rejected = None;
+            for &mask in &instance.masks {
+                if !mask_cache.contains_key(&mask) {
+                    let result =
+                        mask_geometry(scene, mask, limits, &mut mask_visits, &mut mask_parts)?;
+                    if let Err(reason) = &result {
+                        limitations.push(Limitation::MaskRejected {
+                            mask,
+                            reason: reason.clone(),
+                        });
+                    }
+                    mask_cache.insert(mask, result);
+                }
+                if mask_cache[&mask].is_err() {
+                    rejected = Some(mask);
+                    break;
+                }
+            }
+            if let Some(mask) = rejected {
+                if matches!(node.content, NodeContent::Text { .. }) {
+                    coverage.text_instances_omitted += 1;
+                }
                 skipped_node(
                     id,
-                    SkipReason::TextNotPrepared,
+                    SkipReason::UnsupportedMask(mask),
                     &mut coverage,
                     &mut limitations,
                 );
+                continue;
+            }
+        }
+        match node.content {
+            NodeContent::Group => {}
+            NodeContent::Text { definition } => {
+                let Some(text_index) = node.text else {
+                    coverage.text_instances_omitted += 1;
+                    skipped_node(
+                        id,
+                        SkipReason::TextNotPrepared,
+                        &mut coverage,
+                        &mut limitations,
+                    );
+                    continue;
+                };
+                let text = scene
+                    .texts
+                    .get(text_index)
+                    .ok_or_else(|| invalid("node text index outside prepared assets"))?;
+                if text.definition != definition {
+                    return Err(invalid(
+                        "node and prepared text definition identities differ",
+                    ));
+                }
+                let (Some(field), Some(layout)) = (&text.field, &text.layout) else {
+                    coverage.text_instances_omitted += 1;
+                    skipped_node(
+                        id,
+                        SkipReason::TextNotPrepared,
+                        &mut coverage,
+                        &mut limitations,
+                    );
+                    continue;
+                };
+                if field.id != layout.field_id
+                    || field.bounds != layout.bounds
+                    || text.glyphs.len() != layout.glyphs.len()
+                {
+                    return Err(invalid("prepared text field/layout alignment differs"));
+                }
+                if instance.masks.len() >= 255 {
+                    coverage.text_instances_omitted += 1;
+                    skipped_node(
+                        id,
+                        SkipReason::TextClipNestingExceeded,
+                        &mut coverage,
+                        &mut limitations,
+                    );
+                    continue;
+                }
+                coverage.text_instances_prepared += 1;
+                coverage.text_glyphs = coverage
+                    .text_glyphs
+                    .checked_add(text.glyphs.len())
+                    .ok_or_else(|| invalid("text glyph placement count overflow"))?;
+                if coverage.text_glyphs > limits.max_text_glyphs {
+                    return Err(invalid("preview text glyph placement budget exceeded"));
+                }
+                if text.glyphs.is_empty() {
+                    coverage.text_instances_empty += 1;
+                    continue;
+                }
+                mask_parts = mask_parts
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("mask part count overflow"))?;
+                if mask_parts > limits.max_mask_parts {
+                    return Err(invalid("preview text clip/mask part budget exceeded"));
+                }
+                text_clips.insert(id, field_clip(field.bounds, field.body)?);
+                for (placement, glyph) in text.glyphs.iter().enumerate() {
+                    let original = &layout.glyphs[placement];
+                    let asset = scene
+                        .glyphs
+                        .get(glyph.glyph)
+                        .ok_or_else(|| invalid("text glyph index outside prepared assets"))?;
+                    if glyph.layout_index != placement
+                        || asset.font != original.font
+                        || asset.glyph_index != original.glyph_index
+                    {
+                        return Err(invalid("prepared glyph identity/layout alignment differs"));
+                    }
+                    let reason = if glyph.color.is_none() {
+                        Some(SkipReason::TextPaintUnavailable)
+                    } else if asset.mesh.is_none() {
+                        Some(SkipReason::GlyphUnavailable(glyph.glyph))
+                    } else {
+                        None
+                    };
+                    if let Some(reason) = reason {
+                        coverage.text_glyphs_omitted += 1;
+                        limitations.push(Limitation::SkippedTextGlyph {
+                            node: id,
+                            placement,
+                            reason,
+                        });
+                        continue;
+                    }
+                    let geometry = &asset.mesh.as_ref().unwrap().mesh;
+                    if geometry.fills.iter().all(|f| f.indices.is_empty()) {
+                        coverage.text_glyphs_without_geometry += 1;
+                        continue;
+                    }
+                    let key = (glyph.glyph, glyph.color.unwrap());
+                    if !glyph_cache.contains_key(&key) {
+                        let mut indices = Vec::new();
+                        for source_fill in &geometry.fills {
+                            if !matches!(source_fill.paint.fill, Fill::Solid(_)) {
+                                return Err(invalid("prepared glyph has non-solid paint"));
+                            }
+                            let bytes = source_fill
+                                .positions
+                                .len()
+                                .checked_mul(size_of::<Position>())
+                                .and_then(|v| {
+                                    source_fill
+                                        .indices
+                                        .len()
+                                        .checked_mul(size_of::<u32>())
+                                        .and_then(|n| v.checked_add(n))
+                                })
+                                .and_then(|v| text_mesh_bytes.checked_add(v))
+                                .ok_or_else(|| invalid("text draw geometry byte count overflow"))?;
+                            if bytes > limits.max_text_mesh_bytes {
+                                return Err(invalid(
+                                    "preview text draw geometry byte budget exceeded",
+                                ));
+                            }
+                            text_mesh_bytes = bytes;
+                            let [red, green, blue, alpha] = key.1;
+                            indices.push(colored_glyphs.len());
+                            colored_glyphs.push(FillMesh {
+                                style: source_fill.style,
+                                paint: FillStyle {
+                                    source: source_fill.paint.source,
+                                    fill: Fill::Solid(Color {
+                                        red,
+                                        green,
+                                        blue,
+                                        alpha,
+                                    }),
+                                },
+                                // Original contours remain in the prepared glyph; only GPU
+                                // positions/indices and source paint provenance are needed here.
+                                contours: Vec::new(),
+                                positions: source_fill.positions.clone(),
+                                indices: source_fill.indices.clone(),
+                                branching_vertices: source_fill.branching_vertices,
+                            });
+                        }
+                        glyph_cache.insert(key, indices);
+                    }
+                    let m = glyph.local_matrix;
+                    let local = Affine([m.a, m.b, m.c, m.d, m.tx, m.ty]);
+                    if local.0.iter().any(|v| !v.is_finite()) {
+                        return Err(invalid("text glyph local transform is nonfinite"));
+                    }
+                    for (fill, &colored) in glyph_cache[&key].iter().enumerate() {
+                        coverage.nodes[id].source_fill_count += 1;
+                        if colored_glyphs[colored].indices.is_empty() {
+                            continue;
+                        }
+                        if draws.len() >= limits.max_commands {
+                            return Err(invalid("preview fill draw budget exceeded"));
+                        }
+                        draws.push(PlannedDraw {
+                            node: id,
+                            geometry: PlannedGeometry::Glyph(colored),
+                            local,
+                            text_placement: Some(placement),
+                            fill,
+                            image: None,
+                        });
+                    }
+                }
             }
             NodeContent::Bitmap { .. } => {
                 coverage.direct_bitmap_instances_omitted += 1;
@@ -294,7 +559,6 @@ pub fn render_static_with_limits(
                 &mut limitations,
             ),
             NodeContent::Shape { mesh } => {
-                coverage.shape_instances += 1;
                 let asset = scene
                     .meshes
                     .get(mesh)
@@ -323,33 +587,6 @@ pub fn render_static_with_limits(
                 }
                 if geometry.inferred_winding {
                     limitations.push(Limitation::InferredFillRule { node: id });
-                }
-                let mut rejected = None;
-                for &mask in &instance.masks {
-                    if !mask_cache.contains_key(&mask) {
-                        let result =
-                            mask_geometry(scene, mask, limits, &mut mask_visits, &mut mask_parts)?;
-                        if let Err(reason) = &result {
-                            limitations.push(Limitation::MaskRejected {
-                                mask,
-                                reason: reason.clone(),
-                            });
-                        }
-                        mask_cache.insert(mask, result);
-                    }
-                    if mask_cache[&mask].is_err() {
-                        rejected = Some(mask);
-                        break;
-                    }
-                }
-                if let Some(mask) = rejected {
-                    skipped_node(
-                        id,
-                        SkipReason::UnsupportedMask(mask),
-                        &mut coverage,
-                        &mut limitations,
-                    );
-                    continue;
                 }
                 for (fill, shape_fill) in geometry.fills.iter().enumerate() {
                     let image = asset.fill_images[fill];
@@ -386,7 +623,9 @@ pub fn render_static_with_limits(
                     }
                     draws.push(PlannedDraw {
                         node: id,
-                        mesh,
+                        geometry: PlannedGeometry::Shape(mesh, fill),
+                        local: Affine::IDENTITY,
+                        text_placement: None,
                         fill,
                         image,
                     });
@@ -479,7 +718,20 @@ pub fn render_static_with_limits(
             masks.insert(id, parts);
         }
     }
+    let mut clip_parts = BTreeMap::new();
+    for (&node, geometry) in &text_clips {
+        clip_parts.insert(
+            node,
+            [MaskPart {
+                mesh: geometry,
+                transform: world_transform(&scene.nodes[node].instance, stage_to_pixels)?,
+            }],
+        );
+    }
     let mut commands = Vec::new();
+    let mut active_text_clip = None;
+    let mut clipped_fields = BTreeSet::new();
+    let mut submitted_glyphs = BTreeSet::new();
     let mut active_masks = Vec::new();
     let mut used_masks = BTreeSet::new();
     for draw in draws {
@@ -502,6 +754,10 @@ pub fn render_static_with_limits(
         } else {
             None
         };
+        if active_text_clip.is_some_and(|id| id != draw.node) {
+            push_command(&mut commands, Command::PopMask, limits)?;
+            active_text_clip = None;
+        }
         let instance = &scene.nodes[draw.node].instance;
         let common = active_masks
             .iter()
@@ -532,12 +788,32 @@ pub fn render_static_with_limits(
                 .checked_add(parts.len())
                 .ok_or_else(|| invalid("mask submission count overflow"))?;
         }
-        let shape_fill = &scene.meshes[draw.mesh].mesh.as_ref().unwrap().fills[draw.fill];
+        if draw.text_placement.is_some() && active_text_clip.is_none() {
+            let parts = clip_parts
+                .get(&draw.node)
+                .ok_or_else(|| invalid("text clip geometry unavailable"))?;
+            push_command(
+                &mut commands,
+                Command::PushMask {
+                    parts,
+                    scissor: None,
+                },
+                limits,
+            )?;
+            active_text_clip = Some(draw.node);
+            clipped_fields.insert(draw.node);
+        }
+        let shape_fill = match draw.geometry {
+            PlannedGeometry::Shape(mesh, fill) => {
+                &scene.meshes[mesh].mesh.as_ref().unwrap().fills[fill]
+            }
+            PlannedGeometry::Glyph(colored) => &colored_glyphs[colored],
+        };
         push_command(
             &mut commands,
             Command::Draw(Draw {
                 mesh: shape_fill,
-                transform: world_transform(instance, stage_to_pixels)?,
+                transform: draw.local.then(world_transform(instance, stage_to_pixels)?),
                 color_transform: world_color(instance)?,
                 paint: Paint {
                     bitmap,
@@ -551,11 +827,31 @@ pub fn render_static_with_limits(
             }),
             limits,
         )?;
+        if let Some(placement) = draw.text_placement {
+            submitted_glyphs.insert((draw.node, placement));
+            coverage.text_fill_draws += 1;
+            coverage.text_triangles += shape_fill.indices.len() / 3;
+        }
         coverage.fill_draws += 1;
         coverage.triangles += shape_fill.indices.len() / 3;
         coverage.nodes[draw.node].submitted_fills += 1;
         coverage.nodes[draw.node].submitted_triangles += shape_fill.indices.len() / 3;
     }
+    if active_text_clip.is_some() {
+        push_command(&mut commands, Command::PopMask, limits)?;
+    }
+    coverage.text_fields_clipped = clipped_fields.len();
+    coverage.text_glyphs_submitted = submitted_glyphs.len();
+    coverage.text_instances_with_submitted_fills = coverage
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.submitted_fills > 0 && matches!(scene.nodes[n.node].content, NodeContent::Text { .. })
+        })
+        .count();
+    limitations.retain(|issue| !matches!(issue,
+        Limitation::SourceNode { node, issue: scene_content::Limitation::TextBoundsClippingNotApplied }
+            if clipped_fields.contains(node)));
     for _ in &active_masks {
         push_command(&mut commands, Command::PopMask, limits)?;
     }
@@ -563,7 +859,10 @@ pub fn render_static_with_limits(
     coverage.shape_instances_with_submitted_fills = coverage
         .nodes
         .iter()
-        .filter(|n| n.submitted_fills > 0)
+        .filter(|n| {
+            n.submitted_fills > 0
+                && matches!(scene.nodes[n.node].content, NodeContent::Shape { .. })
+        })
         .count();
     let saved_background_applied = match policy.background {
         Background::Transparent => None,
@@ -589,6 +888,44 @@ pub fn render_static_with_limits(
         saved_background_applied,
         coverage,
         limitations,
+    })
+}
+
+/// Source-defined TextBounds, used only for stencil coverage, never color.
+fn field_clip(bounds: Rect, source: Span) -> io::Result<FillMesh> {
+    if bounds.x_max < bounds.x_min || bounds.y_max < bounds.y_min {
+        return Err(invalid("text field bounds have negative extents"));
+    }
+    let positions = [
+        (bounds.x_min, bounds.y_min),
+        (bounds.x_max, bounds.y_min),
+        (bounds.x_max, bounds.y_max),
+        (bounds.x_min, bounds.y_max),
+    ]
+    .map(|(x, y)| Position {
+        x: f64::from(x),
+        y: f64::from(y),
+    })
+    .to_vec();
+    Ok(FillMesh {
+        style: StyleRef { set: 0, index: 1 },
+        paint: FillStyle {
+            source,
+            fill: Fill::Solid(Color {
+                red: 255,
+                green: 255,
+                blue: 255,
+                alpha: 255,
+            }),
+        },
+        contours: Vec::new(),
+        positions,
+        indices: if bounds.x_min == bounds.x_max || bounds.y_min == bounds.y_max {
+            Vec::new()
+        } else {
+            vec![0, 1, 2, 0, 2, 3]
+        },
+        branching_vertices: 0,
     })
 }
 
@@ -703,6 +1040,58 @@ fn source_limitations(scene: &PreparedScene) -> Vec<Limitation> {
         for issue in &asset.issues {
             out.push(Limitation::SourceMesh {
                 mesh,
+                issue: issue.clone(),
+            });
+        }
+    }
+    if !scene.texts.is_empty() {
+        out.push(Limitation::GlyphFillRuleSelected {
+            rule: scene.glyph_fill_rule,
+        });
+    }
+    for (text, asset) in scene.texts.iter().enumerate() {
+        for issue in &asset.issues {
+            out.push(Limitation::SourceText {
+                text,
+                issue: issue.clone(),
+            });
+        }
+        if let Some(binding) = &asset.font_binding {
+            for issue in &binding.issues {
+                out.push(Limitation::SourceFontBinding {
+                    text,
+                    issue: issue.clone(),
+                });
+            }
+        }
+        if let Some(error) = &asset.layout_error {
+            out.push(Limitation::TextLayoutError {
+                text,
+                error: error.clone(),
+            });
+        }
+        if let Some(layout) = &asset.layout {
+            if layout.overflow_x || layout.overflow_y {
+                out.push(Limitation::TextOverflow {
+                    text,
+                    x: layout.overflow_x,
+                    y: layout.overflow_y,
+                });
+            }
+        }
+    }
+    for (font, asset) in scene.fonts.iter().enumerate() {
+        for issue in &asset.issues {
+            out.push(Limitation::SourceFont {
+                font,
+                issue: issue.clone(),
+            });
+        }
+    }
+    for (glyph, asset) in scene.glyphs.iter().enumerate() {
+        for issue in &asset.issues {
+            out.push(Limitation::SourceGlyph {
+                glyph,
                 issue: issue.clone(),
             });
         }
