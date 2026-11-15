@@ -5,6 +5,20 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev18 integration in progress
+
+**VERIFIED bounded Rectangle construction:** the VM now supports deferred
+Rectangle registration alongside Point and zero-argument Rectangle NewMethod.
+Constructor, prototype and instance identities remain distinct; computed
+instance properties, native methods, writes and other constructor forms still
+reject explicitly. Twenty-six distinct focused geometry checks and production
+metadata compilation pass. The original manager replay remains separate.
+Receipt: `evidence/avm1-runtime/rectangle-checks.json`, SHA-256
+`ffb67f42d9a52019a84bc62ad4056d9bc76f37b8ab308fdb897cea1f436b388c`.
+
+Dev17 remains the latest staged package. No dev18 binary or startup check has
+run yet; the inherited service/access holds remain in place.
+
 ## 2026-11-15 dev17 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested code

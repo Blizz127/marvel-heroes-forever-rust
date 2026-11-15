@@ -628,3 +628,10 @@ The dev17 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev17-linux/manifest.json`, SHA-256
 `1163dc008501337dc8837eff041345fee8ccf98e15682ee12cec8d4e858de2ce`.
+
+[Rectangle construction](REA_RECTANGLE_CONSTRUCTION.md) records the owned
+executable's deferred factory, typed object graph, descriptors and zero-argument
+allocation path used by the original bounded implementation. Its evidence ledger
+retains all exact native inputs and tool provenance privately. Unsupported native
+methods and computed instance properties remain explicit; synthetic checks do
+not establish full startup or retail behavior parity.
