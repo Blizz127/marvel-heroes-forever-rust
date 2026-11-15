@@ -205,3 +205,13 @@ event delivery parity.
 [Saved HTML text](GFX_HTML_TEXT.md) records Adobe htmlText documentation, exact
 owner formatting/token/font-linkage evidence and original bounded parsing.
 Paragraph/run representation is separate from pending HTML layout and rendering.
+[Native class registry](REA_CLASS_REGISTRY.md) records exact REA owner-binary
+evidence for AS2 root-context ownership, key comparison and registration/removal,
+separately from unresolved display action scheduling and constructor invocation.
+[Frontend class bindings](FRONTEND_CLASS_REGISTRY.md) applies that native evidence
+in an original bounded registry for one VM/root context. Call/definition origins
+remain provenance; registration does not instantiate a class.
+[Native Function calls](REA_FUNCTION_CALLS.md) records the exact owned-binary
+REA Function/apply registration, receiver and empty-argument evidence, with
+closure/frame boundaries kept explicit. It supplies evidence for future VM work;
+documentation alone does not claim those paths are implemented.

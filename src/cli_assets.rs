@@ -83,7 +83,7 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 avm1::vm::Limits,
                 frontend::{
                     bootstrap::{InitOutcome, InitSession},
-                    selection::{Limits as SelectionLimits, SelectionHost},
+                    host::FrontendHost,
                 },
             };
             let archive = PackageArchive::open(package)?;
@@ -94,7 +94,7 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 InitSession::new(asset.movie.header.version, Limits::default(), 2_000_000)?;
             session.install_movie_clip_metadata(u32::MAX)?;
             session.setup_vm()?.install_property_flags()?;
-            let mut host = SelectionHost::install(session.setup_vm()?, SelectionLimits::default())?;
+            let mut host = FrontendHost::install(session.setup_vm()?, asset.movie.header.version)?;
             let plan = session.compile_frame(0, &asset, 0)?;
             println!(
                 "OBSERVED {} frame 0: {} saved initializers; {} ordinary frame actions retained separately.",
@@ -103,14 +103,15 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 plan.frame_actions.len()
             );
             println!(
-                "Probe bindings: Object/property-flags intrinsics, MovieClip metadata and Selection listener state; other host operations rejected."
+                "Probe bindings: Object/property-flags intrinsics, MovieClip metadata, Selection listeners and root-context class registry; other host operations rejected."
             );
             let outcome = session.initialize(&plan, &mut host)?;
             println!(
                 "OBSERVED Selection: {} retained listeners; {:?}.",
-                host.listeners().len(),
-                host.stats()
+                host.selection().listeners().len(),
+                host.selection().stats()
             );
+            println!("OBSERVED class registry: {:?}.", host.classes().stats());
             match outcome {
                 InitOutcome::Complete {
                     initializers,
@@ -444,8 +445,8 @@ fn frontend_frame(
         "Limitations: {}; text instances omitted: {}; script binding records: {}; unbound action tags: {}.",
         frame.limitations.len(),
         frame.coverage.text_instances_omitted,
-        frame.coverage.source_actions_unexecuted,
-        frame.coverage.unbound_action_tags_unexecuted
+        frame.coverage.source_action_bindings,
+        frame.coverage.unbound_action_tags
     );
     println!(
         "Saved text: {}/{} fields prepared, {} glyph fills submitted, {} field clips; runtime text updates have not run.",

@@ -18,8 +18,12 @@ use std::{
 
 #[path = "frontend/bootstrap.rs"]
 pub mod bootstrap;
+#[path = "frontend/class_registry.rs"]
+pub mod class_registry;
 #[path = "frontend/display_state.rs"]
 pub mod display_state;
+#[path = "frontend/host.rs"]
+pub mod host;
 #[path = "frontend/library.rs"]
 pub mod library;
 #[cfg(feature = "renderer")]

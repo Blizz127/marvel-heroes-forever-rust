@@ -100,11 +100,22 @@ The static diagnostic can also be rendered or shown in a native window:
 mhf frontend render-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog ~/.local/share/marvel-heroes-forever-rust/evidence/login.pam /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en
 mhf frontend window-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en --frames 2
 mhf frontend init-probe /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager
+mhf frontend pointer-probe /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager 100 200 ~/.local/share/marvel-heroes-forever-rust/evidence/cursor.pam
 ```
 
 Static rendering reports its explicit sampling/color policy and omitted behavior.
+Supported saved plain text uses original font glyphs and field clipping; authored
+placeholders remain unchanged. HTML representation is available in the library,
+but HTML layout and runtime text updates are unfinished.
 It does not execute scripts, implement effects or establish a working login screen.
 Outputs stay private and are never overwritten. The initializer probe runs saved
-DoInitAction records in a persistent bounded VM with rejecting native bindings;
+DoInitAction records in a persistent bounded VM with explicit intrinsic/host bindings;
 it exits with an error at unsupported behavior. See
 [initializer phases](docs/FRONTEND_BOOTSTRAP.md) for its exact scope.
+
+`pointer-probe` explicitly invokes one saved MouseMove handler with a supplied
+stage point, then renders the resulting geometry. It rejects scenes with zero or
+multiple matching handlers because general event scheduling is unfinished.
+This checks original cursor code and display-property integration; it does not
+run constructors, initializers or the normal input loop. The source stage uses
+pixels in this command and twips internally. All image outputs remain private.

@@ -30,7 +30,9 @@ create display objects, native methods, singleton namespaces or a player.
 
 `mhf frontend init-probe <package.upk> <movie>` supplies those limited bindings,
 the explicitly supported property-flags intrinsic, and the bounded
-[Selection listener host](FRONTEND_SELECTION_HOST.md). It compiles frame zero
+[Selection listener host](FRONTEND_SELECTION_HOST.md) and
+[AS2 root class registry](FRONTEND_CLASS_REGISTRY.md). `FrontendHost` combines
+those stateful bindings and rejects other native operations. It compiles frame zero
 and executes its initializer phase; unsupported host operations are rejected. It
 reports a nonzero exit when an unsupported operation stops execution. Completion
 of this isolated phase would still not establish movie startup or retail parity.
@@ -48,6 +50,14 @@ metadata, it executed 218 instructions before the unbound ASSetPropFlags call at
 source offset12374; zero initializers completed. Its nonzero exit and exact source
 and binary hashes are in `cli-before-property-flags.json`. This is owned-script
 execution, not native-client execution.
+
+The current driver explicitly binds its validated loaded root/header version to
+the VM. The native loaded-target path is now traced to that header byte; supported
+versions7–19 therefore select the verified clear-zero property-flags branch.
+Arbitrary/unbound objects retain the ambiguity gate. Function objects now inherit
+through a shared Function-prototype object to Object.prototype. These changes
+allow further original initializers to run; the probe still reports its exact
+first failure and does not continue past partial failure.
 
 This driver is original code. Its only external format basis is the Adobe SWF
 specification already itemized in [AVM1 execution](AVM1_VM.md); original asset
