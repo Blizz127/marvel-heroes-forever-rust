@@ -48,3 +48,20 @@ limits are recorded in [display state](FRONTEND_DISPLAY_STATE.md),
 [GPU composition](FRONTEND_PREVIEW.md). Game data and private validation records
 remain outside the repository and build packages. Structural or isolated handler
 checks do not establish native retail event timing, visual or gameplay parity.
+
+**VERIFIED (isolated original handler):** The manager's original 7096+77 byte
+MouseMove span executes four sequential movements through the same controller,
+56 instructions and 24 host calls. Integer and fractional coordinates update
+the original cursor and preserve source IDs, raw placement, masks and actions.
+Unavailable input leaves geometry unchanged; a nonfinite input leaves the sample
+and execution state unchanged. A property-call budget deliberately fails after
+the X write: partial display state is inspectable, the renderer snapshot remains
+unchanged, and retry rejects. Dispatch exhaustion and missing/duplicate handlers
+also reject. A test's initial exact fractional comparison was corrected to a
+1e-8-twip tolerance after ordinary f64 arithmetic produced 20.250000000000057;
+the implementation was unchanged and the failed assertion is retained.
+
+Private records: `evidence/persistent-pointer/verification.json`, original
+harness, successful output and initial assertion/correction record. The root's
+three focused skeletal-reader tests and 24 focused VM tests also pass after
+integration. Native-window integration has a separate validation record.
