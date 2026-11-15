@@ -25,7 +25,8 @@ serializer, then emits the following native prefix in this order:
 | `+0xb0` | Encoded stride, signed count, raw records | `arrays[1]` |
 | `+0x68` (Nodes) | Encoded stride, signed count, raw records | `arrays[2]` |
 | `+0xd8` | Signed object reference | `link_d8` |
-| `+0xc8` container and later fields | Undecoded | `unparsed_native_tail` |
+| `+0xc8` through `+0x19c` containers/fields | Extended prefix below | `native_fields` |
+| Fields after `+0x19c` | Undecoded | `unparsed_native_tail` |
 
 Each stride and count occupies four little-endian bytes. The established
 strides are respectively **12, 12 and 64**. The vector-array helper is
@@ -66,6 +67,77 @@ owner slot of the following native array, initialized to self by construction;
 both samples contain self references. The parser does not impose identity or
 invent an outer-Level relationship. Later references remain in the opaque tail,
 so this one link is not a complete Model dependency inventory.
+
+### Extended Model containers
+
+The extended reader continues from `link_d8` through the following native
+fields. Native offsets identify slots; they do not invent member names.
+
+| Native field | Ordinary 868/3 file representation | `native_fields` API |
+| --- | --- | --- |
+| `+0xc8` | Signed count, then 60-byte records | `records_c8` |
+| `+0x80` | Bulk stride 24, count, raw records | `arrays[0]` |
+| `+0x554` | Raw 32-bit word | `words[0]` |
+| Count at `+0x558`, records at `+0x55c` | Signed count, then 24-byte records | `records_55c` |
+| `+0x60` | Polys object reference | `polys_link` |
+| `+0xe0`, `+0xf0` | Two bulk containers, stride 4 each | `arrays[1..3]` |
+| `+0x548`, `+0x54c` | Two raw 32-bit words | `words[1..3]` |
+| `+0x100` | Bulk stride 4 | `arrays[3]` |
+| `+0x4d0` | Raw 32-bit word | `words[3]` |
+| `+0x19c` | Bulk stride 36 | `arrays[4]` |
+
+The opaque remainder now begins immediately after the `+0x19c` container,
+before the conditional call at `0x140c0e49b` and later serialized
+fields. The additional legacy container below archive version 686 is absent
+from this admitted profile. These raw arrays are not asserted to contain object
+references, float vectors, vertices, indices or renderer-ready geometry.
+
+**VERIFIED (static):** helper `0x140bf0080..0x140bf0214` reads the `+0xc8`
+count and calls record serializer `0x140befb30..0x140befcdc` once per element.
+Each record occupies 96 bytes in native memory but **60 bytes on this file
+path**: a four-byte object reference, six four-byte words, another object
+reference, then seven four-byte words. Their native offsets are respectively
+`+0`, `+0x08..+0x1c`, `+0x20`, and `+0x30..+0x48`. The `+0x48` word is present
+from version 600. The extra `+0x4c/+0x50` words belong to the reference/archive
+mode at archive `+0x1c`; they are not appended to the ordinary file record.
+
+**VERIFIED (static):** scalar helper `0x1406d66b0..0x1406d6729` passes exactly
+the caller's byte count to the ordinary archive operation, or reverses those
+bytes in the swapping path. It does not add a field header. This closes the
+60-byte record width without equating it to native memory size. The record API
+retains both reference spans, all 13 raw words and its complete wire span.
+Names such as Material and Actor remain unproved for those two native slots.
+
+**VERIFIED (static):** the `+0x80` helper at `0x140bf7130..0x140bf7285`,
+four-byte bulk helper at `0x140d6ad90..0x140d6aed5` and 36-byte bulk helper at
+`0x140bf6fd0..0x140bf7125` use the same stored-width/count/raw-load framing
+and 868/3 threshold words as the earlier containers. The Model caller has a
+conditional 16-versus-24 width selection for `+0x80`; the checked reader admits
+the observed 24-byte form only. A stored width of 16 returns `Unsupported`;
+this is a declared support boundary, not a claim that native 16-byte records
+cannot exist. Bulk counts retain the 1,048,576 inspection limit.
+
+**VERIFIED (static):** the `+0x558` count loop uses native records at `+0x55c`
+with stride 28. The wire order is an object reference, eight raw bytes from
+record `+0x0c`, eight from `+0x14`, then four from `+0x08`: **24 bytes**.
+The API keeps both 64-bit patterns and the final 32-bit pattern without boolean,
+bitset, index or float normalization. All record payload bounds are checked
+before allocating the retained record vectors.
+
+The registered Model constructor initializes **64** inline records, advancing
+28 bytes from the `+0x55c` region. The final record ends at `+0xc5c`, the next
+independently serialized field; record 64 would overlap it. The reader rejects
+counts above 64 as `InvalidData`. This is defensive admission based on the
+native storage layout, not a claim that the native serializer clamps or rejects
+malformed counts. The dynamic `+0xc8` array instead uses an explicit 65,536
+record inspection limit, with `Unsupported` above that limit. Negative counts
+and truncated known records are `InvalidData`.
+
+**VERIFIED (static):** native Model initialization constructs Polys through its
+typed allocator and registered constructor, then stores it at Model `+0x60`
+at `0x140bfc5c2`; the alternate path stores null. This supports the Polys link
+role. The reader checks the serialized reference range without imposing an
+unproved nonnull or referent-class invariant.
 
 ## Polys
 
@@ -122,9 +194,9 @@ has NetIndex -1 and an empty property stream terminating at export offset 12.
 
 | Package/object | One-based export | Logical offset | Export bytes | Native prefix bytes | Opaque bytes |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Entry Model | 2 | 1,785 | 228 | 56 | 160 |
+| Entry Model | 2 | 1,785 | 228 | 124 | 92 |
 | Entry Polys | 3 | 2,013 | 24 | 12 | 0 |
-| FrontEnd Model | 13 | 27,705 | 7,540 | 1,088 | 6,440 |
+| FrontEnd Model | 13 | 27,705 | 7,540 | 7,472 | 56 |
 | FrontEnd Polys | 26 | 37,011 | 24 | 12 | 0 |
 
 Both Model seven-word records are all zero. Entry's array counts are 0/0/0;
@@ -133,16 +205,85 @@ FrontEnd's are **6/16/12**, including actual nonempty raw bulk records. Their
 words are zero, with self references 3 and 26. No nonempty original Polys
 record stream was observed in these two samples.
 
+**OBSERVED:** Entry has no `+0xc8` or `+0x55c` records and all five added bulk
+arrays are empty. FrontEnd has 12 `+0xc8` records: six first references resolve
+to `RemoveSurfaceMaterial` and six to `DefaultMaterial`, both `Engine.Material`
+imports. All second references are null. Its added bulk counts, in native field
+order `+0x80/+0xe0/+0xf0/+0x100/+0x19c`, are **144/78/7/0/48**. Its three
+`+0x55c` records also have null references. The Polys links are respectively 3
+and 26. These concrete referents do not establish universal record member names.
+
+Entry's known native span is now export `[12,136)`, with opaque `[136,228)`;
+FrontEnd's is `[12,7484)`, with opaque `[7484,7540)`. The extension retains 68
+additional Entry bytes and 6,384 additional FrontEnd bytes. No remaining bytes
+are silently dropped or treated as padding.
+
+### Bounded StaticMesh dependency lookup
+
+**OBSERVED:** complete captured Entry tables (20 names, 6 imports, 5 exports)
+and FrontEnd tables (199 names, 45 imports, 37 exports) have no StaticMesh names.
+The separate lookup of 29 already selected saved native references reaches no
+StaticMesh target. This is scoped to these captured tables and links; it does
+not establish runtime absence or cover arbitrary transitive assets.
+
+An existing, separately captured Asgard collection at object reference 1341
+saves 45 component references whose byte-checked `StaticMesh` properties resolve
+to 18 distinct explicit mesh exports: references 1322 through 1338 and 1340.
+They include `asgard.asgard_boatbridge`, `limbo_rocks.limbo_rocks_e` (15 uses),
+and `vfx_water.meshes.msh_asgard_waterfall_top` (14 uses). No Entry/FrontEnd
+bridge to this collection was established. Exact asset paths, all ordered uses,
+property spans and source hashes are retained in
+`evidence/model-tail-native/independent/static-mesh-links/SUMMARY.md` and
+`findings.json` (SHA-256
+`b7aef1b0f2a16d1e3cc16458b9ff56c660ecd2db0c4d5077d88774f58d3e80a1`).
+This lookup reused named prior receipts; it performed no arbitrary package scan
+or new mesh payload read.
+
 ## Evidence and validation
 
-**VERIFIED:** six focused product tests pass: all known-prefix truncations,
+**VERIFIED (extended Model):** five focused Model tests pass for the full known
+prefix, every truncation, each reference slot, raw-field retention, all bulk
+headers, dynamic-count limits and the inline table's 64/65-record boundary.
+The 16-byte `+0x80` variant rejects explicitly. The original-byte product check
+agrees with the independent oracle on both Models across 411 output rows:
+16 bulk descriptors, 311 actual record spans, 32 record-index rejections,
+12 `+0xc8` records, 3 inline records, 31 references, 181 raw 32-bit words and
+6 raw 64-bit words. Both opaque suffixes match exactly.
+
+The focused test, build and actual-package run all exit zero. The new Model
+source hash and all 243 frozen baseline files remain unchanged; no Polys or
+baseline suite ran. The independent oracle passes 56 focused checks. Product
+receipt: `evidence/model-tail-native/independent/product-check/verification.json`,
+SHA-256 `f3a0cd90edc3a684a559cbb238a066368b9ca0c1095bcbc272f84d83fda0fbb6`.
+These checks establish file-reader behavior against the two owned samples,
+not native execution, geometry preparation or runtime parity.
+
+The extension's private evidence root is `evidence/model-tail-native/`.
+Its `rea-bundle.json` retains six complete successful observations, independently
+checked against 1,960 owned PE bytes and all chained unwind fragments. The
+complete 1,698-byte Model serializer is reused by exact hash. The native audit
+receipt at `native-verification/receipt.json` has SHA-256
+`437d4c9e18d151adad2d6705459eff3fa200597d949e4b1408e2a09060aba8b8`.
+It verifies the wire sequence, fixed-table extent, ordinary-file record widths,
+version gates and the explicit stop boundary. All six REA records were exported
+before investigation reset, with no target open or cleanup pending.
+
+`field-identities/` retains the direct Polys construction proof and unresolved
+member names. Candidate geometry indexing relationships from other functions
+remain **INFERRED** as Model class relationships; they are not applied by the
+reader. `independent/` retains the unchanged original captures, frozen baseline
+`40d8a705ef07488b46148fa8cdb4f2ce2d7ea0dd`, the extended byte oracle, product
+comparison and bounded StaticMesh lookup. Its source ledger registers the named
+prior Asgard/component receipts used without reading additional mesh payloads.
+
+**VERIFIED (initial prefix increment):** six focused product tests pass: all known-prefix truncations,
 negative/over-limit counts, unsupported strides, invalid object references,
 exact class/profile admission, state-frame rejection, raw-bit preservation,
 record indexing and opaque-tail retention. Polys checks also preserve unequal
 secondary words and accept a nonnegative maximum count without allocating or
 claiming that polygon records exist.
 
-**VERIFIED:** the actual four-export product comparison matches the independent
+**VERIFIED (initial prefix increment):** the actual four-export product comparison matches the independent
 oracles on all 68 output rows, six array descriptors, 34 actual record spans,
 12 record-index boundary results, all fixed words/references and exact opaque
 tails. Both original package hashes, all 237 baseline source files and both
@@ -200,7 +341,8 @@ third-party implementation source was read or copied for this increment.
 | --- | --- | --- |
 | The two map pins above | Owner proprietary files; private interoperability study | Actual headers, raw array records, tails and object references |
 | Pinned `MarvelHeroesOmega.exe`, SHA-256 `8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1` | Owner proprietary client; private interoperability study | Native serializers, branch constants, class construction and diagnostic identities |
-| Existing original project object/World/Level readers and private PE helpers/evidence | Original project source/findings | Admission, span API, byte mapping, prior helper proof and fixtures |
+| Existing original project object/World/Level/Model readers and private PE helpers/evidence | Original project source/findings | Admission, span API, byte mapping, prior helper proof and fixtures |
+| Named prior Asgard collection/component receipts under the private evidence root | Original project findings over owner proprietary bytes; no redistribution | Bounded saved StaticMesh dependency identities; exact 70-file ledger in `model-tail-native/independent/static-mesh-links/source-ledger.json` |
 | REA 6.9.0 and installed skill, native/evidence/recovery guides and tool schemas | REA MIT; analysis tooling, as registered in [PROVENANCE.md](PROVENANCE.md) | Target-free observations, retained evidence and deadline recovery |
 | Rizin, GNU objdump, Python and Rust tooling | Installed analysis/build tools; no implementation copied or linked | Native inspection, byte oracle and focused checks |
 
