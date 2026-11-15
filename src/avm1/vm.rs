@@ -31,6 +31,8 @@ mod geom_namespace;
 mod initial_prototype;
 #[path = "point.rs"]
 mod point;
+#[path = "rectangle.rs"]
+mod rectangle;
 #[cfg(test)]
 #[path = "saved_checks.rs"]
 mod saved_checks;
@@ -74,6 +76,7 @@ pub use initial_prototype::{
     InitialMovieClipPrototypeSelection,
 };
 pub use point::PointObjects;
+pub use rectangle::RectangleObjects;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
 pub use saved_state::{SavedActionId, SavedActionSource, SavedEnvironmentState, SavedMode};
 pub use shared_calls::SavedScriptCallProfile;
@@ -426,6 +429,8 @@ enum Kind {
     ExternalInterfacePrototype,
     PointConstructor,
     PointObject(point::PointRole),
+    RectangleConstructor,
+    RectangleObject(rectangle::RectangleRole),
     StringConstructor,
     StringObject(string::StringState),
     StringMethod(string::StringMethod),
@@ -461,6 +466,7 @@ impl Kind {
                 | Self::MovieClipConstructor
                 | Self::ExternalInterfaceConstructor
                 | Self::PointConstructor
+                | Self::RectangleConstructor
                 | Self::StringConstructor
                 | Self::StringMethod(_)
                 | Self::AddProperty
@@ -545,6 +551,7 @@ pub struct Vm {
     builtin_targets: BTreeMap<ObjectId, ()>,
     string_objects: Option<StringObjects>,
     point_objects: Option<PointObjects>,
+    rectangle_objects: Option<RectangleObjects>,
     geom_namespace: Option<GeomNamespace>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
@@ -593,6 +600,7 @@ impl Vm {
             builtin_targets: BTreeMap::new(),
             string_objects: None,
             point_objects: None,
+            rectangle_objects: None,
             geom_namespace: None,
             code: Vec::new(),
             code_bytes: 0,
@@ -999,23 +1007,29 @@ impl Vm {
         }
         Ok(())
     }
-    fn is_point_native(&self, id: ObjectId) -> bool {
+    fn is_geometry_native(&self, id: ObjectId) -> bool {
         self.objects.get(id.0).is_some_and(|object| {
-            matches!(object.kind, Kind::PointConstructor | Kind::PointObject(_))
+            matches!(
+                object.kind,
+                Kind::PointConstructor
+                    | Kind::PointObject(_)
+                    | Kind::RectangleConstructor
+                    | Kind::RectangleObject(_)
+            )
         })
     }
-    fn reject_point_mutation_chain(&self, mut id: ObjectId) -> Result<()> {
+    fn reject_geometry_mutation_chain(&self, mut id: ObjectId) -> Result<()> {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
-            if self.is_point_native(id) {
-                return self.fail(ErrorKind::Unsupported("Point native mutation profile"));
+            if self.is_geometry_native(id) {
+                return self.fail(ErrorKind::Unsupported("geometry native mutation profile"));
             }
             match self.objects[id.0].prototype {
                 Some(parent) => id = parent,
                 None => return Ok(()),
             }
         }
-        self.fail(ErrorKind::Budget("Point mutation prototype depth"))
+        self.fail(ErrorKind::Budget("geometry mutation prototype depth"))
     }
     fn is_string_native(&self, id: ObjectId) -> bool {
         self.objects.get(id.0).is_some_and(|object| {
@@ -1270,7 +1284,7 @@ impl Vm {
     /// Own stored members only; no prototype lookup and no getter execution.
     pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
         self.check_object(id)?;
-        if self.is_point_native(id) || self.is_geom_namespace(id) {
+        if self.is_geometry_native(id) || self.is_geom_namespace(id) {
             return self.fail(ErrorKind::Unsupported(
                 "partial native own-member inspection",
             ));
@@ -1297,7 +1311,7 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
-        if self.is_point_native(id) || self.is_geom_namespace(id) {
+        if self.is_geometry_native(id) || self.is_geom_namespace(id) {
             return self.fail(ErrorKind::Unsupported(
                 "partial native own-member inspection",
             ));
@@ -1388,7 +1402,7 @@ impl Vm {
         } else {
             self.object_id(args[0].clone())?
         };
-        self.reject_point_mutation_chain(target)?;
+        self.reject_geometry_mutation_chain(target)?;
         self.reject_geom_mutation_chain(target)?;
         let prototype = matches!(
             self.objects[target.0].kind,
@@ -1525,7 +1539,7 @@ impl Vm {
         self.check_object(id)?;
         self.check_member_target(id, key)?;
         self.reject_string_mutation_chain(id)?;
-        self.reject_point_mutation_chain(id)?;
+        self.reject_geometry_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if !matches!(self.objects[id.0].kind, Kind::Plain) {
             return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
@@ -1644,6 +1658,9 @@ impl Vm {
             if let Some(value) = self.point_read(id, key)? {
                 return Ok(value);
             }
+            if let Some(value) = self.rectangle_read(id, key)? {
+                return Ok(value);
+            }
             if let Some(value) = self.geom_namespace_member(id, key)? {
                 return Ok(value);
             }
@@ -1699,7 +1716,9 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
-            if self.point_read(id, key)?.is_some() || self.geom_namespace_member(id, key)?.is_some()
+            if self.point_read(id, key)?.is_some()
+                || self.rectangle_read(id, key)?.is_some()
+                || self.geom_namespace_member(id, key)?.is_some()
             {
                 return Ok(true);
             }
@@ -1734,6 +1753,9 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             if let Some(value) = self.point_read(id, key)? {
+                return Ok(Some(Property::Data(value)));
+            }
+            if let Some(value) = self.rectangle_read(id, key)? {
                 return Ok(Some(Property::Data(value)));
             }
             if let Some(value) = self.geom_namespace_member(id, key)? {
@@ -1826,7 +1848,7 @@ impl Vm {
     ) -> Result<()> {
         self.check_object(id)?;
         self.reject_string_mutation_chain(id)?;
-        self.reject_point_mutation_chain(id)?;
+        self.reject_geometry_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
             return self.attached_text_field_write(field, key, value, host);
@@ -1915,11 +1937,15 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
-        if self.is_point_native(id) && self.point_write(id, &key, value.clone())? {
-            return Ok(());
+        if self.is_geometry_native(id) {
+            if self.point_write(id, &key, value.clone())?
+                || self.rectangle_write(id, &key, value.clone())?
+            {
+                return Ok(());
+            }
         }
         self.reject_string_mutation_chain(id)?;
-        self.reject_point_mutation_chain(id)?;
+        self.reject_geometry_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if matches!(
             self.objects[id.0].kind,
@@ -2720,6 +2746,11 @@ impl Vm {
             Kind::PointConstructor => {
                 return self.fail(ErrorKind::Unsupported("direct Point invocation profile"));
             }
+            Kind::RectangleConstructor => {
+                return self.fail(ErrorKind::Unsupported(
+                    "direct Rectangle invocation profile",
+                ));
+            }
             Kind::StringConstructor => {
                 return self.fail(ErrorKind::Unsupported("direct String invocation profile"));
             }
@@ -2869,7 +2900,7 @@ impl Vm {
                     return Ok(Value::Bool(false));
                 };
                 self.reject_string_mutation_chain(*receiver)?;
-                self.reject_point_mutation_chain(*receiver)?;
+                self.reject_geometry_mutation_chain(*receiver)?;
                 self.reject_geom_mutation_chain(*receiver)?;
                 if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
                     return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
@@ -3790,6 +3821,17 @@ impl Vm {
                             pc += 1;
                             continue;
                         }
+                        if matches!(self.objects[constructor.0].kind, Kind::RectangleConstructor) {
+                            if instruction.opcode != 0x53 || !args.is_empty() {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "Rectangle construction requires zero-argument NewMethod",
+                                ));
+                            }
+                            let object = self.construct_rectangle_zero(constructor)?;
+                            self.push(frame, Value::Object(object))?;
+                            pc += 1;
+                            continue;
+                        }
                         if matches!(self.objects[constructor.0].kind, Kind::StringConstructor) {
                             return self.fail(ErrorKind::Unsupported(
                                 "explicit String construction profile",
@@ -4146,6 +4188,7 @@ impl Vm {
                                         | Kind::MovieClip(_)
                                         | Kind::StringObject(_)
                                         | Kind::PointObject(_)
+                                        | Kind::RectangleObject(_)
                                 ) {
                                     return self.fail(ErrorKind::Unsupported(
                                         "special prototype/super typeof semantics",
@@ -4162,6 +4205,7 @@ impl Vm {
                                         | Kind::MovieClipConstructor
                                         | Kind::ExternalInterfaceConstructor
                                         | Kind::PointConstructor
+                                        | Kind::RectangleConstructor
                                         | Kind::StringConstructor
                                         | Kind::StringMethod(_)
                                         | Kind::AddProperty
