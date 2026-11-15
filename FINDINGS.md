@@ -5,7 +5,21 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev22 work in progress
+## 2026-11-15 dev22 diagnostic increment
+
+**VERIFIED combined build/startup:** clean source
+`25a6e6abc9caca8565ac32db70306c14d66e43a3` builds with the window feature in
+32.39 seconds without warnings. All seventeen focused CLI/image checks pass,
+including all 48 saved Model resource records, explicit empty/duplicate
+selections and rejected invalid selections. The isolated Rust window presents
+two frames with empty stderr; retained cursor and login RGBA identities match.
+Binary SHA-256:
+`4cea4e9c3232a831ced7abecd8161b8a30e4bbd0f6cdb601f4f3fc014422da6a`.
+Receipts: `evidence/dev22-build-result.json`,
+`evidence/build-0.1.0-dev.22-smoke.json`, `evidence/dev22-native-html/receipt.json`.
+All four integrated modules exactly match their helper-tested source hashes
+(`evidence/dev22-integrated-source-identity.json`). These are Rust diagnostic
+checks, not actual native option selection, OS cursor execution or gameplay.
 
 **OBSERVED controlled native-global replay:** manager13 completes all 452
 original initializers (49,244 instructions) from an explicitly unknown initial
@@ -28,10 +42,10 @@ the actual handler is null or authorize a default host bypass. See
 `evidence/mouse-missing-handler/verification.json`, SHA-256
 `6504574a80354113a5f2744c299e2d1834f14104fb6ff7a8653adfa26c04b6c0`.
 
-The next diagnostic integrates explicit-input rectangle AA, packed position
+This diagnostic integrates explicit-input rectangle AA, packed position
 conversion, masked SetMouse coordinate preparation and saved 36-byte Model
 resource inspection. Helper-focused checks and independent comparisons are
-sealed in their component ledgers. The combined dev22 build has not run yet.
+sealed in their component ledgers; the combined checks above also pass.
 None of these supplies a current native receiver, renderer setting or OS effect.
 
 ## 2026-11-15 dev21 diagnostic increment

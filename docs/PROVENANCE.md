@@ -833,3 +833,13 @@ dependency, runtime setting or actual device selection was introduced.
 the same owner-only static compatibility studies. Their ledgers record exact
 paths, ownership/licences, selected raw evidence and conditional limits;
 none establishes complete native startup or an effective default from absence.
+
+[Original global producers](FRESH_GLOBAL_BOOTSTRAP.md) completes the bounded
+pre-registrar construction interval using the owned executable and retained
+REA records. Actual zero-reference cleanup is included under the stated heap,
+collector and no-reentry contracts; this introduces no outside implementation.
+
+The dev22 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev22-linux/manifest.json`, SHA-256
+`f3094c061eab878708c774bd82c0f810e749a4a9e3661c820aaf597c0ce01de0`.

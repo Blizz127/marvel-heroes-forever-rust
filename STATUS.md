@@ -1,9 +1,10 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 13:52 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:51 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
-retail parity. The current source version is `0.1.0-dev.22`; that increment has not been built.
+retail parity. The current source version is `0.1.0-dev.22`; its combined build, seventeen focused
+CLI/image checks and isolated two-frame window smoke pass. Private staging is next.
 
 ## Latest private diagnostic
 
