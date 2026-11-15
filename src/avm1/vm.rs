@@ -1,8 +1,10 @@
 //! Deliberately partial AVM1 executor. Every unsupported operation fails explicitly.
 //! No file, network, native-client, or URL side effects exist in this module.
 use super::{ByteString, Function, Literal, Operands, Program};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::Arc;
 
 #[path = "applied_super.rs"]
@@ -17,6 +19,8 @@ pub mod attached_name_profile;
 mod attached_textfield;
 #[path = "deferred.rs"]
 mod deferred;
+#[path = "execution_store.rs"]
+mod execution_store;
 #[path = "external_interface.rs"]
 mod external_interface;
 #[path = "focus_rect.rs"]
@@ -28,6 +32,11 @@ mod saved_checks;
 mod saved_runtime;
 #[path = "saved_state.rs"]
 pub mod saved_state;
+#[path = "shared_calls.rs"]
+mod shared_calls;
+#[cfg(test)]
+#[path = "shared_call_checks.rs"]
+mod shared_call_checks;
 #[path = "string.rs"]
 mod string;
 use applied_super::AttachedSuperCall;
@@ -50,10 +59,13 @@ pub use attached_textfield::{
     TextFieldWatchState,
 };
 pub use deferred::{BuiltinFactory, DeferredBuiltinName};
+use execution_store::{ExecutionStore, RegisterBank, StoreError};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
 pub use saved_state::{SavedActionId, SavedActionSource, SavedEnvironmentState, SavedMode};
+pub use shared_calls::SavedScriptCallProfile;
+use shared_calls::SharedCallContext;
 pub use string::StringObjects;
 
 pub type Text = Arc<[u16]>;
@@ -479,8 +491,9 @@ struct Object {
     native_hash_profile: bool,
 }
 struct Frame {
-    stack: Vec<Value>,
-    registers: Vec<Value>,
+    store: Rc<RefCell<ExecutionStore>>,
+    registers: RegisterBank,
+    shared_calls: Option<SharedCallContext>,
     scopes: Vec<ObjectId>,
     pool: Arc<Vec<Value>>,
     target: ObjectId,
@@ -493,12 +506,14 @@ enum FrameKind {
     Ordinary,
     Saved {
         action: saved_state::SavedActionState,
-        max_stack_values: usize,
     },
 }
 impl Frame {
     fn is_saved(&self) -> bool {
         matches!(self.kind, FrameKind::Saved { .. })
+    }
+    fn is_shared_script(&self) -> bool {
+        !self.is_saved() && self.shared_calls.is_some()
     }
 }
 enum Flow {
@@ -1959,24 +1974,54 @@ impl Vm {
             .insert(key, Property::Data(value));
         Ok(())
     }
-    fn push(&self, frame: &mut Frame, value: Value) -> Result<()> {
-        let limit = match frame.kind {
-            FrameKind::Saved {
-                max_stack_values, ..
-            } => max_stack_values.min(self.limits.stack_values),
-            FrameKind::Ordinary => self.limits.stack_values,
+    fn store_error(&self, error: StoreError) -> Error {
+        self.error(match error {
+            StoreError::Underflow => ErrorKind::StackUnderflow,
+            StoreError::StackLimit => ErrorKind::Budget("operand stack"),
+            StoreError::RegisterLimit => ErrorKind::Budget("dynamic registers"),
+            StoreError::InvalidRegister(index) => ErrorKind::InvalidRegister(index),
+            StoreError::InvalidRegisterFrame => ErrorKind::Unsupported("register frame ownership"),
+        })
+    }
+    fn isolated_store(
+        &self,
+        register_count: Option<u8>,
+    ) -> Result<(Rc<RefCell<ExecutionStore>>, RegisterBank)> {
+        let mut store = ExecutionStore::new(
+            Vec::new(),
+            std::array::from_fn(|_| Value::Undefined),
+            self.limits.stack_values,
+        )
+        .map_err(|error| self.store_error(error))?;
+        let bank = match register_count {
+            Some(count) => store
+                .enter_function2(count)
+                .map_err(|error| self.store_error(error))?,
+            None => RegisterBank::Fixed,
         };
-        if frame.stack.len() >= limit {
-            return self.fail(ErrorKind::Budget("operand stack"));
-        }
-        frame.stack.push(value);
-        Ok(())
+        Ok((Rc::new(RefCell::new(store)), bank))
+    }
+    fn push(&self, frame: &mut Frame, value: Value) -> Result<()> {
+        frame
+            .store
+            .borrow_mut()
+            .push(value)
+            .map_err(|error| self.store_error(error))
     }
     fn pop(&self, frame: &mut Frame) -> Result<Value> {
         frame
-            .stack
+            .store
+            .borrow_mut()
             .pop()
-            .ok_or_else(|| self.error(ErrorKind::StackUnderflow))
+            .map_err(|error| self.store_error(error))
+    }
+    fn peek(&self, frame: &Frame, depth: usize) -> Result<Value> {
+        frame
+            .store
+            .borrow()
+            .peek_from_top(depth)
+            .cloned()
+            .map_err(|error| self.store_error(error))
     }
     fn object_id(&self, value: Value) -> Result<ObjectId> {
         if let Value::Object(id) = value {
@@ -2275,11 +2320,11 @@ impl Vm {
         }
     }
     fn saved_set_variable(&mut self, frame: &mut Frame, host: &mut impl Host) -> Result<()> {
-        let len = frame.stack.len();
+        let len = frame.store.borrow().len();
         if len < 2 {
             return self.fail(ErrorKind::StackUnderflow);
         }
-        let Value::String(key) = &frame.stack[len - 2] else {
+        let Value::String(key) = self.peek(frame, 1)? else {
             return self.fail(ErrorKind::Unsupported(
                 "saved SetVariable primitive String name profile",
             ));
@@ -2289,17 +2334,17 @@ impl Vm {
                 "saved SetVariable simple ASCII name profile",
             ));
         }
-        self.simple_name(key)?;
-        let key = Arc::clone(key);
+        self.simple_name(&key)?;
+
         // Native routing forwards the original Value without RHS coercion.
         // The selected member setter retains its own type/identity guards.
-        let value = frame.stack[len - 1].clone();
+        let value = self.peek(frame, 0)?;
         // Empty captured/With scope and the saved null activation fence route
         // directly to the current target. Reads' global fallback does not apply.
         // Keep both operands during normal setter dispatch; unsupported writes
         // stop before native normal-return cleanup would consume them.
         self.write_member(frame.target, key, value, host)?;
-        frame.stack.truncate(len - 2);
+        frame.store.borrow_mut().stack.truncate(len - 2);
         Ok(())
     }
     fn reset_execution(&mut self) {
@@ -2339,9 +2384,11 @@ impl Vm {
             .get(code.0)
             .cloned()
             .ok_or_else(|| self.error(ErrorKind::InvalidCode(code)))?;
+        let (store, registers) = self.isolated_store(None)?;
         let mut frame = Frame {
-            stack: Vec::new(),
-            registers: vec![Value::Undefined; 4],
+            store,
+            registers,
+            shared_calls: None,
             scopes: vec![target, self.global],
             pool: Arc::new(Vec::new()),
             target,
@@ -2357,7 +2404,10 @@ impl Vm {
         };
         Ok(Execution {
             value,
-            stack: frame.stack,
+            stack: Rc::try_unwrap(frame.store)
+                .expect("isolated execution owns its store")
+                .into_inner()
+                .stack,
             instructions: self.instructions,
             host_calls: self.host_calls,
         })
@@ -2941,15 +2991,11 @@ impl Vm {
         let target = function.target;
         let mut scopes = vec![activation];
         scopes.extend(function.scopes.iter().copied());
+        let (store, registers) = self.isolated_store(definition.register_count)?;
         let mut frame = Frame {
-            stack: Vec::new(),
-            registers: vec![
-                Value::Undefined;
-                // Native Function2 appends exactly N slots. Outside-N indices
-                // can alias outer/fixed native banks, which this isolated-frame
-                // profile deliberately rejects instead of granting slot N.
-                definition.register_count.map_or(4, usize::from)
-            ],
+            store,
+            registers,
+            shared_calls: None,
             scopes,
             pool: function.pool.clone(),
             target,
@@ -3136,12 +3182,11 @@ impl Vm {
         if frame.is_saved() && index > 3 {
             return Ok(());
         }
-        let slot = frame
-            .registers
-            .get_mut(usize::from(index))
-            .ok_or_else(|| self.error(ErrorKind::InvalidRegister(index)))?;
-        *slot = value;
-        Ok(())
+        frame
+            .store
+            .borrow_mut()
+            .write_register(frame.registers, index, value)
+            .map_err(|error| self.store_error(error))
     }
     fn array(&mut self, values: &[Value]) -> Result<ObjectId> {
         let len = u32::try_from(values.len())
@@ -3165,7 +3210,7 @@ impl Vm {
             return self.fail(ErrorKind::Budget("arguments"));
         }
         let count = count as usize;
-        if count > frame.stack.len() {
+        if count > frame.store.borrow().len() {
             return self.fail(ErrorKind::StackUnderflow);
         }
         let mut args = Vec::with_capacity(count);
@@ -3295,6 +3340,9 @@ impl Vm {
                 return self.fail(ErrorKind::Budget("instructions"));
             }
             self.instructions += 1;
+            if frame.is_shared_script() {
+                self.shared_script_instruction(frame, instruction)?;
+            }
             let mut jump = None;
             match &instruction.operands {
                 Operands::Push(values) => {
@@ -3308,13 +3356,11 @@ impl Vm {
                             Literal::Undefined => Value::Undefined,
                             Literal::Boolean(v) => Value::Bool(*v != 0),
                             Literal::Register(r) if frame.is_saved() && *r > 3 => Value::Undefined,
-                            Literal::Register(r) => {
-                                frame
-                                    .registers
-                                    .get(usize::from(*r))
-                                    .cloned()
-                                    .ok_or_else(|| self.error(ErrorKind::InvalidRegister(*r)))?
-                            }
+                            Literal::Register(r) => frame
+                                .store
+                                .borrow()
+                                .read_register(frame.registers, *r)
+                                .map_err(|error| self.store_error(error))?,
                             Literal::Constant8(i) if frame.is_saved() => frame
                                 .pool
                                 .get(usize::from(*i))
@@ -3375,11 +3421,7 @@ impl Vm {
                         pc += 1;
                         continue;
                     }
-                    let value = frame
-                        .stack
-                        .last()
-                        .cloned()
-                        .ok_or_else(|| self.error(ErrorKind::StackUnderflow))?;
+                    let value = self.peek(frame, 0)?;
                     self.write_register(frame, *r, value)?;
                 }
                 Operands::Function(definition) => {
@@ -3465,14 +3507,10 @@ impl Vm {
                     0x17 => {
                         // Owned native opcode 0x17 restores the zero-depth stack
                         // sentinel and returns normally. Other pops stay checked.
-                        frame.stack.pop();
+                        frame.store.borrow_mut().stack.pop();
                     }
                     0x4c => {
-                        let value = frame
-                            .stack
-                            .last()
-                            .cloned()
-                            .ok_or_else(|| self.error(ErrorKind::StackUnderflow))?;
+                        let value = self.peek(frame, 0)?;
                         self.push(frame, value)?;
                     }
                     0x4d => {
@@ -3590,6 +3628,9 @@ impl Vm {
                         let value =
                             self.invoke(callable, self.target_value(frame.target), &args, host)?;
                         self.push(frame, value)?;
+                    }
+                    0x52 if frame.is_saved() || frame.shared_calls.is_some() => {
+                        self.shared_call_method(frame, host)?;
                     }
                     0x52 => {
                         let method = self.pop(frame)?;
@@ -3777,7 +3818,10 @@ impl Vm {
                         let target = self.object_id(target)?;
                         let names = self.enumerate_names(target)?;
                         if names.len().saturating_add(1)
-                            > self.limits.stack_values.saturating_sub(frame.stack.len())
+                            > self
+                                .limits
+                                .stack_values
+                                .saturating_sub(frame.store.borrow().len())
                         {
                             return self.fail(ErrorKind::Budget("operand stack"));
                         }
@@ -6495,9 +6539,11 @@ mod tests {
                 ErrorKind::Unsupported(_)
             ));
         }
+        let (store, registers) = vm.isolated_store(None).unwrap();
         let frame = Frame {
-            stack: vec![],
-            registers: vec![],
+            store,
+            registers,
+            shared_calls: None,
             scopes: vec![vm.root(), vm.global()],
             pool: Arc::new(vec![]),
             target: vm.root(),
@@ -6531,9 +6577,11 @@ mod tests {
         vm.set(inner, "__proto__", Value::Object(prototype))
             .unwrap();
         vm.set(vm.global(), "shadow", Value::Number(7.0)).unwrap();
+        let (store, registers) = vm.isolated_store(None).unwrap();
         let frame = Frame {
-            stack: Vec::new(),
-            registers: vec![Value::Undefined; 4],
+            store,
+            registers,
+            shared_calls: None,
             scopes: vec![inner, vm.global()],
             pool: Arc::new(Vec::new()),
             target: vm.root(),

@@ -1925,3 +1925,63 @@ correction follows `SAVED_SCRIPT_CALLS.md` and the private register receipt
 Focused synthetic coverage checks duplicate destinations, absent arguments and
 preload precedence; it also directly classifies the resulting ScriptFunction as
 callable without invoking a factory. These are Rust checks, not native execution.
+
+### Explicit shared saved-Environment script calls
+
+The new `enable_saved_script_calls` API requires a supplied current-state
+`EmptyDynamicNoPendingException` profile; an adopted four-register/operand
+snapshot alone does not establish those facts. Each callable additionally needs
+`bind_saved_script_environment`, an explicit selected-native-Environment witness.
+The VM checks the exact captured target and `[target, global]` scope shape. These
+checks constrain a supplied assertion; they do not discover native Environment
+identity from the receiver name, file or source version.
+
+Admitted named CallMethod calls copy their arguments while retaining all original
+call operands in one `ExecutionStore`. Saved and ordinary control frames borrow
+that same store. Function2 adds exactly N reversed-index dynamic slots, parameters
+precede preloads, and a successful callee removes only its register extent. Return
+pops its current result operand; the caller then drops `argc + 2` from the current
+post-callee top and replaces the remaining top. No entry-depth restoration or
+private callee operand vector hides residual stack changes. Saved fixed registers
+remain in the same store throughout. Generic diagnostic execution and `Vm::call`
+remain fenced after saved Environment adoption.
+
+This first implementation admits exact own-data ScriptFunction methods on ordinary
+Plain receivers, same selected attached Environment, Function2 flags `0x28`,
+`0x29` or `0x2a`, and indices strictly below serialized N. Arguments and Super are
+suppressed. Activation locals and direct literals/registers, bounded scalar
+operations, branches and Return work through ordinary control semantics; saved
+DefineLocal semantics resume after return. It rejects type1 setup until the
+arguments-object graph is grounded, captured activation/With, native callbacks,
+constructor/apply/Super calls, different Environments, positive-prefix nested
+Function2 allocation, and unproved body/source-pool paths. ConstantPool and Push
+constants in ordinary callees stay gated because a definition-time pool snapshot
+alone does not prove the current native source-wrapper pool. Existing native
+bodies reached through other diagnostic entrypoints retain their previous scope.
+
+An error halts the adopted Environment and retains actual partial operands, fixed
+registers and the active dynamic tail. `saved_environment_dynamic_registers`
+provides read-only diagnostics; this is not native exception unwinding or a
+resumable continuation. Normal-return cleanup is never synthesized after a body
+error. Bounds/heap admission failures are engineering limits, not a model of
+native allocator failure. Control-frame tokens are private and used synchronously
+in lexical LIFO order; no reentrant host capability is supplied by this route.
+
+VERIFIED static behavioral authority remains `SAVED_SCRIPT_CALLS.md`, with private
+combined receipt SHA-256
+`d308e57e2b1844022e7d9b05418ffa592d963191097696713a5138013dcb1203`.
+The independent state module's nine Rust checks are recorded in
+`avm1-execution-store/receipt.json` (SHA-256
+`f1732729e271bc70608612ba62a704788fef7c69674936fdeb204dbd1c2c6695`).
+Those synthetic checks prove neither native allocator behavior nor actual saved
+handler call eligibility. The original 34 audited Construct bodies have no calls;
+no original-body call replay has been inferred from their success.
+
+OBSERVED Rust validation: eight focused shared-call checks pass, including balanced,
+positive and negative callee stack deltas, absent duplicate register arguments,
+preload ordering, ordinary locals versus the restored saved target, unchanged
+public-call fences, and an inherited-ceiling failure retaining exact callee-origin
+partial state. The ten existing saved-opcode checks also pass. During validation,
+one older negative fixture failed because its synthetic standard-name map omitted
+`_x`; the mock now explicitly places that name at ID0. No native inventory or
+production classifier was changed by that fixture correction.

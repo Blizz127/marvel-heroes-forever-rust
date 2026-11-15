@@ -12,6 +12,10 @@ use super::saved_state::{
 use super::{
     AttachedClipId, ErrorKind, Flow, Frame, FrameKind, Host, Kind, ObjectId, Result, Value, Vm,
 };
+use super::{ExecutionStore, RegisterBank, SavedScriptCallProfile, SharedCallContext};
+use std::cell::RefCell;
+use std::collections::BTreeSet;
+use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,8 +48,11 @@ pub(super) struct InstalledAction {
 }
 #[derive(Debug)]
 pub(super) struct InstalledEnvironment {
-    state: SavedEnvironmentState,
-    halted: bool,
+    pub(super) state: SavedEnvironmentState,
+    pub(super) halted: bool,
+    pub(super) script_profile: Option<SavedScriptCallProfile>,
+    pub(super) script_bindings: Arc<BTreeSet<ObjectId>>,
+    pub(super) dynamic: Vec<Value>,
 }
 
 impl Vm {
@@ -129,6 +136,9 @@ impl Vm {
         self.saved_environments.push(Some(InstalledEnvironment {
             state,
             halted: false,
+            script_profile: None,
+            script_bindings: Arc::new(BTreeSet::new()),
+            dynamic: Vec::new(),
         }));
         self.saved_environment_owners.insert(owner, id);
         Ok(id)
@@ -229,9 +239,18 @@ impl Vm {
         } = self.saved_actions[id.0].take().unwrap();
         let mut env = self.saved_environments[environment.0].take().unwrap();
         let (stack, registers, max_stack_values) = env.state.take_execution();
+        // Successful admission proved the supplied stack ceiling. No dynamic
+        // bank is inferred for calls: those need the separate explicit profile.
+        let store = ExecutionStore::new(stack, registers, max_stack_values)
+            .expect("admitted saved state obeys its stack ceiling");
+        let shared_calls = env.script_profile.map(|_| SharedCallContext {
+            target,
+            bindings: Arc::clone(&env.script_bindings),
+        });
         let mut frame = Frame {
-            stack,
-            registers: Vec::from(registers),
+            store: Rc::new(RefCell::new(store)),
+            registers: RegisterBank::Fixed,
+            shared_calls,
             scopes: vec![target, self.global],
             pool: Arc::clone(action_state.pool()),
             target,
@@ -242,7 +261,6 @@ impl Vm {
             locals: target,
             kind: FrameKind::Saved {
                 action: action_state,
-                max_stack_values,
             },
         };
         self.depth = 1;
@@ -262,13 +280,11 @@ impl Vm {
             Ok(Flow::Jump(destination)) => self.fail(ErrorKind::InvalidBranch(destination as i128)),
             Err(error) => Err(error),
         };
-        // Central saved register helpers never resize the four-slot bank and
-        // run never replaces Frame.kind. These are private structural invariants,
-        // independent of script errors, which return with the original Frame.
-        let registers: [Value; 4] = frame
-            .registers
-            .try_into()
-            .expect("saved Frame keeps four registers");
+        // Participating frames only borrow the Rc lexically. Returned errors
+        // drop those control frames but retain the one store's partial contents.
+        let store = Rc::try_unwrap(frame.store)
+            .expect("saved execution returns sole ownership of its store")
+            .into_inner();
         let FrameKind::Saved {
             action: action_state,
             ..
@@ -276,7 +292,8 @@ impl Vm {
         else {
             unreachable!("central run preserves saved Frame kind")
         };
-        env.state.restore_execution(frame.stack, registers);
+        env.state.restore_execution(store.stack, store.fixed);
+        env.dynamic = store.dynamic;
         env.halted = result.is_err();
         self.saved_actions[id.0] = Some(InstalledAction {
             owner,
@@ -293,7 +310,7 @@ impl Vm {
         result
     }
 
-    fn saved_idle(&self) -> Result<()> {
+    pub(super) fn saved_idle(&self) -> Result<()> {
         if self.saved_active || self.depth != 0 {
             return self.fail(ErrorKind::Unsupported(
                 "saved execution entry is already active",
@@ -307,7 +324,10 @@ impl Vm {
             .and_then(Option::as_ref)
             .ok_or_else(|| self.error(ErrorKind::Unsupported("invalid or borrowed saved action")))
     }
-    fn saved_environment(&self, id: SavedEnvironmentId) -> Result<&InstalledEnvironment> {
+    pub(super) fn saved_environment(
+        &self,
+        id: SavedEnvironmentId,
+    ) -> Result<&InstalledEnvironment> {
         self.saved_environments
             .get(id.0)
             .and_then(Option::as_ref)
@@ -328,7 +348,7 @@ impl Vm {
         }
         Ok(())
     }
-    fn saved_owner_profile(&self, owner: AttachedClipId) -> Result<(ObjectId, u32)> {
+    pub(super) fn saved_owner_profile(&self, owner: AttachedClipId) -> Result<(ObjectId, u32)> {
         self.check_attached(owner)?;
         let info = self.attached_info(owner)?;
         self.check_object(info.owner)?;
