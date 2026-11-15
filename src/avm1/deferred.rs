@@ -44,6 +44,19 @@ pub(super) struct BuiltinEntry {
 }
 
 impl Vm {
+    /// Read the explicitly supplied association without binding or resolving a
+    /// token. Apply the same target-kind/owner checks as the mutating binder.
+    pub fn is_bound_builtin_context_target(&self, target: ObjectId) -> Result<bool> {
+        self.check_object(target)?;
+        match self.objects[target.0].kind {
+            Kind::Plain => {}
+            Kind::AttachedOwner(clip) if self.attached_owner(clip)? == target => {}
+            _ => return self.fail(ErrorKind::Unsupported(
+                "builtin context target requires plain target or attached owner",
+            )),
+        }
+        Ok(self.builtin_targets.contains_key(&target))
+    }
     /// Assert that this live target uses this VM's one builtin context.
     ///
     /// The host supplies the association; root identity or parentage is never

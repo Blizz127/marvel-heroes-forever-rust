@@ -32,6 +32,18 @@ stops execution immediately; earlier writes remain visible. Execution is not
 transactional, and retrying a stream is not an automatic recovery strategy.
 `instruction_count()` remains available after failure.
 
+Lookup-only integrations may use `classify_callability(&Value)`, returning
+`ValueCallability::{Callable, NonCallable, DeferredBuiltin}` after validating
+handles. Unsupported native function identities are still Callable; this is not
+an invocation-support promise. Deferred tokens remain unresolved, without a
+factory call or coercion. `is_bound_builtin_context_target(ObjectId)` validates
+the same Plain/typed-attached-owner profile as the binder and reports only actual
+membership in this VM's supplied context map. Neither API installs an association
+or changes heap/state. One focused synthetic check covers ordinary/native and
+unsupported callable identities, invalid/disguised typed handles, deferred tokens,
+bound/unbound targets and unchanged counters; the non-test module also compiles
+without warnings.
+
 `Value` distinguishes undefined, null, Boolean, double, UTF-16 string and object
 identity. Objects have data/accessor properties and an explicit prototype. Script functions
 and native bindings are object kinds. Arrays expose indexed properties and length.

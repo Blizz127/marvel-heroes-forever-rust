@@ -82,6 +82,15 @@ pub enum Value {
     /// Retained native tag11 name; factory/cache belong to the active context.
     DeferredBuiltin(DeferredBuiltinName),
 }
+
+/// Read-only value classification. Callable identity does not promise that a
+/// native/script invocation profile is implemented; deferred tokens stay unresolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueCallability {
+    Callable,
+    NonCallable,
+    DeferredBuiltin,
+}
 impl Value {
     pub fn string(value: &str) -> Self {
         Self::String(text(value))
@@ -1689,28 +1698,22 @@ impl Vm {
     }
     fn callable(&self, value: &Value) -> bool {
         if let Value::Object(id) = value {
-            self.objects.get(id.0).is_some_and(|object| {
-                matches!(
-                    object.kind,
-                    Kind::Script(_)
-                        | Kind::Native(_)
-                        | Kind::UnsupportedNative(_)
-                        | Kind::ObjectConstructor
-                        | Kind::ArrayConstructor
-                        | Kind::FunctionConversion
-                        | Kind::MovieClipConstructor
-                        | Kind::ExternalInterfaceConstructor
-                        | Kind::StringConstructor
-                        | Kind::StringMethod(_)
-                        | Kind::AddProperty
-                        | Kind::RegisterClass
-                        | Kind::SetPropertyFlags
-                        | Kind::FunctionMethod(_)
-                )
-            })
+            self.objects.get(id.0).is_some_and(|object| object.kind.function_value())
         } else {
             false
         }
+    }
+    /// Inspect the existing Value/kind without coercion, native calls or lazy
+    /// factory resolution. Invalid or disguised owner/storage handles reject.
+    pub fn classify_callability(&self, value: &Value) -> Result<ValueCallability> {
+        self.check_value(value)?;
+        Ok(if matches!(value, Value::DeferredBuiltin(_)) {
+            ValueCallability::DeferredBuiltin
+        } else if self.callable(value) {
+            ValueCallability::Callable
+        } else {
+            ValueCallability::NonCallable
+        })
     }
     fn read_member(&mut self, id: ObjectId, key: &Text, host: &mut impl Host) -> Result<Value> {
         self.check_object(id)?;
@@ -4489,6 +4492,47 @@ mod tests {
             ErrorKind::Unsupported(_)
         ));
     }
+    #[test]
+    fn readonly_callability_and_builtin_context_membership_do_not_resolve_or_mutate() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        let clip = vm.create_attached_movie_clip(AttachedClipSpec {
+            target: DisplayTargetId(912),
+            source: AttachedClipSource {movie: LoadedMovieSourceId(2), sprite_id: 3, header_version: 15},
+            parent: None,
+            event_state: AttachedEventState {target_flags: 0x5200_0180, load_flags: 0, source_flags: 0},
+        }).unwrap();
+        let owner = vm.attached_owner(clip).unwrap();
+        let plain = vm.object().unwrap();
+        let native = vm.native(97).unwrap();
+        let unsupported = vm.alloc(Kind::UnsupportedNative("unimplemented test method"), None).unwrap();
+        let token = vm.register_deferred_builtin(vm.global(), "DeferredTest", BuiltinFactory::Unsupported, 1).unwrap();
+        let before = (vm.object_count(), vm.properties, vm.string_units, vm.host_calls, vm.builtin_targets.len());
+        for value in [Value::Object(native), Value::Object(unsupported), Value::Object(vm.object_constructor.unwrap())] {
+            assert_eq!(vm.classify_callability(&value).unwrap(), ValueCallability::Callable);
+        }
+        for value in [Value::Object(plain), Value::DisplayClip(clip), Value::Undefined, Value::Null,
+                      Value::Bool(true), Value::Number(1.0), Value::string("function")] {
+            assert_eq!(vm.classify_callability(&value).unwrap(), ValueCallability::NonCallable);
+        }
+        assert_eq!(vm.classify_callability(&token).unwrap(), ValueCallability::DeferredBuiltin);
+        assert_eq!(vm.get(vm.global(), "DeferredTest").unwrap(), token);
+        for value in [Value::Object(ObjectId(usize::MAX)), Value::DisplayClip(AttachedClipId(usize::MAX)), Value::Object(owner)] {
+            assert!(vm.classify_callability(&value).is_err());
+        }
+        assert!(!vm.is_bound_builtin_context_target(owner).unwrap());
+        assert!(!vm.is_bound_builtin_context_target(plain).unwrap());
+        assert!(vm.is_bound_builtin_context_target(native).is_err());
+        assert!(vm.is_bound_builtin_context_target(ObjectId(usize::MAX)).is_err());
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units, vm.host_calls, vm.builtin_targets.len()), before);
+        vm.bind_builtin_context_target(owner).unwrap();
+        vm.bind_builtin_context_target(plain).unwrap();
+        assert!(vm.is_bound_builtin_context_target(owner).unwrap());
+        assert!(vm.is_bound_builtin_context_target(plain).unwrap());
+        assert!(!vm.is_bound_builtin_context_target(vm.global()).unwrap());
+    }
+
     #[test]
     fn primitive_values_and_conservative_coercions() {
         let mut vm = setup();
