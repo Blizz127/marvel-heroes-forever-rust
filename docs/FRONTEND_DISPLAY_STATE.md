@@ -23,6 +23,23 @@ belong to their respective VM/scene instances. Reusing this state with another
 VM or rebuilding the scene without rebuilding associations is unsupported.
 `bind_object` does not validate another subsystem's heap or create an object.
 
+`FrontendHost::attach_display` combines this property host with its existing
+Selection listeners and class registry. It requires an explicit binding between
+the registry's owning VM root and the scene root, and rejects a second attachment.
+Indexed property requests then use the same DisplayState checks and budgets;
+without an attached display they fail explicitly. The caller retains ownership
+of scene construction, object identity, input sampling and dispatch order.
+
+**VERIFIED (dev.9 original-script integration):** A private harness runs all 452
+manager initializers, consumes the checked VM handoff, explicitly associates the
+saved structural scene and executes the unchanged MouseMove handler at source7096
+through that same FrontendHost. The handler runs 14 instructions and six property
+calls, places the cursor at the supplied `(100,200)` pixels, and preserves the
+one Selection listener and five class registrations. Missing-root and replacement
+attachments reject. Receipt: `evidence/dev9-bootstrap-handoff/display-host-receipt.json`.
+The cursor association is still an explicit Plain-object diagnostic; this does
+not establish native MovieClip allocation or complete event ordering.
+
 The state validates the complete preorder tree, parent/child agreement, source
 identity indices, depth, mask-reference range, finite matrices, and agreement
 between raw placements and their saved derived transform/visibility. It rejects
