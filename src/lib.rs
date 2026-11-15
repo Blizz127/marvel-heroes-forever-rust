@@ -7,6 +7,7 @@ pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod animation;
 pub mod avm1;
 pub mod calligraphy;
+pub mod camera;
 pub mod frontend;
 pub mod gfx;
 pub mod localization;
