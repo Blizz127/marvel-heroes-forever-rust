@@ -41,6 +41,8 @@ mod global_extensions_checks;
 mod initial_prototype;
 #[path = "mouse.rs"]
 mod mouse;
+#[path = "object_primitives.rs"]
+mod object_primitives;
 #[path = "point.rs"]
 mod point;
 #[path = "rectangle.rs"]
@@ -91,6 +93,7 @@ pub use initial_prototype::{
     InitialMovieClipPrototypeSelection,
 };
 pub use mouse::MouseObjects;
+use object_primitives::ObjectPrimitive;
 pub use point::PointObjects;
 pub use rectangle::RectangleObjects;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
@@ -481,6 +484,7 @@ enum Kind {
     SetPropertyFlags,
     FunctionMethod(FunctionMethod),
     FunctionPrimitive(FunctionPrimitive),
+    ObjectPrimitive(ObjectPrimitive),
     FunctionPrototype,
     ConstructorSuper {
         constructor: ObjectId,
@@ -514,6 +518,7 @@ impl Kind {
                 | Self::SetPropertyFlags
                 | Self::FunctionMethod(_)
                 | Self::FunctionPrimitive(_)
+                | Self::ObjectPrimitive(_)
         )
     }
 }
@@ -553,6 +558,9 @@ struct Object {
     prototype: Option<ObjectId>,
     insertion_keys: Vec<Text>,
     native_hash_profile: bool,
+    // Durable allocation provenance, distinct from mutable property/hash state.
+    // Only the proved zero-argument native Object construction sets this bit.
+    native_object_instance: bool,
 }
 struct Frame {
     store: Rc<RefCell<ExecutionStore>>,
@@ -792,6 +800,7 @@ impl Vm {
             prototype,
             insertion_keys: Vec::new(),
             native_hash_profile: false,
+            native_object_instance: false,
         });
         if let Some(parent) = prototype {
             self.raw_member(
@@ -910,10 +919,20 @@ impl Vm {
                     "Object.prototype.isPropertyEnumerable",
                 ),
                 ("isPrototypeOf", "Object.prototype.isPrototypeOf"),
-                ("toString", "Object.prototype.toString"),
-                ("valueOf", "Object.prototype.valueOf"),
             ] {
                 let method = self.bootstrap_function(Kind::UnsupportedNative(name))?;
+                self.raw_member(
+                    prototype,
+                    text(key),
+                    Property::Data(Value::Object(method)),
+                    1,
+                )?;
+            }
+            for (key, method) in [
+                ("toString", ObjectPrimitive::ToString),
+                ("valueOf", ObjectPrimitive::ValueOf),
+            ] {
+                let method = self.bootstrap_function(Kind::ObjectPrimitive(method))?;
                 self.raw_member(
                     prototype,
                     text(key),
@@ -1405,6 +1424,7 @@ impl Vm {
             )?;
         }
         self.objects[object.0].native_hash_profile = true;
+        self.objects[object.0].native_object_instance = true;
         Ok(object)
     }
     fn ordinary_object(&mut self) -> Result<ObjectId> {
@@ -3142,6 +3162,14 @@ impl Vm {
                 }
                 return self.invoke_function_primitive(method, this);
             }
+            Kind::ObjectPrimitive(method) => {
+                if constructor_context.is_some() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Object primitive construction profile",
+                    ));
+                }
+                return self.invoke_object_primitive(method, this);
+            }
             Kind::SetPropertyFlags => return self.apply_property_flags(args),
             Kind::RegisterClass => {
                 if args.len() != 2 {
@@ -4242,6 +4270,7 @@ impl Vm {
                                     | Kind::SetPropertyFlags
                                     | Kind::FunctionMethod(_)
                                     | Kind::FunctionPrimitive(_)
+                                    | Kind::ObjectPrimitive(_)
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
                             }
@@ -4541,6 +4570,7 @@ impl Vm {
                                         | Kind::SetPropertyFlags
                                         | Kind::FunctionMethod(_)
                                         | Kind::FunctionPrimitive(_)
+                                        | Kind::ObjectPrimitive(_)
                                 ) {
                                     "function"
                                 } else {
@@ -4829,12 +4859,21 @@ mod tests {
             assert!(vm.callable(&method));
             assert_eq!(vm.own_property_flags(prototype, key).unwrap(), Some(1));
             assert!(vm.has_key(instance, &text(key)).unwrap());
-            assert!(matches!(
-                vm.call(method, Value::Object(instance), &[], &mut RejectHost)
-                    .unwrap_err()
-                    .kind,
-                ErrorKind::UnsupportedNativeFunction(_)
-            ));
+            let error = vm
+                .call(method, Value::Object(instance), &[], &mut RejectHost)
+                .unwrap_err();
+            if matches!(key, "toString" | "valueOf") {
+                // ordinary_object() does not certify a native Object allocation.
+                assert!(matches!(
+                    error.kind,
+                    ErrorKind::Unsupported("Object primitive native receiver category profile")
+                ));
+            } else {
+                assert!(matches!(
+                    error.kind,
+                    ErrorKind::UnsupportedNativeFunction(_)
+                ));
+            }
             assert_eq!(vm.host_calls, 0);
         }
     }

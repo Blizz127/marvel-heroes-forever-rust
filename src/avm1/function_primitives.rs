@@ -61,7 +61,8 @@ impl Vm {
                     | Kind::AddProperty
                     | Kind::RegisterClass
                     | Kind::FunctionMethod(_)
-                    | Kind::FunctionPrimitive(_) => {}
+                    | Kind::FunctionPrimitive(_)
+                    | Kind::ObjectPrimitive(_) => {}
                     Kind::Script(function) => {
                         // Actual type1/type2 getters preserve the function
                         // object but clear the auxiliary captured-frame ref.
@@ -302,9 +303,8 @@ mod tests {
         assert_eq!(vm.depth, 0);
         assert_eq!(vm.current_target, Some(vm.root()));
         assert_eq!(vm.host_calls, 0);
-        // The original Object.prototype methods remain separate unsupported
-        // native callbacks; this increment only replaces Function's two bodies.
-        let object_method = vm.get(vm.object_prototype.unwrap(), "valueOf").unwrap();
+        // Other Object.prototype callbacks remain separate unsupported natives.
+        let object_method = vm.get(vm.object_prototype.unwrap(), "watch").unwrap();
         assert!(matches!(
             vm.call(
                 object_method,

@@ -2535,3 +2535,57 @@ implementation and its tests. Private
 `fcdef8f5a8e074af49f50b6cafbe99ee2c89f6a3a195f5adb7e33f66c3b6334d`.
 The 53-file seal and all earlier receipts remain retained. No further unchanged
 replay or native execution was performed.
+
+### Bounded Object prototype primitive callbacks
+
+VERIFIED static evidence in [REA_OBJECT_PRIMITIVES.md](REA_OBJECT_PRIMITIVES.md)
+binds Object's distinct native `toString` and `valueOf` callbacks. The existing
+bootstrap method identities, insertion order, flags 1 and cold null parents are
+preserved. Dispatch uses the looked-up callable, so an own replacement method
+continues to shadow the prototype method.
+
+`Object.prototype.toString` returns `[object Object]` for admitted native
+category 6 receivers and `[type Function]` for admitted category 23 receivers.
+Both are exactly 15 UTF-16 units selected from the active builtin context;
+otherwise-valid arguments are ignored. This callback does not convert a
+FunctionRef, so a captured ScriptFunction can use the function string branch.
+`valueOf` preserves the supported receiver identity, using the fresh-result
+contract and the target/global-only ScriptFunction guard needed when auxiliary
+reference state would otherwise be dropped. It requires no Environment.
+
+The admitted categories are the already-proved common native callback classes,
+actual ScriptFunction, cached Object/Function prototypes, and objects created
+through the established zero-argument native Object allocation path. A new
+private allocation-origin marker is set only after completed `object_literal()`
+construction, shared by InitObject, guarded zero-argument NewObject and fresh
+host-result construction. The marker defaults false for every other allocator
+and survives ordinary metadata and hash-history changes. Neither writable
+`constructor`/`__proto__` properties nor enumeration state certify native class.
+Controlled roots, globals, activations and other `Kind::Plain` allocations
+therefore remain outside this callback profile.
+
+Primitive, display, deferred, super and unproved specialized native receivers
+remain rejected; the real display branches involve handles and resolution,
+not an invented generic string. Direct toString calls without an active bound
+context reject. General object-to-primitive coercion is still a separate gate.
+The existing Function valueOf whitelist now also recognizes the two new ordinary
+native callback kinds, preserving their previously supported function identities.
+
+OBSERVED: five new callback checks and thirteen focused existing Function,
+bootstrap, Object-construction and host-result checks pass. They cover original-
+format synthetic InitObject/NewObject/named-call paths, property shadowing,
+durable allocation origin, captured-function differences, invalid receivers,
+context admission and budget errors. The final test build and production
+metadata compile exit zero without diagnostics, with all 28 frozen source files
+unchanged. An initial test build failed because its synthetic Host omitted the
+required command method; the fixture-only correction and failed log are retained.
+Receipt `avm1-runtime/object-primitives-checks/receipt.json`, SHA-256
+`97a488cbda39304d3a1d16ead6b455e4684956f9577c68b63037d4f8417def08`.
+
+A separate decoder-only scan found 43 fixed-name toString sites and one valueOf
+site in the original manager. The strongest producers are an Array, a numeric
+Modulo result and named Date construction; none proves dispatch to these Object
+prototype callbacks. Private `avm1-object-primitives-sites/receipt.json` SHA-256
+`be5d291abc8d260395d448ab0a029b676a1726f9c3ebb8de49a7318b1b8374f0`
+records those limits. No original replay or native callback execution accompanies
+this increment, and the Mouse host remains rejecting.
