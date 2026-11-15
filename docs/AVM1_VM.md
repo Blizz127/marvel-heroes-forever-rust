@@ -2153,3 +2153,24 @@ Its source-only `static-context/receipt.json`, SHA-256
 `56ef566a9e6d16e5adb2398983b4bd624e5e8106e78ee4646bcd56181d712605`,
 checks all 26 frozen source entries and exact original call operands. Later
 cursor properties in that source remain separate, unexecuted dependencies.
+
+### Mouse user-event host seam
+
+`MouseHideRequest { origin, context, index }` and default-rejecting
+`Host::mouse_hide` reserve the native host boundary without installing a Mouse
+object or claiming cursor effects. The admitted zero-argument callback will use
+index0; the typed request represents event type0x16 with byte+4 and DWORD+8 zero
+and index at+c. The active Environment target selects its AS2 root/MovieImpl;
+method `this` and script origin do not select that host. An implementation must
+validate its explicit movie/handler association and preserve actual event effects.
+
+The complete static callback1b6fe0 first writes Undefined to its result, then
+calls the installed user-event handler. It makes no local visibility mutation.
+A missing native handler takes a logging branch; the unbound Rust interface is
+an unsupported capability, not a modeled missing-handler success or a visibility
+change. Factory/global binding and concrete engine-handler behavior remain
+separate requirements. This API-only increment passes production compilation;
+it does not advance the original manager or install an accepting test host.
+
+Retained native core: `rea-mouse-hide/hide.bundle.json`, REA Evidence
+`ev_30c745945b9384dc927d1a5d495a0d81436e77df954f82d483c97a4801d894be`.

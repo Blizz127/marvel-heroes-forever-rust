@@ -319,12 +319,30 @@ pub struct AttachedVisibilityRequest {
     pub visible: bool,
     pub origin: Option<CodeOrigin>,
 }
+/// Native zero-argument Mouse.hide host event. The callback ignores `this`;
+/// the active Environment target selects the root/MovieImpl and its handler.
+/// Event type is0x16, byte+4 and DWORD+8 are0, and `index` is DWORD+c.
+/// The admitted zero-argument callback always supplies index0. A host must
+/// validate its explicit context/handler association and implement the actual
+/// event effects; acceptance is not a generic cursor-visibility stub.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MouseHideRequest {
+    pub origin: Option<CodeOrigin>,
+    pub context: ObjectId,
+    pub index: u32,
+}
 pub trait Host {
     fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String>;
     /// Existing hosts retain their direct-value behavior. The VM materializes
     /// ObjectFields only after this callback returns, permitting setter reentry.
     fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
         self.call(call).map(HostResult::Value)
+    }
+    /// Deliver the admitted event to the explicitly bound current movie's
+    /// user-event handler. No handler, cursor state or successful delivery is
+    /// assumed by default. This interface itself does not install Mouse.
+    fn mouse_hide(&mut self, _request: MouseHideRequest) -> std::result::Result<(), String> {
+        Err("Mouse.hide user-event host is unbound".into())
     }
     /// Preparation may reject but must not publish changed display state. The
     /// borrowed closure publishes the admitted result once after the VM commits
