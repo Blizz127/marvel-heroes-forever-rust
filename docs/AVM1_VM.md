@@ -49,7 +49,9 @@ Defaults cap each invocation at 250,000 instructions, 64 nested function/With
 executions, 16,384 stack values, 10,000 host calls and 4,096 arguments. Persistent
 caps are 100,000 heap objects, one million cumulative properties, eight million
 allocated string units, 20,000 registered programs and 64 MiB of source spans.
-Arrays are capped at one million elements and prototype traversal at 256 links.
+Arrays are capped at one million elements, prototype traversal at 256 links, and
+property-visitor work at one million members per invocation. Flag updates reserve
+work for both preflight and mutation before touching any member.
 Configured function depth greater than 128 is rejected. Pool references,
 registers, branches, object IDs and stack accesses are checked. Loops consume the
 same instruction budget as straight-line code.
@@ -59,8 +61,9 @@ the bounded arena, so sustained gameplay will eventually require reclamation.
 Host-created Rust values are supplied by trusted integration code; the VM's
 allocation counters cover its own allocations and installed property names.
 
-Unsupported operations return errors, including Try/Throw, enumeration,
-property flags, movieclip paths, super and parent preloads, automatic
+Unsupported operations return errors, including Try/Throw, unrestricted
+enumeration/property flags (the bounded supported profile is below), movieclip
+paths, super and parent preloads, automatic
 primitive boxing, and uninstalled standard-library/native functions. Missing
 ordinary properties correctly yield undefined; attempting to call that value
 stops with `UnboundCall`. The optional `install_object_constructor()` installs the documented Object
@@ -119,7 +122,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Seventeen focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twenty-one focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -144,10 +147,10 @@ the standard Object constructor/accessor method and an explicit MovieClip native
 constructor binding with a linked prototype. RejectHost rejects any attempt to
 invoke that native constructor; no unrelated namespace is precreated. The
 original initializer itself constructs `_global.gfx`, `gfx.core.UIComponent` and
-its prototype. It executes 218 instructions before stopping at the unbound
-`ASSetPropFlags` call at 12374. Zero initializers complete, and subsequent
-initializers are not executed after that failure. Current results are in
-`init-order-after-pop.tsv`; `init-order-results.tsv` records the earlier strict
+its prototype. The earlier Object-only intrinsic profile executes 218 instructions before
+stopping at the unbound `ASSetPropFlags` call at 12374. Zero initializers complete,
+and subsequent initializers are not executed after that failure. That baseline is
+in `init-order-after-pop.tsv`; `init-order-results.tsv` records the earlier strict
 stack-underflow investigation.
 The first initializer reaches UIComponent extending MovieClip at 8705 and six
 prototype `addProperty` calls starting at 12178 before requiring `ASSetPropFlags`
@@ -189,8 +192,9 @@ registration, not successful retail class initialization.
 `owned-accessor-results.tsv`, `accessor-evidence.json` and `vm-tests-accessor.txt`
 retain that evidence and eleven passing focused tests. The synthetic accessor test
 also verifies a real script setter mutates the instance, not the prototype, and
-invalid registration leaves no property behind. Ordered initialization still stops at the unresolved property-flags binding;
-no native effect is silently stubbed.
+invalid registration leaves no property behind. That increment still stopped at
+the unresolved property-flags binding; the later flag implementation and its exact
+remaining default-clear stop are described below.
 
 ## Explicit function method values
 
@@ -229,9 +233,85 @@ probe and thirteen passing focused tests. Static REA evidence and original-code
 execution are distinct from running the native client; no native comparison has
 been claimed.
 
-The ASSetPropFlags research verifies part of its bit-mask transformation but does
-not yet settle every flag's meaning, visitor coverage and default return value.
-Those gaps remain explicit. No successful property-flags callback is installed.
+The subsequent native-backed property-flag increment below replaces the missing
+intrinsic with a bounded implementation. Its remaining default-clear ambiguity
+is reported explicitly instead of being hidden behind a successful callback.
+
+## Native-backed property flags
+
+`install_property_flags()` explicitly installs the bounded `ASSetPropFlags`
+intrinsic. It accepts a generic object, null selector and integer numeric masks;
+three or four arguments are supported. Other selectors, native object classes,
+and unverified numeric coercions stop explicitly. Null selects stored own members,
+including already hidden members. It never visits a prototype, synthesizes absent
+virtual builtins, resolves a getter or invokes a native host. Successful calls
+return Undefined.
+
+**VERIFIED, static REA:** Both masks are limited to their low three bits. The new
+flag byte is `(old & ~clear) | set`; setting wins overlap and upper existing bits
+are preserved. Bit 1 prevents enumeration, bit 2 prevents own-member deletion,
+and bit 4 prevents ordinary own-data assignment. Existing flags survive ordinary
+value replacement, including prior strings, functions and objects. Extends creates
+stored `__proto__` and `__constructor__` entries with flags 3. These entries are
+therefore included by the null selector even though they are hidden by default.
+No symbolic behavior is claimed for upper flag bits.
+
+The exact three-argument default remains a native evidence dependency. Native code
+uses clear 7 only when a target-derived cached environment byte equals 5, otherwise
+clear 0. The cache's producer has not yet been fully connected to the parsed movie
+header. The VM therefore does **not** equate its SWF version with that byte. Before
+mutating anything, it compares both possible outcomes for every selected member.
+An outcome-independent call executes; otherwise `AmbiguousPropertyFlags { old,
+set }` stops at the original script callsite. Explicit four-argument calls do not
+need this gate. The failing ASSet operation itself is atomic, while earlier actions
+in the stream still remain visible.
+
+`own_property_flags()` and `own_enumerable_names()` expose stored state for focused
+integration checks without executing getters. The latter uses lexical inspection
+order, not native runtime hash order. ActionEnumerate/Enumerate2 implement verified
+hidden-member filtering and prototype traversal only where zero or one visible
+name remains. Multiple names and visible duplicate/shadow cases stop until native
+ordering is recovered. Own generic-member Delete returns false for absent or
+protected members; deleting unprotected prototype metadata remains unsupported.
+ReadOnly ordinary own-data writes leave the value unchanged, as the native
+SetMember path discards its false result. Inherited ReadOnly and flagged-accessor
+write ordering, prototype writes after its metadata flags change, and addProperty
+replacement of flagged members remain explicit gaps.
+
+**OBSERVED:** With the intrinsic installed, the unmodified first manager
+initializer still reaches source 12374 after 218 instructions, now stopping at
+`AmbiguousPropertyFlags { old: 3, set: 1 }`. Both metadata entries remain flags 3;
+ordinary entries remain untouched. This is more precise execution evidence, not a
+completed initializer or a claim of native parity. No later initializer runs.
+`run-init-order-property-flags.rs`, `init-order-property-flags.tsv`,
+`vm-tests-property-flags.txt` and `property-flags-evidence.json` preserve the focused
+checks and controlled owned-script result privately.
+
+An additional owned-bytecode probe selects the original manager constant pool at
+55506+118 and unmodified property-flag suffix at 55787+37, including the ASSet call
+at 55821. The 11-instruction probe uses the actual owned GFX version 15. Its explicitly
+supplied generic target has one data property initially
+at flags 0. The call changes that property to flags 1, preserves its value and
+finishes with an empty action stack and zero host calls. Both native defaults give
+the same result for that controlled state. The constructor and containing class
+initializer are not run, and this does not bypass the first initializer's real
+metadata ambiguity. `run-owned-property-flags.rs` and
+`owned-property-flags-results.tsv` retain that distinct probe.
+
+Native evidence is retained under the private evidence root:
+
+- `rea-native-alternative/asflags-scope-proof-receipt.json` and
+  `asflags-scope-final.bundle.json`: generic-object binding, own-member visitor and
+  Enum/Delete/SetMember flag consumers.
+- `rea-native-alternative/extends-name-binding.bundle.json`: exact metadata names,
+  flags 3 baselines, and ordinary assignment/cleanup preserving flag bytes.
+- `rea-asflags-native/finding-summary.json`: masks, transformation and native
+  default-clear branch.
+- `rea-asflags-followup-return/finding-summary.json` and `final.bundle.json`:
+  native registration, wrapper, caller-initialized Undefined and untouched return
+  slot, bridged to raw Push type 3.
+- `rea-asflags-followup-version/finding-summary.json`: target-derived cached byte
+  and the unresolved concrete virtual-dispatch/header producer.
 
 ## Indexed movie-property host seam
 
@@ -337,8 +417,8 @@ manager/login root-frame distributions and registration dependencies.
 | [Adobe SWF v9 specification, authored PDF mirror](https://www.mobilefish.com/download/flash/swf_file_format_spec_v9.pdf) | © 2006–2008 Adobe, all rights reserved | Cross-check Extends `__proto__` / `__constructor__` fields obscured in extracted v19 text. |
 | [Adobe AS2 Object reference](https://open-flash.github.io/mirrors/as2-language-reference/Object.html) and [Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html) | Adobe copyrighted documentation, all rights reserved | Object construction and prototype behavior; registerClass and function call/apply contracts for remaining bootstrap work. |
 | [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; `Function(value)` adoption remains unverified and unimplemented. |
-| [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage evidence; insufficient to implement its complete contract. |
-| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch and zero-depth ActionPop behavior; static REA evidence only. |
+| [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage context; native implementation decisions use the cited owned REA evidence. |
+| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata and return-value behavior; static REA evidence only. |
 | Owner's private frontend-manager and login GFX bytes | Proprietary retail material, private compatibility study | Original-script isolated probes and actual unsupported-dependency measurements. |
 
 The integrating lead owns additions to `docs/PROVENANCE.md`. This lane changes

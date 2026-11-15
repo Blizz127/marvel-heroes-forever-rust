@@ -55,6 +55,7 @@ pub struct Limits {
     pub arguments: usize,
     pub array_length: u32,
     pub prototype_depth: usize,
+    pub member_visits: usize,
 }
 impl Default for Limits {
     fn default() -> Self {
@@ -71,6 +72,7 @@ impl Default for Limits {
             arguments: 4096,
             array_length: 1_000_000,
             prototype_depth: 256,
+            member_visits: 1_000_000,
         }
     }
 }
@@ -90,6 +92,7 @@ pub enum ErrorKind {
     UnboundCall,
     Host(String),
     InvalidArrayLength,
+    AmbiguousPropertyFlags { old: u8, set: u8 },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error {
@@ -263,6 +266,7 @@ enum Kind {
     ObjectConstructor,
     AddProperty,
     RegisterClass,
+    SetPropertyFlags,
     FunctionMethod(FunctionMethod),
 }
 #[derive(Debug, Clone)]
@@ -277,6 +281,7 @@ enum Property {
 struct Object {
     kind: Kind,
     properties: BTreeMap<Text, Property>,
+    flags: BTreeMap<Text, u8>,
     prototype: Option<ObjectId>,
 }
 struct Frame {
@@ -301,6 +306,7 @@ pub struct Vm {
     code_bytes: usize,
     objects: Vec<Object>,
     properties: usize,
+    member_visits: usize,
     string_units: usize,
     instructions: usize,
     host_calls: usize,
@@ -320,6 +326,7 @@ impl Vm {
             code_bytes: 0,
             objects: Vec::new(),
             properties: 0,
+            member_visits: 0,
             string_units: 0,
             instructions: 0,
             host_calls: 0,
@@ -394,8 +401,17 @@ impl Vm {
         self.objects.push(Object {
             kind,
             properties: BTreeMap::new(),
+            flags: BTreeMap::new(),
             prototype,
         });
+        if let Some(parent) = prototype {
+            self.raw_member(
+                id,
+                text("__proto__"),
+                Property::Data(Value::Object(parent)),
+                3,
+            )?;
+        }
         Ok(id)
     }
     pub fn object(&mut self) -> Result<ObjectId> {
@@ -444,6 +460,167 @@ impl Vm {
         self.alloc(Kind::Plain, prototype)
     }
 
+    /// Installs only the native-backed, currently supported flag intrinsic.
+    pub fn install_property_flags(&mut self) -> Result<ObjectId> {
+        match self.get(self.global, "ASSetPropFlags")? {
+            Value::Object(id) if matches!(self.objects[id.0].kind, Kind::SetPropertyFlags) => {
+                return Ok(id);
+            }
+            Value::Undefined => {}
+            _ => {
+                return self.fail(ErrorKind::Unsupported(
+                    "ASSetPropFlags binding already exists",
+                ));
+            }
+        }
+        let id = self.alloc(Kind::SetPropertyFlags, None)?;
+        self.set(self.global, "ASSetPropFlags", Value::Object(id))?;
+        Ok(id)
+    }
+    /// Own stored members only; no prototype lookup and no getter execution.
+    pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
+        self.check_object(id)?;
+        let key = text(key);
+        Ok(self.objects[id.0]
+            .properties
+            .contains_key(&key)
+            .then(|| self.own_flags(id, &key)))
+    }
+    /// Inspection order is lexical, not a claim about native hash enumeration.
+    pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
+        self.check_object(id)?;
+        Ok(self.objects[id.0]
+            .properties
+            .keys()
+            .filter(|key| self.own_flags(id, key) & 1 == 0)
+            .cloned()
+            .collect())
+    }
+    fn own_flags(&self, id: ObjectId, key: &Text) -> u8 {
+        self.objects[id.0].flags.get(key).copied().unwrap_or(0)
+    }
+    fn raw_member(&mut self, id: ObjectId, key: Text, value: Property, flags: u8) -> Result<()> {
+        self.reserve_property(id, &key)?;
+        self.objects[id.0].flags.insert(key.clone(), flags);
+        self.objects[id.0].properties.insert(key, value);
+        Ok(())
+    }
+    fn visit_members(&mut self, count: usize) -> Result<()> {
+        if count > self.limits.member_visits.saturating_sub(self.member_visits) {
+            return self.fail(ErrorKind::Budget("member visits"));
+        }
+        self.member_visits += count;
+        Ok(())
+    }
+    fn flag_mask(&self, value: &Value) -> Result<u8> {
+        let Value::Number(number) = value else {
+            return self.fail(ErrorKind::Unsupported(
+                "nonnumeric ASSetPropFlags mask profile",
+            ));
+        };
+        if !number.is_finite()
+            || number.fract() != 0.0
+            || *number < f64::from(i32::MIN)
+            || *number > f64::from(u32::MAX)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "ASSetPropFlags numeric coercion profile",
+            ));
+        }
+        Ok((uint32(*number) & 7) as u8)
+    }
+    fn apply_property_flags(&mut self, args: &[Value]) -> Result<Value> {
+        if !(3..=4).contains(&args.len()) {
+            return self.fail(ErrorKind::Unsupported(
+                "ASSetPropFlags argument-count profile",
+            ));
+        }
+        let target = self.object_id(args[0].clone())?;
+        if !matches!(self.objects[target.0].kind, Kind::Plain) {
+            return self.fail(ErrorKind::Unsupported(
+                "ASSetPropFlags non-generic object class",
+            ));
+        }
+        if !matches!(args[1], Value::Null) {
+            return self.fail(ErrorKind::Unsupported("ASSetPropFlags non-null selector"));
+        }
+        let set = self.flag_mask(&args[2])?;
+        let clear = args.get(3).map(|value| self.flag_mask(value)).transpose()?;
+        self.visit_members(self.objects[target.0].properties.len().saturating_mul(2))?;
+        // No choice between unproved native environment defaults. Check every
+        // selected property before mutation; only outcome-independent calls run.
+        if clear.is_none() {
+            for key in self.objects[target.0].properties.keys() {
+                let old = self.own_flags(target, key);
+                if (old | set) != ((old & !7) | set) {
+                    return self.fail(ErrorKind::AmbiguousPropertyFlags { old, set });
+                }
+            }
+        }
+        let keys: Vec<_> = self.objects[target.0].properties.keys().cloned().collect();
+        for key in keys {
+            let old = self.own_flags(target, &key);
+            self.objects[target.0]
+                .flags
+                .insert(key, (old & !clear.unwrap_or(0)) | set);
+        }
+        Ok(Value::Undefined)
+    }
+    fn enumerate_names(&mut self, mut id: ObjectId) -> Result<Vec<Text>> {
+        let mut seen = BTreeMap::<Text, bool>::new();
+        let mut names = Vec::new();
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            if !matches!(self.objects[id.0].kind, Kind::Plain) {
+                return self.fail(ErrorKind::Unsupported(
+                    "enumeration on non-generic object class",
+                ));
+            }
+            self.visit_members(self.objects[id.0].properties.len())?;
+            for key in self.objects[id.0].properties.keys() {
+                let visible = self.own_flags(id, key) & 1 == 0;
+                if let Some(prior) = seen.get(key) {
+                    if *prior || visible {
+                        return self.fail(ErrorKind::Unsupported(
+                            "native enumeration shadow/duplicate ordering",
+                        ));
+                    }
+                }
+                seen.insert(key.clone(), visible);
+                if visible {
+                    names.push(key.clone());
+                }
+                if names.len() > 1 {
+                    return self.fail(ErrorKind::Unsupported(
+                        "native enumeration hash order with multiple names",
+                    ));
+                }
+            }
+            if let Some(parent) = self.objects[id.0].prototype {
+                id = parent;
+            } else {
+                return Ok(names);
+            }
+        }
+        self.fail(ErrorKind::Budget("prototype lookup depth"))
+    }
+    fn delete_member(&mut self, id: ObjectId, key: &Text) -> Result<bool> {
+        self.check_object(id)?;
+        if !matches!(self.objects[id.0].kind, Kind::Plain) {
+            return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
+        }
+        if !self.objects[id.0].properties.contains_key(key) || self.own_flags(id, key) & 2 != 0 {
+            return Ok(false);
+        }
+        if key.as_ref() == text("__proto__").as_ref() {
+            return self.fail(ErrorKind::Unsupported(
+                "deleting unprotected prototype metadata",
+            ));
+        }
+        self.objects[id.0].properties.remove(key);
+        self.objects[id.0].flags.remove(key);
+        Ok(true)
+    }
     pub fn register(&mut self, program: Arc<Program>) -> Result<CodeId> {
         if self.code.len() >= self.limits.programs {
             return self.fail(ErrorKind::Budget("registered programs"));
@@ -555,6 +732,20 @@ impl Vm {
         }
         self.fail(ErrorKind::Budget("prototype lookup depth"))
     }
+    fn property_owner(&self, mut id: ObjectId, key: &Text) -> Result<Option<ObjectId>> {
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            if self.objects[id.0].properties.contains_key(key) {
+                return Ok(Some(id));
+            }
+            if let Some(parent) = self.objects[id.0].prototype {
+                id = parent;
+            } else {
+                return Ok(None);
+            }
+        }
+        self.fail(ErrorKind::Budget("prototype lookup depth"))
+    }
     fn callable(&self, value: &Value) -> bool {
         if let Value::Object(id) = value {
             self.objects.get(id.0).is_some_and(|object| {
@@ -565,6 +756,7 @@ impl Vm {
                         | Kind::ObjectConstructor
                         | Kind::AddProperty
                         | Kind::RegisterClass
+                        | Kind::SetPropertyFlags
                         | Kind::FunctionMethod(_)
                 )
             })
@@ -588,6 +780,12 @@ impl Vm {
     ) -> Result<()> {
         self.check_value(&value)?;
         if let Some(Property::Accessor { setter, .. }) = self.descriptor(id, &key)? {
+            let owner = self.property_owner(id, &key)?.unwrap();
+            if self.own_flags(owner, &key) & 4 != 0 {
+                return self.fail(ErrorKind::Unsupported(
+                    "flagged accessor assignment native ordering",
+                ));
+            }
             if let Some(setter) = setter {
                 self.invoke(setter, Value::Object(id), &[value], host)?;
             }
@@ -649,7 +847,27 @@ impl Vm {
                 "accessor requires executable property assignment",
             ));
         }
+        if let Some(owner) = self.property_owner(id, &key)? {
+            if self.own_flags(owner, &key) & 4 != 0 {
+                if owner != id {
+                    return self.fail(ErrorKind::Unsupported(
+                        "inherited readonly assignment native ordering",
+                    ));
+                }
+                if key.as_ref() == text("__proto__").as_ref() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "readonly prototype metadata assignment",
+                    ));
+                }
+                return Ok(());
+            }
+        }
         if key.as_ref() == text("__proto__").as_ref() {
+            if self.objects[id.0].properties.contains_key(&key) && self.own_flags(id, &key) != 3 {
+                return self.fail(ErrorKind::Unsupported(
+                    "prototype assignment after metadata flags changed",
+                ));
+            }
             let prototype = match value {
                 Value::Null => None,
                 Value::Object(p) => Some(p),
@@ -667,6 +885,12 @@ impl Vm {
                 }
                 cursor = self.objects[p.0].prototype;
             }
+            self.raw_member(
+                id,
+                key,
+                Property::Data(prototype.map_or(Value::Null, Value::Object)),
+                3,
+            )?;
             self.objects[id.0].prototype = prototype;
             return Ok(());
         }
@@ -885,6 +1109,7 @@ impl Vm {
     fn reset_execution(&mut self) {
         self.instructions = 0;
         self.host_calls = 0;
+        self.member_visits = 0;
         self.depth = 0;
         self.current = None;
         self.current_code = None;
@@ -1056,6 +1281,7 @@ impl Vm {
                 };
                 return self.invoke(this, Value::Object(*receiver), &forwarded, host);
             }
+            Kind::SetPropertyFlags => return self.apply_property_flags(args),
             Kind::RegisterClass => {
                 if args.len() != 2 {
                     return self.fail(ErrorKind::Unsupported(
@@ -1119,6 +1345,11 @@ impl Vm {
                         && name.as_ref() == text("length").as_ref()
                 {
                     return self.fail(ErrorKind::Unsupported("accessor over intrinsic property"));
+                }
+                if self.own_flags(*receiver, name) != 0 {
+                    return self.fail(ErrorKind::Unsupported(
+                        "addProperty replacement of flagged member",
+                    ));
                 }
                 self.reserve_property(*receiver, name)?;
                 let setter = if matches!(args[2], Value::Null) {
@@ -1625,6 +1856,7 @@ impl Vm {
                                     | Kind::ObjectConstructor
                                     | Kind::AddProperty
                                     | Kind::RegisterClass
+                                    | Kind::SetPropertyFlags
                                     | Kind::FunctionMethod(_)
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
@@ -1632,8 +1864,40 @@ impl Vm {
                         }
                         let parent = self.object_id(self.get(superclass, "prototype")?)?;
                         let prototype = self.alloc(Kind::Plain, Some(parent))?;
-                        self.set(prototype, "__constructor__", Value::Object(superclass))?;
+                        self.raw_member(
+                            prototype,
+                            text("__constructor__"),
+                            Property::Data(Value::Object(superclass)),
+                            3,
+                        )?;
                         self.set(subclass, "prototype", Value::Object(prototype))?;
+                    }
+                    0x46 | 0x55 => {
+                        let target = self.pop(frame)?;
+                        let target = if instruction.opcode == 0x46 {
+                            let name = self.to_text(&target)?;
+                            self.variable(frame, &name, host)?
+                        } else {
+                            target
+                        };
+                        let target = self.object_id(target)?;
+                        let names = self.enumerate_names(target)?;
+                        if names.len().saturating_add(1)
+                            > self.limits.stack_values.saturating_sub(frame.stack.len())
+                        {
+                            return self.fail(ErrorKind::Budget("operand stack"));
+                        }
+                        self.push(frame, Value::Null)?;
+                        for name in names {
+                            self.push(frame, Value::String(name))?;
+                        }
+                    }
+                    0x3a => {
+                        let key = self.pop(frame)?;
+                        let key = self.to_text(&key)?;
+                        let target = self.object_id(self.pop(frame)?)?;
+                        let result = self.delete_member(target, &key)?;
+                        self.push(frame, Value::Bool(result))?;
                     }
                     0x3e => return Ok(Flow::Return(self.pop(frame)?)),
                     0x22 => {
@@ -1800,6 +2064,7 @@ impl Vm {
                                         | Kind::ObjectConstructor
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
+                                        | Kind::SetPropertyFlags
                                         | Kind::FunctionMethod(_)
                                 ) {
                                     "function"
@@ -1942,10 +2207,9 @@ mod tests {
         assert!(vm.strict_equal(&Value::Number(0.0), &Value::Number(-0.0)));
         assert!(!vm.strict_equal(&Value::Number(f64::NAN), &Value::Number(f64::NAN)));
         assert!(vm.equal(&Value::Null, &Value::Undefined).unwrap());
-        assert!(
-            vm.equal(&Value::string("12.5"), &Value::Number(12.5))
-                .unwrap()
-        );
+        assert!(vm
+            .equal(&Value::string("12.5"), &Value::Number(12.5))
+            .unwrap());
         assert!(vm.number(&Value::string("")).is_err());
         assert!(vm.number(&Value::Null).is_err());
         assert!(vm.number(&Value::string("0x10")).is_err());
@@ -2315,15 +2579,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(result.value, Value::Object(receiver));
-        assert!(
-            vm.call(
+        assert!(vm
+            .call(
                 Value::Object(apply),
                 function,
                 &[Value::Object(receiver), Value::Null],
                 &mut RejectHost
             )
-            .is_err()
-        );
+            .is_err());
         let mut vm = Vm::new(
             15,
             Limits {
@@ -2601,5 +2864,243 @@ mod tests {
             host.requests[0].constructor_origin.unwrap().code,
             definitions
         );
+    }
+    #[test]
+    fn property_flags_visit_own_hidden_members_without_getters_or_parent_mutation() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let parent = vm.object().unwrap();
+        vm.set(parent, "inherited", Value::Number(1.0)).unwrap();
+        let child = vm.alloc(Kind::Plain, Some(parent)).unwrap();
+        vm.set(child, "own", Value::Number(2.0)).unwrap();
+        let Value::Object(object_proto) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        let add = vm.get(object_proto, "addProperty").unwrap();
+        let native_getter = vm.native(99).unwrap();
+        vm.call(
+            add,
+            Value::Object(child),
+            &[
+                Value::string("accessor"),
+                Value::Object(native_getter),
+                Value::Null,
+            ],
+            &mut RejectHost,
+        )
+        .unwrap();
+        let result = vm
+            .call(
+                Value::Object(intrinsic),
+                Value::Object(vm.global()),
+                &[
+                    Value::Object(child),
+                    Value::Null,
+                    Value::Number(1.0),
+                    Value::Number(0.0),
+                ],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Undefined);
+        assert_eq!(result.host_calls, 0);
+        assert_eq!(vm.own_property_flags(child, "__proto__").unwrap(), Some(3));
+        assert_eq!(vm.own_property_flags(child, "accessor").unwrap(), Some(1));
+        assert_eq!(vm.own_property_flags(child, "own").unwrap(), Some(1));
+        assert_eq!(vm.own_property_flags(parent, "inherited").unwrap(), Some(0));
+        assert!(vm.own_enumerable_names(child).unwrap().is_empty());
+        assert!(matches!(
+            vm.read_property(child, "accessor", &mut RejectHost)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Host(_)
+        ));
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[
+                Value::Object(child),
+                Value::Null,
+                Value::Number(0.0),
+                Value::Number(1.0),
+            ],
+            &mut RejectHost,
+        )
+        .unwrap();
+        assert_eq!(vm.own_property_flags(child, "accessor").unwrap(), Some(0));
+        assert_eq!(vm.own_property_flags(child, "__proto__").unwrap(), Some(2));
+    }
+    #[test]
+    fn property_flag_consumers_and_value_replacement_preserve_attributes() {
+        let mut vm = setup();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let object = vm.object().unwrap();
+        vm.set(object, "field", Value::Number(1.0)).unwrap();
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[
+                Value::Object(object),
+                Value::Null,
+                Value::Number(15.0),
+                Value::Number(0.0),
+            ],
+            &mut RejectHost,
+        )
+        .unwrap();
+        assert_eq!(vm.own_property_flags(object, "field").unwrap(), Some(7));
+        vm.set(object, "field", Value::Number(2.0)).unwrap();
+        assert_eq!(vm.get(object, "field").unwrap(), Value::Number(1.0));
+        assert!(!vm.delete_member(object, &text("field")).unwrap());
+        assert!(vm.enumerate_names(object).unwrap().is_empty());
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[
+                Value::Object(object),
+                Value::Null,
+                Value::Number(0.0),
+                Value::Number(6.0),
+            ],
+            &mut RejectHost,
+        )
+        .unwrap();
+        vm.set(object, "field", Value::string("replacement"))
+            .unwrap();
+        assert_eq!(vm.own_property_flags(object, "field").unwrap(), Some(1));
+        assert!(vm.delete_member(object, &text("field")).unwrap());
+        assert_eq!(vm.own_property_flags(object, "field").unwrap(), None);
+        assert!(!vm.delete_member(object, &text("missing")).unwrap());
+        vm.set(object, "only", Value::Number(0.0)).unwrap();
+        assert_eq!(vm.enumerate_names(object).unwrap(), vec![text("only")]);
+        vm.set(object, "second", Value::Number(0.0)).unwrap();
+        assert!(vm.enumerate_names(object).is_err());
+    }
+    #[test]
+    fn flag_consuming_actions_use_their_real_stack_contracts() {
+        let mut vm = setup();
+        let object = vm.object().unwrap();
+        vm.set(vm.root(), "subject", Value::Object(object)).unwrap();
+        vm.raw_member(
+            object,
+            text("locked"),
+            Property::Data(Value::Number(1.0)),
+            7,
+        )
+        .unwrap();
+        let mut bytes = push(&[Value::string("subject")]);
+        bytes.push(0x1c);
+        bytes.extend(push(&[Value::string("locked"), Value::Number(2.0)]));
+        bytes.push(0x4f);
+        bytes.extend(push(&[Value::string("subject")]));
+        bytes.push(0x1c);
+        bytes.extend(push(&[Value::string("locked")]));
+        bytes.push(0x3a);
+        assert_eq!(
+            execute(&mut vm, &bytes).unwrap().stack,
+            vec![Value::Bool(false)]
+        );
+        assert_eq!(vm.get(object, "locked").unwrap(), Value::Number(1.0));
+        vm.set(object, "visible", Value::Null).unwrap();
+        for opcode in [0x46, 0x55] {
+            let mut bytes = push(&[Value::string("subject")]);
+            if opcode == 0x55 {
+                bytes.push(0x1c);
+            }
+            bytes.push(opcode);
+            assert_eq!(
+                execute(&mut vm, &bytes).unwrap().stack,
+                vec![Value::Null, Value::string("visible")]
+            );
+        }
+        let intrinsic = vm.install_property_flags().unwrap();
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[
+                Value::Object(object),
+                Value::Null,
+                Value::Number(1.0),
+                Value::Number(7.0),
+            ],
+            &mut RejectHost,
+        )
+        .unwrap();
+        assert_eq!(vm.own_property_flags(object, "locked").unwrap(), Some(1));
+        assert_eq!(vm.own_property_flags(object, "visible").unwrap(), Some(1));
+    }
+    #[test]
+    fn ambiguous_default_flag_clearing_is_atomic_and_member_work_is_bounded() {
+        let mut vm = setup();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let parent = vm.object().unwrap();
+        let object = vm.alloc(Kind::Plain, Some(parent)).unwrap();
+        vm.set(object, "normal", Value::Number(0.0)).unwrap();
+        let error = vm
+            .call(
+                Value::Object(intrinsic),
+                Value::Object(vm.global()),
+                &[Value::Object(object), Value::Null, Value::Number(1.0)],
+                &mut RejectHost,
+            )
+            .unwrap_err();
+        assert_eq!(
+            error.kind,
+            ErrorKind::AmbiguousPropertyFlags { old: 3, set: 1 }
+        );
+        assert_eq!(vm.own_property_flags(object, "normal").unwrap(), Some(0));
+        assert_eq!(vm.own_property_flags(object, "__proto__").unwrap(), Some(3));
+        let independent = vm.object().unwrap();
+        vm.set(independent, "x", Value::Null).unwrap();
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[Value::Object(independent), Value::Null, Value::Number(1.0)],
+            &mut RejectHost,
+        )
+        .unwrap();
+        assert_eq!(vm.own_property_flags(independent, "x").unwrap(), Some(1));
+        vm.raw_member(independent, text("high"), Property::Data(Value::Null), 0x80)
+            .unwrap();
+        vm.call(
+            Value::Object(intrinsic),
+            Value::Object(vm.global()),
+            &[Value::Object(independent), Value::Null, Value::Number(1.0)],
+            &mut RejectHost,
+        )
+        .unwrap();
+        assert_eq!(
+            vm.own_property_flags(independent, "high").unwrap(),
+            Some(0x81)
+        );
+        let mut vm = Vm::new(
+            15,
+            Limits {
+                member_visits: 1,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let object = vm.object().unwrap();
+        vm.set(object, "x", Value::Null).unwrap();
+        assert_eq!(
+            vm.call(
+                Value::Object(intrinsic),
+                Value::Object(vm.global()),
+                &[
+                    Value::Object(object),
+                    Value::Null,
+                    Value::Number(1.0),
+                    Value::Number(0.0)
+                ],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Budget("member visits")
+        );
+        assert_eq!(vm.own_property_flags(object, "x").unwrap(), Some(0));
     }
 }
