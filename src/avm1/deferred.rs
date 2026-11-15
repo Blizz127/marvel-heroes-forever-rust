@@ -299,10 +299,10 @@ impl Vm {
             self.check_object(id)?;
             let object = &self.objects[id.0];
             if !matches!(object.kind, Kind::Plain)
-                || object
-                    .properties
-                    .values()
-                    .any(|value| !matches!(value, Property::Data(_)))
+                || object.properties.iter().any(|(key, value)| {
+                    !matches!(value, Property::Data(_))
+                        && !self.is_owned_global_extensions_marker(id, key, value)
+                })
                 || (depth != 0 && object.prototype.is_some())
             {
                 return self.fail(ErrorKind::Unsupported(

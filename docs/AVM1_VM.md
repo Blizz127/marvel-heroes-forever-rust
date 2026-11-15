@@ -2252,3 +2252,45 @@ baseline instead of retaining the earlier ambiguous no-new-globals Boolean.
 The prior Plain `gfxExtensions` property remains distinct from native context,
 version-property and marker effects; the installed Mouse handler/effect remains
 unresolved. No native/window operation was performed by this replay.
+
+### Opt-in native global extension state
+
+`bind_global_extensions(GlobalExtensionsProfile { context_target, current_byte })`
+now explicitly associates the diagnostic GLOBAL with this VM's one supplied
+native context and no-watch profile. Binding is idle-only and does not create
+a fresh native checkpoint. `None` records an unknown adopted byte; it never
+inherits zero or a previously stored Boolean. Both the adoption target and the
+active target must be explicitly associated with that same context. The public
+`global_extensions_info()` snapshot retains current byte, last write origin and
+final marker-attempt result independently of property lookup.
+
+For exact Bool SetMember, the native hook runs before generic ReadOnly checks.
+It writes byte1/2, then raw-writes `gfxVersion = "4.2.23"` or conditionally
+deletes that own slot, and finally attempts the native marker assignment. Raw
+version replacement preserves flags even with ReadOnly; DontDelete preserves
+the version on false. A ReadOnly extension slot retains its earlier Value while
+the byte/version effects remain committed, and SetMember completes without a
+result. Getter presence follows the byte: zero is missing, one is true, other
+nonzero is false. Unknown state rejects. The marker is not exposed as an
+ordinary Boolean property.
+
+Parent/resolver/selected accessor and value-cleanup profiles are checked before
+mutation; property/string budgets are preflighted. This admission policy is
+not native failure or allocation parity. Other assignment opcodes, arbitrary
+coercion, protected metadata/reflection/deletion, inherited GLOBAL lookup and
+bound GLOBAL enumeration remain gated. Default unbound diagnostic behavior is
+unchanged. A narrow ownership check permits only this actual marker through the
+deferred namespace guard, so subsequent Mouse materialization can proceed. No
+other native marker gains namespace admission. Full native-global membership
+and current native-state capture remain separate limitations.
+
+OBSERVED: fifteen focused module/interpreter checks pass, including exact
+getter presence, unknown state, same-context admission, protected descriptor
+ordering, engineering budgets, marker ownership, default-model separation and
+a synthetic SetMember followed by Mouse.hide. That last path publishes the
+deferred Mouse graph and reaches the unchanged rejecting host; it does not
+claim a cursor effect. Production metadata compilation passes without warnings.
+The source was unchanged across compilation and checks. Static authority is
+[REA_GLOBAL_EXTENSIONS.md](REA_GLOBAL_EXTENSIONS.md). Private verification:
+`avm1-runtime/global-extensions-checks/receipt.json`, SHA-256
+`19e059a0e1d9605eb02a8329b7439cc16f2bb5919bdcf7077f3a680810a0c38b`. No original manager or native process was executed by these checks.

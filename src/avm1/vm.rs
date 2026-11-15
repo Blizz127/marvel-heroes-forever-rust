@@ -27,6 +27,11 @@ mod external_interface;
 mod focus_rect;
 #[path = "geom_namespace.rs"]
 mod geom_namespace;
+#[path = "global_extensions.rs"]
+mod global_extensions;
+#[cfg(test)]
+#[path = "global_extensions_checks.rs"]
+mod global_extensions_checks;
 #[path = "initial_prototype.rs"]
 mod initial_prototype;
 #[path = "mouse.rs"]
@@ -73,6 +78,8 @@ use execution_store::{ExecutionStore, RegisterBank, StoreError};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
 pub use geom_namespace::GeomNamespace;
+use global_extensions::GlobalExtensionsLookup;
+pub use global_extensions::{GlobalExtensionsInfo, GlobalExtensionsProfile};
 pub use initial_prototype::{
     InitialMovieClipPrototypeProfile, InitialMovieClipPrototypeReason,
     InitialMovieClipPrototypeSelection,
@@ -515,6 +522,7 @@ enum Property {
 enum NativeMarker {
     ExternalAvailable,
     StringLength,
+    GlobalExtensions,
 }
 #[derive(Debug, Clone, Copy)]
 struct ClassBase {
@@ -580,6 +588,7 @@ pub struct Vm {
     rectangle_objects: Option<RectangleObjects>,
     mouse_objects: Option<MouseObjects>,
     geom_namespace: Option<GeomNamespace>,
+    global_extensions: Option<global_extensions::GlobalExtensionsState>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
     objects: Vec<Object>,
@@ -630,6 +639,7 @@ impl Vm {
             rectangle_objects: None,
             mouse_objects: None,
             geom_namespace: None,
+            global_extensions: None,
             code: Vec::new(),
             code_bytes: 0,
             objects: Vec::new(),
@@ -1350,6 +1360,7 @@ impl Vm {
             ));
         }
         let key = text(key);
+        self.guard_global_extensions_mutation(id, &key)?;
         Ok(self.objects[id.0]
             .properties
             .contains_key(&key)
@@ -1358,6 +1369,7 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
+        self.guard_global_extensions_inventory(id)?;
         if self.is_geometry_native(id)
             || self.is_geom_namespace(id)
             || self.is_mouse_native(id)
@@ -1386,6 +1398,27 @@ impl Vm {
             .filter(|key| self.own_flags(id, key) & 1 == 0)
             .cloned()
             .collect())
+    }
+    fn guard_global_extensions_inventory(&self, id: ObjectId) -> Result<()> {
+        if self.global_extensions.is_some() && id == self.global {
+            return self.fail(ErrorKind::Unsupported(
+                "bound partial native GLOBAL inventory/flags profile",
+            ));
+        }
+        Ok(())
+    }
+    fn guard_global_extensions_mutation(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if self.global_extensions.is_some()
+            && id == self.global
+            && ["gfxExtensions", "gfxVersion", "__proto__", "__resolve"]
+                .iter()
+                .any(|name| key.as_ref() == text(name).as_ref())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bound native GLOBAL protected member operation",
+            ));
+        }
+        Ok(())
     }
     fn own_flags(&self, id: ObjectId, key: &Text) -> u8 {
         self.objects[id.0].flags.get(key).copied().unwrap_or(0)
@@ -1453,6 +1486,7 @@ impl Vm {
         } else {
             self.object_id(args[0].clone())?
         };
+        self.guard_global_extensions_inventory(target)?;
         self.reject_geometry_mutation_chain(target)?;
         self.reject_mouse_mutation_chain(target)?;
         self.reject_geom_mutation_chain(target)?;
@@ -1535,6 +1569,7 @@ impl Vm {
         let mut names = Vec::new();
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            self.guard_global_extensions_inventory(id)?;
             if self.is_geom_namespace(id)
                 || self.is_mouse_native(id)
                 || self.is_mouse_listener(id)
@@ -1593,6 +1628,7 @@ impl Vm {
     }
     fn delete_member(&mut self, id: ObjectId, key: &Text) -> Result<bool> {
         self.check_object(id)?;
+        self.guard_global_extensions_mutation(id, key)?;
         self.check_member_target(id, key)?;
         self.reject_string_mutation_chain(id)?;
         self.reject_geometry_mutation_chain(id)?;
@@ -1703,6 +1739,12 @@ impl Vm {
     }
     fn get_key(&self, mut id: ObjectId, key: &Text) -> Result<Value> {
         self.check_object(id)?;
+        match self.global_extensions_read(id, key)? {
+            GlobalExtensionsLookup::Inactive => {}
+            GlobalExtensionsLookup::Missing => return Ok(Value::Undefined),
+            GlobalExtensionsLookup::Present(value) => return Ok(value),
+        }
+        let initial_receiver = id;
         if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
             return Ok(match self.attached_lookup(clip, key)? {
                 AttachedMember::Missing => Value::Undefined,
@@ -1712,6 +1754,11 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if id != initial_receiver && self.global_extensions.is_some() && id == self.global {
+                return self.fail(ErrorKind::Unsupported(
+                    "native GLOBAL inherited lookup profile",
+                ));
+            }
             if let Some(value) = self.point_read(id, key)? {
                 return Ok(value);
             }
@@ -1747,6 +1794,11 @@ impl Vm {
                     Property::NativeMarker(NativeMarker::StringLength) => self.fail(
                         ErrorKind::Unsupported("String length marker requires typed receiver"),
                     ),
+                    Property::NativeMarker(NativeMarker::GlobalExtensions) => {
+                        self.fail(ErrorKind::Unsupported(
+                            "global extension marker requires bound native receiver",
+                        ))
+                    }
                     Property::Accessor { .. } => self.fail(ErrorKind::Unsupported(
                         "accessor requires executable property access",
                     )),
@@ -1767,6 +1819,12 @@ impl Vm {
     }
     fn has_key(&self, mut id: ObjectId, key: &Text) -> Result<bool> {
         self.check_object(id)?;
+        match self.global_extensions_read(id, key)? {
+            GlobalExtensionsLookup::Inactive => {}
+            GlobalExtensionsLookup::Missing => return Ok(false),
+            GlobalExtensionsLookup::Present(_) => return Ok(true),
+        }
+        let initial_receiver = id;
         if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
             return Ok(matches!(
                 self.attached_lookup(clip, key)?,
@@ -1776,6 +1834,11 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if id != initial_receiver && self.global_extensions.is_some() && id == self.global {
+                return self.fail(ErrorKind::Unsupported(
+                    "native GLOBAL inherited lookup profile",
+                ));
+            }
             if self.point_read(id, key)?.is_some()
                 || self.rectangle_read(id, key)?.is_some()
                 || self.mouse_read(id, key)?.is_some()
@@ -1811,8 +1874,20 @@ impl Vm {
         self.fail(ErrorKind::Budget("prototype lookup depth"))
     }
     fn descriptor(&self, mut id: ObjectId, key: &Text) -> Result<Option<Property>> {
+        self.check_object(id)?;
+        match self.global_extensions_read(id, key)? {
+            GlobalExtensionsLookup::Inactive => {}
+            GlobalExtensionsLookup::Missing => return Ok(None),
+            GlobalExtensionsLookup::Present(value) => return Ok(Some(Property::Data(value))),
+        }
+        let initial_receiver = id;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if id != initial_receiver && self.global_extensions.is_some() && id == self.global {
+                return self.fail(ErrorKind::Unsupported(
+                    "native GLOBAL inherited lookup profile",
+                ));
+            }
             if let Some(value) = self.point_read(id, key)? {
                 return Ok(Some(Property::Data(value)));
             }
@@ -1911,6 +1986,10 @@ impl Vm {
         host: &mut impl Host,
     ) -> Result<()> {
         self.check_object(id)?;
+        if self.global_extensions_write(id, &key, &value)? {
+            return Ok(());
+        }
+        self.guard_global_extensions_mutation(id, &key)?;
         self.reject_string_mutation_chain(id)?;
         self.reject_geometry_mutation_chain(id)?;
         self.reject_mouse_mutation_chain(id)?;
@@ -2002,6 +2081,10 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        if self.global_extensions_write(id, &key, &value)? {
+            return Ok(());
+        }
+        self.guard_global_extensions_mutation(id, &key)?;
         if self.is_geometry_native(id) {
             if self.point_write(id, &key, value.clone())?
                 || self.rectangle_write(id, &key, value.clone())?
@@ -2971,6 +3054,7 @@ impl Vm {
                 let (Value::Object(receiver), Value::String(name)) = (&this, &args[0]) else {
                     return Ok(Value::Bool(false));
                 };
+                self.guard_global_extensions_mutation(*receiver, name)?;
                 self.reject_string_mutation_chain(*receiver)?;
                 self.reject_geometry_mutation_chain(*receiver)?;
                 self.reject_mouse_mutation_chain(*receiver)?;
