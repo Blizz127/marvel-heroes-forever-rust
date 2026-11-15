@@ -24,6 +24,8 @@ pub mod bootstrap;
 pub mod class_registry;
 #[path = "frontend/display_state.rs"]
 pub mod display_state;
+#[path = "frontend/external_host.rs"]
+pub mod external_host;
 #[path = "frontend/host.rs"]
 pub mod host;
 #[path = "frontend/init_ledger.rs"]

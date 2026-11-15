@@ -4,10 +4,12 @@
 use super::{
     class_registry::{ClassRegistry, Limits as ClassLimits},
     display_state::DisplayState,
+    external_host::{CALL_BINDING, ExternalHost},
     selection::{Limits as SelectionLimits, SelectionHost},
 };
 use crate::avm1::vm::{
-    ClassRegistration, Host, HostCall, HostCommand, ObjectId, PropertyRequest, Value, Vm,
+    ClassRegistration, Host, HostCall, HostCommand, HostResult, ObjectId, PropertyRequest, Value,
+    Vm,
 };
 use std::{error::Error, io};
 
@@ -15,6 +17,7 @@ pub struct FrontendHost {
     selection: SelectionHost,
     classes: ClassRegistry,
     display: Option<DisplayState>,
+    external: Option<ExternalHost>,
 }
 
 impl FrontendHost {
@@ -26,6 +29,7 @@ impl FrontendHost {
             selection,
             classes,
             display: None,
+            external: None,
         })
     }
     pub fn selection(&self) -> &SelectionHost {
@@ -54,11 +58,41 @@ impl FrontendHost {
     pub fn display_mut(&mut self) -> Option<&mut DisplayState> {
         self.display.as_mut()
     }
+    pub fn attach_external(&mut self, external: ExternalHost) -> Result<(), String> {
+        if self.external.is_some() {
+            return Err("frontend external interface is already attached".into());
+        }
+        if external.root() != self.classes.context().root {
+            return Err("frontend external interface must use the owning VM root".into());
+        }
+        self.external = Some(external);
+        Ok(())
+    }
+    pub fn external(&self) -> Option<&ExternalHost> {
+        self.external.as_ref()
+    }
+    pub fn external_mut(&mut self) -> Option<&mut ExternalHost> {
+        self.external.as_mut()
+    }
 }
 
 impl Host for FrontendHost {
     fn call(&mut self, call: HostCall<'_>) -> Result<Value, String> {
+        if call.binding == CALL_BINDING {
+            return Err("frontend external calls require HostResult materialization".into());
+        }
         self.selection.call(call)
+    }
+    fn call_result(&mut self, call: HostCall<'_>) -> Result<HostResult, String> {
+        if call.binding == CALL_BINDING {
+            return self
+                .external
+                .as_mut()
+                .ok_or("frontend external interface is not attached")?
+                .handle_call(&call)
+                .expect("binding checked before routing");
+        }
+        self.selection.call(call).map(HostResult::Value)
     }
     fn command(&mut self, _: ObjectId, command: HostCommand) -> Result<(), String> {
         Err(format!("unhandled frontend command {command:?}"))

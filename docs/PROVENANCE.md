@@ -314,3 +314,23 @@ layout is not promoted to native parity by a conditional mathematical model.
 [Camera math](CAMERA_MATH.md) records explicit-input native rotation, view and
 projection arithmetic plus private instruction/byte comparisons. Its original
 mathematical replay does not establish the selected runtime camera or GPU output.
+
+[Explicit movie callback routing](FRONTEND_EXTERNAL_HOST.md) applies the owned
+receiver/context evidence in original Rust; supplied handler/player identities
+are distinguished from automatic startup or instance discovery.
+
+[World transforms](WORLD_TRANSFORMS.md) records owned native actor/component
+math and a saved-property audit. Its class/default grammar study also used
+[UELib](https://github.com/EliotVU/Unreal-Library/tree/8236c39b79e30887a487ecf9b018204e430a5ebc),
+MIT, pinned commit `8236c39b79e30887a487ecf9b018204e430a5ebc`, and GNU objdump
+2.46 (GPL-3.0-or-later, static analysis tool only). No reference code was copied
+or executed. The detailed ledger includes exact selected UELib files, discovery
+sources, licences and private source hashes.
+[TextField runtime](TEXTFIELD_RUNTIME.md),
+[deferred builtin values](DEFERRED_BUILTIN_VALUES.md), and
+[frontend receiver association](FRONTEND_EXTERNAL_RECEIVER.md) record further
+private owned-executable/package studies through REA. These distinguish static
+contracts from supplied runtime state and actual retail observations.
+[Standalone retail probe](NATIVE_STANDALONE_PROBE.md) records owner-documented
+launch arguments, Wine/tools ledger and a bounded offline black-window
+observation; it does not establish a functioning login screen.

@@ -86,6 +86,15 @@ impl LocalizationCallback {
             ));
         }
         self.stats.requests += 1;
+        let label = Self::validated_label(args, self.limits.max_label_units)?;
+        let resolved = self.labels.resolve(&label)?;
+        let data = resolved.prototype().localized_data(&self.locale)?;
+        self.last_resolution = Some(resolved);
+        self.stats.resolved += 1;
+        Ok(data.into_host_result())
+    }
+
+    pub(crate) fn validated_label(args: &[Value], max_label_units: usize) -> io::Result<String> {
         let [Value::String(name), Value::String(label)] = args else {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -104,7 +113,7 @@ impl LocalizationCallback {
         }
         // Check before converting/allocating. Native incoming code page zero is
         // only established for the restricted ASCII profile, not general UTF-8.
-        if label.len() > self.limits.max_label_units {
+        if label.len() > max_label_units {
             return Err(io::Error::other(
                 "localization callback label budget exceeded",
             ));
@@ -115,12 +124,6 @@ impl LocalizationCallback {
                 "localization callback label must be nonempty NUL-free ASCII",
             ));
         }
-        let label = String::from_utf16(label)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        let resolved = self.labels.resolve(&label)?;
-        let data = resolved.prototype().localized_data(&self.locale)?;
-        self.last_resolution = Some(resolved);
-        self.stats.resolved += 1;
-        Ok(data.into_host_result())
+        String::from_utf16(label).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
     }
 }

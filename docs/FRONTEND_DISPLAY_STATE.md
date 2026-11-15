@@ -234,3 +234,17 @@ rejected its size; its contents were not used. Selected primary authored HTML
 references are privately retained with hashes in `reference-manifest.json`.
 The existing project REA evidence remains separate from the Rust-host execution
 reported here. The lead integrates this ledger into `docs/PROVENANCE.md`.
+
+## Typed attached-cursor validation
+
+**VERIFIED original-script execution in Rust; supplied attachment state.**
+Private `evidence/attached-display-integration/attempt-3/receipt.json` records
+source `92bb18ba97a5365afdde9a8d0fea51ed279bf4ca` unchanged across compilation
+and execution. The original MouseMove body at 7096 ran 14 instructions and six
+property calls, moving the typed cursor to (100,200) pixels. Explicit DisplayClip
+readback matched. Source/movie, parent, sprite, identity and replacement gates
+were checked. Four focused display geometry tests also passed after integration.
+This uses explicit known source identity and raw-state fixtures, without class
+initialization, automatic attachment, child snapshots, event dispatch or timing
+claims. Earlier product/harness compile failures remain preserved as attempts
+1 and 2; they are not counted as passing runs.
