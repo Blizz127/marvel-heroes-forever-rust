@@ -1036,3 +1036,24 @@ The dev25 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev25-linux/manifest.json`, SHA-256
 `860d30d59ab3c5819e01d0b850662168a8190a028b38bf8a09943d8fa961b911`.
+
+## Primary color and Model receiver continuations
+
+[Primary color sources](SCALE9_PRIMARY_COLOR.md) use the same owned proprietary
+executable and retained generated-record evidence to bind saved provider tables,
+solid byte mapping, clone/bind behavior and invocation-wide cache lifetime.
+Fourteen scoped REA records remain private; no outside implementation was read
+or copied, and no current bitmap color or runtime resource effect was invented.
+
+See [Model draw receiver](MODEL_DRAW_RECEIVER.md). Exact-target navigation and
+one bounded REA/Rizin call studied the owned proprietary 1.52.0.1700 executable
+(private pin SHA-256
+`8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`).
+The concrete ModelComponent callback and numerical proxy-metadata writer were
+studied alongside the retained wrapper constructor and exact saved FrontEnd
+zero-field observations. Source paths, hashes, purposes and licence categories
+are in private `evidence/model-draw-receiver/sources.json` and its component
+ledgers. Existing original helpers/receipts were reused; no outside
+implementation or new SDK source was read or copied. Raw artifacts remain
+private. The actual incoming draw receiver and selected shader-record identity
+remain unresolved; no native or renderer execution was performed.

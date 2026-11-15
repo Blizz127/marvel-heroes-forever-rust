@@ -5,6 +5,24 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev26 work in progress
+
+**VERIFIED focused vertex-upload checks:** an original whole-stride wrapper now
+uses an explicit initial 8,192-byte scratch buffer, retains scratch across
+chunks, applies admitted element transfers in descriptor order and copies the
+complete destination stride. It preserves ordered overlap and skipped fields;
+unsupported input rejects before changing either destination or scratch. Three
+focused checks pass. The native category-two table confirms raw transfers for
+unchanged full codes `251/1211/2211`; flag-bearing aliases are not accepted as
+the same codes. Independent comparison and the combined executable are still
+pending at this checkpoint. No live format, GPU upload or pixel parity follows.
+
+**VERIFIED static color boundary:** the concrete saved provider, solid-color
+byte packing, clone/bind writes and invocation-wide cache lifetime are now
+documented. The successful ordinary bitmap color word remains unestablished;
+no white default was added. Fourteen scoped REA records and their exact bytes
+are retained privately. See [primary color evidence](docs/SCALE9_PRIMARY_COLOR.md).
+
 ## 2026-11-15 dev25 diagnostic increment
 
 **VERIFIED private staging, 14:39 UTC:** all 453 packaged sizes/hashes and the
