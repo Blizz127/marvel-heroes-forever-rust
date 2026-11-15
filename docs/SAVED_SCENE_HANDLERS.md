@@ -219,3 +219,117 @@ fixture code is original project work. The same explicit English font alias as
 [LOGIN_INSTANCE_INPUTS.md](LOGIN_INSTANCE_INPUTS.md) is an inspection input,
 not a recovered native locale decision. All extracted bytes, build products and
 validation state remain private.
+
+## Static dependencies of the 34 original Construct records
+
+**VERIFIED static source correspondence; no new handler execution:** a separate
+bounded parser dump covers the same 34 source spans in their original selection,
+owner and per-record order. Independent raw-byte reconstruction matches all
+4,889 dump rows / 45,288 columns byte-for-byte. The parser is the original
+`src/avm1.rs` at `2d9b798`, with only its VM-module declaration omitted in a
+private copy; its dependency-free binary neither compiles nor instantiates a VM.
+The transform, frozen original/copied hashes and build dependencies are retained.
+
+**OBSERVED:** all 1,686 instructions are in one linear top-level chain per record.
+Each record begins with its single ConstantPool and terminates exactly at End,
+without trailing bytes. The only opcode kinds are:
+
+| Opcode | Count |
+| --- | ---: |
+| ConstantPool | 34 |
+| Push | 792 |
+| GetVariable | 118 |
+| SetVariable | 556 |
+| InitObject | 34 |
+| SetMember | 118 |
+| End | 34 |
+
+No direct CallFunction/CallMethod, branch, With, SetTarget/SetTarget2,
+DefineFunction/DefineFunction2 or Try instruction occurs. There are no nested
+bodies whose availability could be mistaken for a reached function. This does
+not waive runtime member/accessor/resolver guards: the absence of explicit call
+opcodes does not prove all member paths return without callbacks or failure.
+Later instructions are source-reachable only if earlier operations return.
+
+A source-only literal/stack-provenance pass retains exact pool indices, original
+numeric bits, opcode/operand offsets and conditional object aliases. It consumes
+no unknown incoming stack values or registers, adds at most three stack values,
+and has net stack effect zero. These are relative source properties, not chosen
+native stack/register defaults. Its 556 SetVariable right-hand sides are 222
+Strings, 285 Booleans, 34 fresh empty Objects, 13 double-encoded zeroes and two
+integer-encoded ones.
+
+Every record creates one empty object and immediately assigns it to `soundMap`.
+All 118 GetVariable operations subsequently read that exact name; all 118
+SetMember operations assign literal Strings through those reads. The alias to
+the earlier fresh object is **conditional on successful ordinary write/read
+behavior**, not an observed live lookup. No case or instance label is used to
+infer the receiver or path.
+
+The 54 exact SetVariable key spellings classify as 50 ordinary names and four
+native Standards. The Standard assignments are `autoSize` ID 48 (20), `maxChars`
+ID 65 (two), `password` ID 68 (two), and `wordWrap` ID 49 (two). Ordinary name
+admission alone is not write-success evidence. The pool also contains `scroll`
+ID 57 once, but operand provenance puts it on the conditional **plain soundMap
+object** at offset 43610, not on a Clip. It is not an additional Clip Standard
+assignment or a reason to extend that dispatcher.
+
+### Exact implementation profiles and next dependencies
+
+The initially proposed primitive-only saved SetVariable change became
+`640e4d1`. Static analysis showed a fresh Object RHS restriction in all 34 records
+and earlier Number RHS restrictions in four. That finding prompted the separate
+raw-value preservation change `eed5e65`; the audit pins both source revisions
+instead of describing the earlier limitation as current at every revision.
+
+**INFERRED candidate selection at exact `eed5e65`:** 32 of 34 records have no
+remaining identified opcode, operand or Standard-name gate. This source preserves
+the original RHS Value through the normal current-target setter, consuming the
+two operands only after success. Normal owner/Environment, name, storage,
+prototype, property, allocation and budget conditions still apply. No successful
+execution of those 32 records is claimed by this audit.
+
+The remaining records are Scene actions 84 / owner 66 and 86 / owner 68. Their
+exact unresolved Standard writes at this revision are:
+
+| Action / owner | `maxChars` ID 65 | `password` ID 68 | `wordWrap` ID 49 |
+| --- | --- | --- | --- |
+| 84 / 66 | Offset 36629, double zero | 36637, false | 36733, false |
+| 86 / 68 | Offset 37044, double zero | 37052, true | 37148, false |
+
+These owners are adopted case-3 Sprite components, not direct case-4 TextFields.
+At `eed5e65`, the implemented attached-name exception admits only exact ID 48
+`autoSize`; IDs 49/65/68 require their own established case-3 route. A parallel
+native study reports their ordinary fallback, but that report is not silently
+assumed implemented in this frozen source comparison. Future fixes and runtime
+checks need their own revisions and receipts.
+
+For the narrower primitive profile, Number operands occur only in actions
+64 / owner 32, 66 / owner 34, 84 / owner 66 and 86 / owner 68. The private report
+retains all 15 exact names/bits/offsets and each record's first dependency, so the
+later raw-RHS fix can be assessed without executing or changing source. No With,
+target-switch or function-call implementation is required merely to decode this
+particular Construct subset; broader startup frames remain separate work.
+
+Private `evidence/construct-opcode-audit/analysis/per-record.tsv` retains every
+selected ordinal, Scene action, Scene/attached owner, source/receiver movie and
+header, source span, mask and previously installed action ID. `records.json`
+retains complete typed assignments and source witnesses;
+`runtime-profile-eed5e65.json` records the version-specific 32/2 grouping.
+
+| Private artifact under `evidence/construct-opcode-audit/` | SHA-256 |
+| --- | --- |
+| `parser/receipt.json` | `94769bd43576c591cd985d27ff707992cf444cab339c09dd50fc44a07ccbca25` |
+| `parser/MANIFEST.json` | `9bd3f1abdef1b948754505bb73a7871b49ed7d80784c1cc09a8c549286ae8819` |
+| `contract/receipt.json` | `c8ffdb692c0f4b807937bb2fa8463ef672387b41484f31546b5042abffa4bf87` |
+| `standard-names/MANIFEST.json` | `5296441d08fe92c85ce1dcf14743362d32406dd3c30fd799930d0b75e82606e2` |
+| `analysis/receipt.json` | `10535d26ddce6887b3608a304806ff093f284ff165ceadb4d58f2b4b204389a1` |
+| `analysis/MANIFEST.json` | `c6ced935c476e72afb28966ef5f1660e3e9c36d03dd6e7534887dd424ba5dbfd` |
+
+Provenance is the same private owner-movie spans, previously authenticated native
+name inventory and original project code/docs already recorded above, plus
+frozen `saved_dispatch`, attached TextField, TextField host/state and saved-action
+contract sources. Component source ledgers record each read and licence/use;
+`analysis/profile-sources.json` pins the additional `640e4d1`/`eed5e65` files.
+No website, new third-party implementation, REA/native process, event delivery,
+VM reexecution or product-code change was used for this static audit.
