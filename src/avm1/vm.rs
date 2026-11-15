@@ -21,6 +21,9 @@ mod deferred;
 mod external_interface;
 #[path = "focus_rect.rs"]
 mod focus_rect;
+#[cfg(test)]
+#[path = "saved_checks.rs"]
+mod saved_checks;
 #[path = "saved_runtime.rs"]
 mod saved_runtime;
 #[path = "saved_state.rs"]
