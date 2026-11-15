@@ -32,6 +32,8 @@ pub mod init_ledger;
 pub mod library;
 #[path = "frontend/localized_data.rs"]
 pub mod localized_data;
+#[path = "frontend/localized_prototype.rs"]
+pub mod localized_prototype;
 #[path = "frontend/pointer.rs"]
 pub mod pointer;
 #[cfg(feature = "renderer")]
