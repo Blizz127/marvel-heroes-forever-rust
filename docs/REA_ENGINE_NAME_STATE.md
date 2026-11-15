@@ -14,9 +14,9 @@ caller exposure is **0x141270ccc → 0x141263340**, passed **E+0x100**. This stu
 does not prove the rest of the 7,974-byte initializer, engine-constructor
 return, current state-4 absence, or successful Mouse.hide execution.
 
-The continuation below extends that conditional proof across the actual
-E+0x100 container's first 97 additions and the following fixed name lookup,
-stopping before the distinct helper at **0x141271e02 → 0x14127bc40**.
+The continuations below extend that conditional proof across the actual
+E+0x100 container's 135 addition attempts and a local stack initializer,
+stopping before the global-receiver call **0x141272764 → 0x1406f4870**.
 
 Target: owner's Win64 build 1.52.0.1700 PE, SHA-256
 `8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`.
@@ -429,3 +429,124 @@ reuses the original private `world-transform-defaults/copy-inner` receipt.
 No target, script, native callback, allocator or import was executed. Source
 and tooling licences remain as recorded above; the additional analysis and
 checking scripts are original project work. No VM or frontend code changed.
+
+## Continuation: adapter calls and the next global receiver
+
+**VERIFIED:** complete **0x14127bc40..0x14127bc7e** is a 62-byte adapter to
+`0x141263340`. It writes the incoming name identifier and pair pointer into a
+local descriptor, supplies a separate local output index and null fourth
+argument, and calls the already bounded container helper at **0x14127bc5f**.
+After a valid successful insertion/update, it reads the returned index and
+M's entry-array pointer, computes `array + index * 20 + 4`, and returns that
+pointer. It performs no additional allocation, native callback or object
+conversion. This returned pointer's validity depends on the successful
+container result; allocation failure is not assigned a fabricated result.
+
+The original caller performs **38** such calls from **0x141271e02** through
+**0x14127273a**. The first uses the previously prepared stack pair. Of the
+remaining 37, 32 use **0x14125ea50..0x14125ea5d**, which stores `{EDX, -1}`
+and returns RCX; five use **0x14125ea60..0x14125ea6a**, which stores
+`{EDX, R8D}` and returns RCX. These five actual inputs have EDX=0 and second
+DWORDs 0, 1, 2, 4, 3. **0x141598070..0x141598073** is a three-byte DWORD
+load from RCX into EAX, used to obtain the name identifier. Neither scalar
+constructor nor this load calls another function. Captured padding and the
+neighboring function after these leaves are excluded from the selected proof.
+
+Actual RCX remains M=E+0x100. Each pair is a live stack object during the
+synchronous call. The underlying helper dereferences its pair pointer and
+copies the eight bytes on both insertion and replacement; it does not retain
+the stack pointer as the stored payload. The caller does not use the adapter's
+returned entry pointer as a later callback argument or object receiver in this
+segment. Therefore the extra wrapper introduces no new ownership operation.
+
+All 38 corresponding fixed name inputs were independently checked: ASCII,
+length 3..17 UTF-16 units, no trailing underscore-digit suffix and the same
+bounded wrapper profile. At most 36 conversion bytes fit the inline buffer.
+The actual identifier values and lookup hit/miss results remain unobserved.
+
+### Crossing the inline allocation-bit capacity
+
+There are now at most **135** new entries across the preceding 97 attempts
+and these 38. A duplicate remains an ordinary replacement and can only reduce
+or delay growth. This larger bound requires the already retained dynamic
+bit-storage branch; the earlier 97-attempt inline-only result is not silently
+extended past its limit.
+
+At new-entry count **129**, `0x1406d6460` sees old capacity 128 bits, requires
+five words, and passes old/new word counts 4/5 to the checked scalar growth
+arithmetic. The resulting capacity is **22 words / 704 bits**. Through
+`0x1406dba10 → 0x1406dbc80`, the selected first dynamic allocation:
+
+- Requests **88 bytes** through `0x1407213b0` with the old heap pointer null.
+- Stores the returned pointer as the allocation bitmap's heap pointer.
+- Copies **16 initialized inline bytes** through the checked `memcpy` thunk.
+- Zeroes the remaining **72 bytes**, beginning at new pointer+16, through
+  the checked `memset` thunk.
+
+The allocation is distinct valid storage under the inherited ordinary allocator
+profile. No old bitmap heap allocation is freed on this first transition.
+The previous 128 bits and cleared padding are preserved, and new bits are
+initialized before the subsequent iterator reads them. No second bitmap growth
+is needed by count 135. This is bounded arithmetic and branch analysis, not a
+native allocator observation or a claim about unspecified allocation failure.
+
+The all-distinct maximum also adds entry-array growth at count **131** to
+capacity **196 / 3,920 bytes**, and bucket growth at count **114** to
+capacity **128 / 512 bytes**. The same already bounded entry copying, bucket
+initialization/rehash, valid index and no-reentry conditions apply. The extra
+heap bitmap is another distinct allocation in the conditional write footprint;
+no live alias is inferred from a static field name.
+
+### Final stack initializer and precise next boundary
+
+After the last adapter returns to **0x14127273f**, the caller passes its stack
+object at RSP+0x48 to retained **0x14059c400..0x14059c40d**. This 13-byte leaf
+zeroes exactly two QWORDs at RCX/+8 and returns the same pointer. It has no
+callee, allocator or destructor. In this caller its effect is solely a
+16-byte local initialization, returning to **0x141272749**.
+
+The next unresolved call is **0x141272764 → 0x1406f4870** with:
+
+| Argument | Actual producer |
+| --- | --- |
+| RCX | Pointer loaded from global `0x142ae68d0` at `0x14127275d` |
+| RDX | Fixed owned-image source at `0x1421bc9a0` |
+| R8 | Address of the just-zeroed 16-byte stack object |
+| R9 | Address `0x142af1a00`, not a value loaded from that address |
+
+This is a new global receiver and output path. Its implementation and effects
+are not covered by the name/container result. Under the inherited valid-live-
+engine, disjoint allocation, valid graph, ordinary primitive and no-reentry
+conditions, the bounded continuation preserves actual L/O/C_L through this
+call site, **before entering `0x1406f4870`**. No conclusion is made about the
+callee, later engine constructor return, current state-4 cache, or Mouse.hide.
+
+### Adapter continuation evidence
+
+Private files are in `evidence/rea-engine-name-state/post-container/`.
+The original verifier matches **1,214 selected instruction spans / 4,632
+bytes**, including the adapter, exact scalar leaves, selected caller and
+reused growth helpers. `verification.json` SHA-256:
+`7695b786a911c841c0b4c321876d44bde142c92411eb626dbe82305ed1e3b3af`.
+The first heap-bitmap expansion and updated capacities are independently
+recorded scalar derivations; they do not execute a target or allocator.
+
+Independent `caller-review.json` checks **1,391 instruction spans / 5,207
+bytes** and **868 literal bytes**, including exact stack lifetimes, all 38
+source inputs and the expanded allocation bounds. Its final SHA-256 is
+`2c9aa291751cda277f137ba179adbcc56f4f4c4ea20f27cd4c15ff0dcfb4efc8`.
+The joined `preservation-receipt.json` binds both checks and the preceding
+preservation receipt; SHA-256
+`3374680bede8dcc31d921ca07f81e6bcc43069e690b4cfca133f7211545eb7bf`.
+The independently sealed earlier 97-entry container review remains separate
+and unchanged; it is not substituted for the new heap-bitmap branch proof.
+
+One new target-free REA call produced complete selected helper record
+`ev_4ca3dff4f343e83ba06a890185be19a0934ba64653b9d353d5ada60c173b6424`.
+The selected 62/13/10/3-byte bodies are byte-checked; padding and neighboring
+instructions are excluded, including an invalid decode outside all selected
+leaf ranges. The complete reply is exit-zero, untruncated and unchanged-target;
+`helpers.bundle.json` and its reset export are identical. The 13-byte local
+initializer reuses `ev_df97bcfd…` in the preservation sealed bundle. All other
+source/tooling provenance remains as above. No native process, AVM1 replay,
+VM implementation or frontend behavior changed.
