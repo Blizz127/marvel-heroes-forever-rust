@@ -7,6 +7,16 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev23 diagnostic increment
 
+**VERIFIED private staging, 14:15 UTC:** all 441 packaged sizes/hashes and the
+complete file set pass, with packaged version and Original-preset readback.
+Private artifact: `builds/0.1.0-dev.23`. Clean package source is
+`1ea6469b30d55ac69de675ccea97539ab33f8718`; only documentation differs from the
+tested source below. Manifest SHA-256:
+`5890ac36b32bbddcf56260f9d93348ef593f21fb93996965e4ea38623b13edb6`.
+Receipt: `evidence/build-0.1.0-dev.23-package-validation.json`. The coordinator
+intake is queued, superseding dev22's Rust diagnostic only. Publication and
+owner-device validation remain unconfirmed; no retail tile or service changed.
+
 **VERIFIED combined build/startup:** clean source
 `d5d96eafdbe219b30961654bbe2ac5f8c94d4418` builds with window support in
 28.30 seconds without warnings. All eight focused preset/VM/image checks pass.
