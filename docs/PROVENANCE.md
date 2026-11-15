@@ -770,3 +770,18 @@ package/native producer, layout and dispatch evidence in their source ledgers.
 Actual backend receivers, nested default-copy effects and later resource
 lifecycle remain explicit boundaries. No new external implementation, live
 service action or native runtime state was introduced.
+
+[Selected Model node geometry](UPK_MODEL_NODE_GEOMETRY.md) records original
+bounded joins between saved Node, pool, position and surface records, with
+independent comparisons against both owned map exports. No triangulation or
+material implementation was borrowed. [Bootstrap binding preservation](FRESH_PROTOTYPE_BINDINGS.md)
+extends exact owned startup evidence through explicit cache/global/prototype
+conditions; it does not supply those conditions as runtime defaults.
+
+[Native output ownership](SCALE9_OUTPUT_RECEIVER.md),
+[native options and mesh flags](SCALE9_OPTIONS.md) and
+[initial texture-query checkpoints](SCALE9_TEXTURE_QUERY_CHECKPOINT.md) retain
+the exact constructor, receiver, upload and resource/query records listed in
+their ledgers. These original static studies keep current inputs and callback
+effects explicit. No external SDK implementation or live renderer state was
+substituted for the remaining evidence.

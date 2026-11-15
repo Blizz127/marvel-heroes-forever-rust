@@ -7,6 +7,12 @@ their ordered corner records, saved position triples and corresponding `+0xc8`
 records. It does not triangulate, resolve materials, transform coordinates,
 create render resources or execute a world.
 
+The diagnostic command is `mhf upk model-geometry <package.upk>
+<1-based-model> [0-based-node ...]`. An empty selection stays empty; explicit
+order and duplicates are preserved. It prints original position bits without
+normalization or inferred transforms. The original frontend Model is export13;
+its saved node indices are 0 through 11.
+
 ## Native evidence and interpretation boundary
 
 **VERIFIED (static):** the established Model serializer uses raw bulk loading
