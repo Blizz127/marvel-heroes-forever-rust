@@ -49,6 +49,8 @@ pub mod pointer;
 pub mod preview;
 #[path = "frontend/runtime_text.rs"]
 pub mod runtime_text;
+#[path = "frontend/saved_handlers.rs"]
+pub mod saved_handlers;
 #[path = "frontend/scene_content.rs"]
 pub mod scene_content;
 #[path = "frontend/selection.rs"]

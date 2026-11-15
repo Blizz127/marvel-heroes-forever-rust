@@ -449,3 +449,7 @@ order, triangle coverage, decoded bitmap alpha and the original visibility
 action route. Its CPU explanation preserves the failed whole-scene GPU check.
 Cached `wgpu-types` 27.0.1 blend constants (MIT OR Apache-2.0) were studied to
 interpret the existing diagnostic blend state, not copied into game logic.
+
+[Saved handler table](SAVED_HANDLER_TABLE.md) implements ordered, per-owner
+source-wrapper handles from the registered native event contracts. Its supported
+mask profile and focused synthetic checks do not establish lifecycle delivery.
