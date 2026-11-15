@@ -7,6 +7,16 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev24 work in progress
 
+**VERIFIED Function primitive callbacks:** the two actual Function.prototype
+callbacks now execute in their proved receiver/context profiles. `toString`
+returns the exact native 15-unit string through an explicitly bound active
+context; `valueOf` preserves supported function/OP/FP identities. Unknown native
+receiver categories and captured-frame representations remain gated. Twelve
+focused checks and production metadata compilation pass without diagnostics.
+Receipt: `evidence/avm1-runtime/function-primitives-checks/receipt.json`, SHA-256
+`f9868721dcc0e7ddecb985e41a88f1d54d19b91d024960f3fa4460003d5b084d`.
+See [native Function callbacks](docs/REA_FUNCTION_PRIMITIVES.md).
+
 **VERIFIED primary vertex export:** original Rust now copies/resets the seven-word
 descriptor and scans generated vertices with the native cursor, full-width mesh
 comparison and exact record-bit preservation. Four focused tests and all fourteen

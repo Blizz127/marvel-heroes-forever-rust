@@ -941,3 +941,16 @@ provider from the separate alternate archive. [Primary fill format](SCALE9_PRIMA
 records exact selector/cache construction and distinguishes fresh format storage
 from looser compatibility hits. Their remaining source/lifecycle identities stay
 explicit; no new external implementation or runtime defaults were introduced.
+
+[Function primitive callbacks](REA_FUNCTION_PRIMITIVES.md) use exact owned
+callback objects, category/getter tables, active-context traversal and the
+fifteen-unit literal. The original VM implementation retains proved identity
+and result-slot profiles without copying native code or supplying unsupported
+receiver conversions. Its private source ledger and twelve focused checks
+separate synthetic execution from static instruction evidence.
+
+[Option owner propagation](SCALE9_OPTIONS_MESH_IDENTITY.md) joins native root,
+shape, compound and mesh construction stores, with concrete provider retention.
+The extended engine-config and MovieDef cleanup studies keep real cache,
+callback, notification and object-identity conditions explicit. All use the
+previously registered owned executable; none selects current live state.
