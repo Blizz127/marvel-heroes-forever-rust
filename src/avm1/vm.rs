@@ -28,6 +28,8 @@ mod execution_store;
 mod external_interface;
 #[path = "focus_rect.rs"]
 mod focus_rect;
+#[path = "function_primitives.rs"]
+mod function_primitives;
 #[path = "geom_namespace.rs"]
 mod geom_namespace;
 #[path = "global_extensions.rs"]
@@ -80,6 +82,7 @@ pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 use execution_store::{ExecutionStore, RegisterBank, StoreError};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
+use function_primitives::FunctionPrimitive;
 pub use geom_namespace::GeomNamespace;
 use global_extensions::GlobalExtensionsLookup;
 pub use global_extensions::{GlobalExtensionsInfo, GlobalExtensionsProfile};
@@ -477,6 +480,7 @@ enum Kind {
     RegisterClass,
     SetPropertyFlags,
     FunctionMethod(FunctionMethod),
+    FunctionPrimitive(FunctionPrimitive),
     FunctionPrototype,
     ConstructorSuper {
         constructor: ObjectId,
@@ -509,6 +513,7 @@ impl Kind {
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
                 | Self::FunctionMethod(_)
+                | Self::FunctionPrimitive(_)
         )
     }
 }
@@ -921,11 +926,11 @@ impl Vm {
                 ("call", Kind::FunctionMethod(FunctionMethod::Call)),
                 (
                     "toString",
-                    Kind::UnsupportedNative("Function.prototype.toString"),
+                    Kind::FunctionPrimitive(FunctionPrimitive::ToString),
                 ),
                 (
                     "valueOf",
-                    Kind::UnsupportedNative("Function.prototype.valueOf"),
+                    Kind::FunctionPrimitive(FunctionPrimitive::ValueOf),
                 ),
             ] {
                 let method = self.bootstrap_function(kind)?;
@@ -3129,6 +3134,14 @@ impl Vm {
                 }
                 return self.invoke(this, receiver, &forwarded, host);
             }
+            Kind::FunctionPrimitive(method) => {
+                if constructor_context.is_some() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Function primitive construction profile",
+                    ));
+                }
+                return self.invoke_function_primitive(method, this);
+            }
             Kind::SetPropertyFlags => return self.apply_property_flags(args),
             Kind::RegisterClass => {
                 if args.len() != 2 {
@@ -4228,6 +4241,7 @@ impl Vm {
                                     | Kind::RegisterClass
                                     | Kind::SetPropertyFlags
                                     | Kind::FunctionMethod(_)
+                                    | Kind::FunctionPrimitive(_)
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
                             }
@@ -4526,6 +4540,7 @@ impl Vm {
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
                                         | Kind::FunctionMethod(_)
+                                        | Kind::FunctionPrimitive(_)
                                 ) {
                                     "function"
                                 } else {

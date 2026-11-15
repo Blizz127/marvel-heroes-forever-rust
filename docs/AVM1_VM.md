@@ -2467,3 +2467,45 @@ the original parser and owned inputs. Committed root Selection/ClassRegistry
 from4fe0a806 are byte-identical to increment13's dependencies. All prior replay
 receipts remain unchanged. No native client/window operation or cursor effect
 is claimed.
+
+### Bounded Function prototype primitive callbacks
+
+VERIFIED static evidence in [REA_FUNCTION_PRIMITIVES.md](REA_FUNCTION_PRIMITIVES.md)
+now supplies the actual Function prototype `toString` and `valueOf` callback
+bodies. The existing bootstrap objects keep their identities, flags and cold
+null parents; invocation follows the selected callable object, not a method-name
+shortcut. Public `FunctionMethod::{Call, Apply}` is unchanged.
+
+`toString` requires an active target explicitly associated with this VM's
+builtin context and returns the exact 15-unit string `[type Function]`. The
+native callback ignores the receiver and arguments; the VM validates those
+Values and argument budgets without coercing or resolving them. A direct
+`Vm::call` has no active target and rejects. The existing string-unit budget is
+charged for each returned Rust value; native instead retains an existing builtin
+node, so this is an engineering limit rather than allocation parity.
+
+`valueOf` admits the proved common native callback categories, Object/Function
+constructors, thirteen early methods, cached Object/Function prototypes, and
+script functions with exactly the target/global scope profile. It returns the
+same supported object identity. This models a fresh result destination: actual
+native function conversion produces a reference with cleared auxiliary frame
+and flags. The VM cannot preserve that distinction for a captured activation or
+With wrapper, so those receivers remain rejected. Other specialized native
+constructor/method classes, arbitrary plain objects, display values, deferred
+tokens, super references and primitive receivers remain explicit boundaries.
+In particular, the native null-interface result is tag6/pointer0; it is not
+silently mapped to Rust Null or Undefined. Object.prototype's similarly named
+callbacks remain separate unsupported native functions.
+
+OBSERVED: five focused callback checks, five bootstrap checks and two existing
+Object/Function checks pass. They exercise named original-format synthetic
+opcodes, current-context admission, ignored inputs without factory effects,
+identity and metadata preservation, closure rejection, invalid handles and
+string-budget failure with original error coordinates. Both the focused test
+build and production metadata compilation exit zero without diagnostics; all
+frozen source hashes remain unchanged. These are synthetic executor checks,
+not retail runtime parity or an original manager replay. The existing rejecting
+Mouse host and all saved-state/lifecycle gates are unchanged. Private build,
+test logs and frozen sources are indexed under
+`avm1-runtime/function-primitives-checks/receipt.json`, SHA-256
+`f9868721dcc0e7ddecb985e41a88f1d54d19b91d024960f3fa4460003d5b084d`.

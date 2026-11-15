@@ -101,7 +101,7 @@ fn bootstrap_does_not_backfill_existing_functions_and_later_functions_use_warm_p
 }
 
 #[test]
-fn bootstrap_function_own_native_methods_remain_distinct_and_explicitly_unsupported() {
+fn bootstrap_function_own_native_methods_remain_distinct_and_preserve_metadata_gates() {
     let mut vm = setup();
     vm.install_object_constructor().unwrap();
     let fp = vm.function_prototype.unwrap();
@@ -113,17 +113,20 @@ fn bootstrap_function_own_native_methods_remain_distinct_and_explicitly_unsuppor
             vm.classify_callability(&Value::Object(native)).unwrap(),
             ValueCallability::Callable
         );
-        assert!(matches!(
-            vm.call(
-                Value::Object(native),
-                Value::Object(fp),
-                &[],
-                &mut RejectHost
-            )
-            .unwrap_err()
-            .kind,
-            ErrorKind::UnsupportedNativeFunction(_)
-        ));
+        let result = vm.call(
+            Value::Object(native),
+            Value::Object(fp),
+            &[],
+            &mut RejectHost,
+        );
+        if name == "valueOf" {
+            assert_eq!(result.unwrap().value, Value::Object(fp));
+        } else {
+            assert!(matches!(
+                result.unwrap_err().kind,
+                ErrorKind::Unsupported("Function.toString requires current Environment")
+            ));
+        }
         assert_eq!(vm.host_calls, 0);
     }
     for prototype in [op, fp] {
