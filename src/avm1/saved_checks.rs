@@ -370,7 +370,7 @@ fn saved_pool_uses_first_executed_record_and_invalid_indices_are_undefined() {
     completed(vm.execute_saved_action(id, env, &mut RejectHost).unwrap());
     assert_eq!(
         vm.saved_environment_state(env).unwrap().stack(),
-        expected.repeat(2)
+        [expected.as_slice(), expected.as_slice()].concat()
     );
     assert_eq!(vm.string_units, units_before + 6);
 }
