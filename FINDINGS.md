@@ -5,6 +5,53 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev15 integration in progress
+
+**VERIFIED Rust integration:** selected saved Scene records now bind to distinct
+VM installations with exact original source and mask identity. The actual login
+probe installs all 34 Construct records, preserving 89 unselected bindings and
+889 unbound tags, all supplied Environment state and all source inputs. It
+executes no instructions. [Binding evidence](docs/SAVED_SCENE_HANDLERS.md)
+records 1,204 handler comparisons and the independent source-envelope checks.
+
+The [saved-vector phase](docs/SAVED_DISPATCH.md) applies the recovered wrapper
+gates and runs installed handlers through persistent Environment state. It stops
+on errors and leaves dynamic lookup explicitly pending after normal returns.
+All four focused composition tests pass; the integrated window-feature checks
+pass. The retained failed fixture used an unsupported legacy opcode; it was
+corrected to the already supported numeric Add2 profile without relaxing the VM.
+
+**OBSERVED original Construct progress:** the unchanged 449-byte action now
+executes 24 instructions through the table/dispatch path before rejecting the
+Object value assigned to `soundMap` at offset 39601. Ten prior writes, the
+actual `autoSize='none'` value, pending operands and four supplied registers
+remain retained. The Environment is halted, later work is not executed and no
+event-completion result is returned. Receipt:
+`evidence/avm1-original-construct-saved-increment2/receipt.json`. That value-type
+restriction is being reconciled with the native ordinary-setter contract.
+
+**VERIFIED register admission correction:** Function2 now allocates exactly its
+serialized register count. The independent parser-only audit of 21 owned movies
+finds all 212,996 active register indices within their 18,815 Function2 banks.
+Seven focused checks pass. Native outer-bank fallback and shared ordinary-call
+execution are separate work; this audit is not a native execution comparison.
+
+**VERIFIED World loader:** the new original parser and `upk world` command read
+both initial/frontend World exports, preserving exact raw records and ordered
+links. PersistentLevel references are 1 and 11 respectively; both array counts
+and unknown tails are zero. Both actual-map commands and a wrong-class rejection
+check pass. Receipt: `evidence/world-cli-dev15/receipt.json`. No referenced Level
+is loaded or run yet.
+
+**OBSERVED service prerequisite:** one public HTTP SiteConfig GET returned 502
+at 11:44:25 UTC. Current local launcher source selects HTTP port 80, whereas the
+older offline probes used an inherited 8443 argument. The sealed probes remain
+unchanged. The saved service hold has no verified release or current safe-start
+contract in the inspected receipts; no wake or alternate start was attempted.
+[Service entry](docs/MHSERVEREMU_TEST_ENTRY.md) records the exact source conflict,
+request and limits. Independent Rust work continues. Dev14 remains the latest
+staged package; no publication, login or gameplay is claimed.
+
 ## 2026-11-15 dev14 diagnostic increment
 
 **VERIFIED Rust integration:** the window-feature check passes after native
