@@ -221,3 +221,14 @@ the original project parsers and exact serialized links; its complete source,
 licence and input ledger is retained privately in `mesh-assets/README.md` and
 `manifest.json`. No game data belongs in source commits or private executable
 packages.
+
+## Owned device-handle lifetime
+
+`MeshRenderer::owned(&QuadRenderer).await` is an additive alternative to the
+existing borrowed constructor. It retains cloned wgpu handles and the original
+resource-owner ID, allowing a native host to own both renderers without a
+self-reference. Quad pipelines, layouts and image data are not rebuilt by
+cloning those handles. The four mesh pipelines and internal white texture are
+created once per mesh renderer; later frame submissions still prepare dynamic
+vertices, uniforms, image bindings and a stencil target. This is persistent
+pipeline/texture ownership, not allocation-free frame rendering.

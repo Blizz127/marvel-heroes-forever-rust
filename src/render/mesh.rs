@@ -9,7 +9,11 @@ use crate::gfx::{
     shapes::{Fill, GradientKind},
     tessellate::{FillMesh, Position, fill_coordinates},
 };
-use std::{borrow::Cow, io, ops::Range};
+use std::{
+    borrow::Cow,
+    io,
+    ops::{Deref, Range},
+};
 use wgpu::util::DeviceExt;
 
 const VERTEX_BYTES: usize = 16;
@@ -148,8 +152,22 @@ pub enum Command<'a> {
     PopMask,
 }
 
+enum RendererSource<'a> {
+    Borrowed(&'a QuadRenderer),
+    Owned(QuadRenderer),
+}
+impl Deref for RendererSource<'_> {
+    type Target = QuadRenderer;
+    fn deref(&self) -> &QuadRenderer {
+        match self {
+            Self::Borrowed(value) => value,
+            Self::Owned(value) => value,
+        }
+    }
+}
+
 pub struct MeshRenderer<'a> {
-    source: &'a QuadRenderer,
+    source: RendererSource<'a>,
     params_layout: wgpu::BindGroupLayout,
     alpha: wgpu::RenderPipeline,
     replace: wgpu::RenderPipeline,
@@ -186,8 +204,33 @@ struct SavedMask {
     scissor: Scissor,
 }
 
+impl MeshRenderer<'static> {
+    /// Keep the same device, layout, renderer identity and resource handles.
+    /// No quad pipelines or texture data are recreated by these handle clones.
+    /// This permits a window host to own both renderers without self-borrows.
+    pub async fn owned(source: &QuadRenderer) -> io::Result<Self> {
+        let owned = QuadRenderer {
+            owner: source.owner,
+            device: source.device.clone(),
+            queue: source.queue.clone(),
+            format: source.format,
+            layout: source.layout.clone(),
+            nearest: source.nearest.clone(),
+            linear: source.linear.clone(),
+            alpha: source.alpha.clone(),
+            replace: source.replace.clone(),
+            adapter_info: source.adapter_info.clone(),
+        };
+        Self::from_source(RendererSource::Owned(owned)).await
+    }
+}
+
 impl<'a> MeshRenderer<'a> {
     pub async fn new(source: &'a QuadRenderer) -> io::Result<Self> {
+        Self::from_source(RendererSource::Borrowed(source)).await
+    }
+
+    async fn from_source(source: RendererSource<'a>) -> io::Result<Self> {
         let device = &source.device;
         device.push_error_scope(wgpu::ErrorFilter::Validation);
         let params_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

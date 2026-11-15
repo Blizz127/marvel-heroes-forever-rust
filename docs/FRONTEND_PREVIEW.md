@@ -97,6 +97,70 @@ remain. HTML, passwords, required wrapping, unsupported static text and missing
 font bindings receive no substitute text. There is no input editing, caret,
 selection, localization, VM string update, font hinting or retail AA claim.
 
+## Reusing GPU assets across frames
+
+`GpuScene::new(&renderer, prepared, stage, policy).await` consumes an immutable
+`PreparedScene` and creates resident texture resources and four fill/mask
+pipelines once. `with_limits` accepts the same explicit budgets.
+`render_static` remains a one-shot convenience path; internally it borrows the
+CPU snapshot rather than copying its decoded images. Both paths use the same
+frame planner.
+
+The owned GPU scene can live beside a window renderer. Its mesh renderer retains
+cloned wgpu device/queue/layout/pipeline handles and the original renderer
+identity. It does not hold a reference to the caller's `QuadRenderer`, mint a
+new resource owner, or recompile the quad pipelines. The existing borrowed
+`MeshRenderer::new` API is unchanged; `MeshRenderer::owned` is additive.
+
+```rust,ignore
+let gpu_scene = preview::GpuScene::new(&renderer, prepared, stage, policy).await?;
+let nodes = display_state.snapshot_nodes(); // caller-owned actual current state
+let frame = gpu_scene.offscreen(&nodes)?;
+let submission = gpu_scene.render_to_view(
+    &surface_view, width, height, &nodes, preview::Viewport::Contain,
+)?;
+// The host owns surface acquisition/presentation, events and script execution.
+```
+
+Every frame supplies the complete ordered `SceneNode` arena. Only world matrix,
+world color and effective visibility may differ from the prepared source.
+Identity, definitions, raw placements, tree, masks, effects and source records
+must match; a mismatch or nonfinite state errors before submission. The caller
+updates descendant world transforms/effective visibility consistently. New
+assets, hierarchy, mask membership, text contents or policy require preparing a
+new GPU scene. There is no index-only cache shared between unrelated scenes.
+
+`offscreen` retains the native saved extent. `render_to_view` draws directly to
+a caller-owned single-sample view with the scene's device/format and supplied
+dimensions. `Viewport::NativePixels` retains physical pixel scale at top-left;
+`Contain` fits uniformly and centers the saved ceil pixel extent. A scissor
+excludes offstage geometry from the margins, and the selected background clear
+applies to the whole target. `viewport(...).stage_point(...)` maps a target point
+back to stage twips and rejects outside-target/margin points. It dispatches no
+event and invents no script state.
+
+`GpuResources` records actual resident asset texture uploads/bytes, four
+fill-pipeline builds and one internal white texture upload. All decoded textures
+referenced by the prepared bitmap asset cache are considered at preparation,
+including initially hidden content; `max_uploaded_bytes` bounds the total
+resident cache. Unknown encoding/failure diagnostics are retained and emitted
+when a frame references the texture. Frame `texture_uploads_this_frame` is zero.
+The older coverage fields `uploaded_textures`/`uploaded_rgba_bytes` count
+referenced resident resources; they are not repeated uploads.
+
+Current visibility, color, mask acceptance/replay, field clipping, omissions and
+coverage are recomputed each frame. CPU transformed vertices, colored glyph
+draw copies, paint uniforms/bind groups and the stencil target remain
+frame-local. This increment does not claim allocation-free drawing or a
+complete GPU geometry cache.
+
+Script counts are structural binding/tag records.
+`RendererDoesNotExecuteScripts` and `SourceScriptBindings` describe this
+renderer, without asserting that the caller's VM has executed no handlers.
+`source_action_bindings` and `unbound_action_tags` are the preferred coverage
+fields; the previous `*_unexecuted` names remain compatibility aliases with the
+same neutral counts. The renderer does not attest caller runtime initialization.
+
 ## Mask handling
 
 Each ordinary draw requests its exact ordered active mask NodeIds. The adapter
@@ -223,6 +287,49 @@ smoke receipts and result). The login RGBA SHA256 is
 These checks validate saved geometry/paint/clipping composition only. No native
 text renderer comparison, physical GPU, interactive text entry, runtime script
 state, effects, scale-nine or retail frontend parity was run for this increment.
+
+## Reusable-scene validation
+
+**VERIFIED (2026-11-15):** Offline compilation and seven focused actual-asset
+groups pass on llvmpipe/Mesa Vulkan, with two worker threads and no native
+display. The original login, character-select and manager first frames remain
+byte-identical to the saved-text checkpoint. Login still submits 232 glyphs/22
+field clips; character select submits 92 glyphs/seven clips.
+
+The manager check retains the frozen prior one-shot implementation as an
+independent reference. Initial, repeated and translated frames match it exactly.
+Moving both original `cursor_mc` subtree nodes by +4,800/+3,800 twips places the
+original cursor at (200,150) pixels and changes 761 target pixels. Hiding and
+revealing the subtree returns the expected clear/cursor frames. Rejected raw
+metadata, mask-identity and NaN-state updates do not alter the next valid frame.
+
+Across those frames, resources remain one asset texture upload (16,384 RGBA
+bytes), four fill pipelines and one internal white texture upload; frame texture
+uploads remain zero. The original `QuadRenderer` is dropped before reusable
+frames render, exercising the owned handle lifetime. Login retains 29 asset
+uploads/4,290,240 bytes and character select 22/45,544,960 bytes.
+
+Caller-owned native-size `TextureView` output/readback equals offscreen output
+byte for byte. A 1000×1000 target checks centered contain mapping, padded-row
+readback, margins and pointer-to-stage conversion. Cropped native targets reject
+pointer points outside the actual target. This is headless surface-compatible
+target validation; no native surface presentation was run in this increment.
+
+Private receipts are `evidence/preview-reuse-compile.log` and
+`evidence/preview-reuse-checks/{src/main.rs,sources.json,build.log,smoke.log,result.json}`.
+The retained first build attempt failed only because the private harness exposed
+unrelated new VM modules without importing that crate; its isolated module
+wiring was corrected before the successful build. No renderer assertion or
+expected pixel value was changed. The manager checks took 11.949 seconds and
+the two text baselines 21.926 seconds.
+
+**OBSERVED:** `preview-reuse-checks/moved.png` displays the original blue cursor
+on the unchanged saved white manager clear. Its raw RGBA hash, also matching
+the caller-owned native view, is
+`ac77edd6e20997741cd08abf5f6beaa7036661eac646fdc54d4419ce3623a46a`.
+RGBA files and lossless PNG containers remain private. The diagnostic transform
+change does not claim VM event execution, native presentation, initialized
+frontend behavior or retail parity.
 
 ## Source and licence register
 
