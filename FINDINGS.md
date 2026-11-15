@@ -5,6 +5,47 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev12 diagnostic increment
+
+**VERIFIED Rust execution:** tested source
+`7041d197cc63a002075aa239c04985954b73158f` builds with the window feature.
+Binary SHA256 `e2da8fda61e1f1e0e1e87ef2f6e4321fa624c2f7dd050877b0f1a778ad8db846`
+passes nine CLI/image checks and the isolated two-frame window smoke with no
+stderr. Saved scene/cursor pixels remain unchanged. Receipts:
+`evidence/build-0.1.0-dev.12-smoke.json` and `dev12-native-html/receipt.json`.
+
+Native String boxing/ASCII uppercase, exact-false `_focusrect`, checked movie
+bindings and document-to-render preparation are integrated. Original localization
+now obtains `Log In` from the actual catalog, executes uppercase at 94251 and
+writes `LOG IN` at 94252. Six glyph placements follow from that live document;
+all 32 other text instances and host/source state stay intact. Attachment,
+absent services and effective format/font bindings remain controlled inputs.
+The bridge also passed twenty typed rejection cases and its replacement,
+cache/default and empty-document controls.
+
+All 452 selected manager initializers complete on the controlled attached root
+in 49,244 instructions, with one Selection listener and five class registrations.
+The original containing-frame action then stops after 33 instructions at typed
+receiver `Function.apply`. Minimal globals, child snapshot and raw native state
+remain supplied. [AVM1 execution](docs/AVM1_VM.md) records the exact receipts;
+this does not establish a complete native startup sequence.
+
+**OBSERVED limit:** the first GPU composition submits updated label geometry but
+changes no final pixels in the overlapping saved scene. Its visibility assertion
+failed; exact occlusion and startup visibility actions are being investigated.
+[Runtime text preparation](docs/RUNTIME_TEXT_PREPARATION.md) preserves that result,
+the private fixture's dependency difference and its conditional style scope.
+
+The complete 16,490-file isolated retail snapshot reached original loading
+artwork and stopped on that new splash without input. All input hashes remain
+unchanged. A same-snapshot/fresh-prefix comparison permits the now-known splash.
+No login or server connection has been demonstrated.
+
+Linux notices cover 121 dependencies/231 files, manifest SHA256
+`79f218ee46f34e82207920473a4ebc5260b984b83a03ed71431fe44902402764`.
+This original-code diagnostic bundles no game assets and exposes zero finished
+upgrades. No Rust launcher publication route has been confirmed.
+
 ## 2026-11-15 dev11 diagnostic increment
 
 **VERIFIED Rust execution:** tested source

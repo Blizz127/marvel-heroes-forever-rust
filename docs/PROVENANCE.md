@@ -407,3 +407,13 @@ default is inferred from its focused checks.
 per-instance document text and exact format handles into explicit renderer
 inputs. Native style mapping and empty-document policy remain supplied; no
 authored text, default style or rendered result is substituted by the bridge.
+
+[Complete-distribution retail probe](NATIVE_FULL_DISTRIBUTION_PROBE.md) records
+the first painted original loading splash in the isolated 16,490-file snapshot,
+its conservative observer stop and complete before/after private input hashes.
+It does not establish entry to the login frontend or server connectivity.
+
+The [runtime text GPU observation](RUNTIME_TEXT_PREPARATION.md) records the
+failed whole-scene visibility assertion, private dependency drift and installed
+Pillow 13.0.0 metadata (MIT-CMU). Pillow only encoded unchanged diagnostic RGBA;
+neither that tool nor the captures are bundled in the client.

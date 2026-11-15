@@ -175,3 +175,38 @@ source and adds no dependency. Original assets and evidence stay private.
 The integrated library exposes `frontend::runtime_text`. The root window-feature
 compile and the two scoped CPU document-to-glyph checks passed. Rendering and
 native effective-format parity remain separate work.
+
+## First whole-scene GPU observation
+
+**OBSERVED diagnostic GPU execution, not a successful visibility check:** a new
+private fixture reused committed source `7041d197cc63a002075aa239c04985954b73158f`
+and the sealed post-VM CPU case. It rendered the returned PreparedScene and saved
+baseline through one software Vulkan renderer with the existing explicit policy.
+Product/source assets were unchanged; effective format/font mapping stayed supplied.
+
+Both outputs are 1920 by 1200 with all 33 text instances prepared. Saved baseline
+pixels match the retained diagnostic exactly. Node 89 changes from eleven fills /
+2,266 triangles to five fills / 1,062 triangles; the space in six glyph placements
+has no painted fill. Total glyph fills change from 303 to 297. Nevertheless, final
+RGBA pixels are identical. The assertion requiring visible change fails with exit
+101 and remains recorded as a failure.
+
+The selected field's transformed bounds are pixels `[835, 612, 1095, 637]`.
+Visual inspection shows overlapping authored modal layers. Occlusion is an
+explanation under investigation, not yet proof of the exact responsible draw.
+No visibility flag, asset, scene order or native state was changed to pass the
+check. Actual startup and visibility/lifecycle execution remain required.
+
+The private fixture selected `ordered-float` 5.5.1 instead of the product's
+5.3.0; all other registry identities match the root lock. This first run remains
+sealed with that difference. A later comparison must use a new scope and the
+product dependency versions. The product build retains its own lock/notices.
+
+Artifacts: `evidence/runtime-text-gpu/`. `run-receipt.json` SHA256:
+`ab73f2d50e14544a048c670da7319c57083ce0960556f216dd0b13d67e6c7dd7`.
+All 77 frozen source files, 32 prior inputs and ten copied harness files were
+checked unchanged before/after execution. The harness manifest was sealed after
+compilation began but before execution; it is not a pre-compilation snapshot.
+Product sources were separately verified before compilation. Installed Pillow
+13.0.0 (metadata licence MIT-CMU) encoded unchanged RGBA to PNG for inspection;
+it is a private tool, neither linked nor packaged with the client.
