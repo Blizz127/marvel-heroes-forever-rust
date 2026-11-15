@@ -5,7 +5,19 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev25 work in progress
+## 2026-11-15 dev25 diagnostic increment
+
+**VERIFIED combined build/startup:** clean source
+`cf338fb0f7cb2885e602102a6fb96e3fc1988a1c` builds with window support in
+25.61 seconds without warnings. All eight focused preset/VM/image checks pass.
+The isolated Rust window presents two frames with empty stderr; saved cursor
+and login RGBA identities are unchanged. All 34 integrated source hashes match
+the relevant focused freezes. Binary SHA-256:
+`d7c3c50d16819165a6bb7b4783250e4b201cf7469ad517b4b6c8624741df93dc`.
+Receipts: `evidence/dev25-build-result.json`,
+`evidence/build-0.1.0-dev.25-smoke.json`, `evidence/dev25-native-html/receipt.json`
+and `evidence/dev25-integrated-source-identity.json`. No native-retail launch,
+service request, owner-device test, full suite or retail parity is claimed.
 
 **VERIFIED Object prototype callbacks:** the exact native `toString`/`valueOf`
 profiles now execute in original Rust, retaining identities, flags and cold
@@ -23,10 +35,11 @@ boundary remains unchanged. See [native callback evidence](docs/REA_OBJECT_PRIMI
 now normalizes the complete supplied array before descriptor selection and
 binds triangle ordinal transfer to that same source. Preview and resumed chunks
 retain source identity; rejected packing retains both cursor and destination.
-Three focused invariants pass. Exact format, resolved colors and invocation-wide
-native cache continuity remain explicit caller inputs. See
-[composition and evidence](docs/SCALE9_PRIMARY_OUTPUT.md); independent comparison
-and the later combined executable are still pending at this checkpoint.
+Three focused invariants and 282 independent comparison checks pass. The latter
+checks complete normalized records/matrices, four descriptor sequences with
+partial and resumed chunks, four atomic rejections and same-source triangles.
+Exact format, resolved colors and invocation-wide native cache continuity remain
+explicit caller inputs. See [composition and evidence](docs/SCALE9_PRIMARY_OUTPUT.md).
 
 **VERIFIED primary packed records:** the explicit twelve-byte writer now composes
 the native coordinate packer with supplied resolved color words and exact flag
@@ -38,9 +51,9 @@ Receipt: `evidence/scale9-primary-packing/receipt.json`, SHA-256
 `851a0f09d64d996c059848dc7d6d254def9a2cf43dc337a4f31e1952ecb5bd15`.
 Root production library checking with window support passes without warnings in
 12.41 seconds at clean source `a4566d25182f1e2d376629f1968bb97ae64170f8`;
-receipt: `evidence/dev25-packing-production-check.json`. No dev25 executable or
-startup check has run. Live format/color association and renderer enablement
-remain separate; dev24 is the latest staged artifact.
+receipt: `evidence/dev25-packing-production-check.json`. That earlier metadata
+check is distinct from the later combined executable/startup checks above.
+Live format/color association and renderer enablement remain separate.
 
 ## 2026-11-15 dev24 diagnostic increment
 

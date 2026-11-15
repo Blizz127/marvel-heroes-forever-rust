@@ -1014,3 +1014,25 @@ hashes, purposes and licence categories are in
 `evidence/model-draw-consumer/sources.json` and component ledgers. Native data,
 reference snapshots and raw evidence remain private. The next caller-supplied
 virtual receiver and selected shader-record identities remain unresolved.
+
+## External configuration API contract
+
+The extension in [engine name/state evidence](REA_ENGINE_NAME_STATE.md) uses
+these primary sources only to interpret already observed import arguments and
+return branches. Documentation is CC BY 4.0 under the linked licence; no SDK
+implementation or sample code was copied. Exact source/use entries are retained
+in `evidence/rea-engine-name-state/external-lookup/provenance.json`, SHA-256
+`790a7d980fd3bbca25dd332602ced45f1a73026837c455d44eb560ea2e344ca3`.
+
+| Source | Use |
+| --- | --- |
+| [Microsoft Learn CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew) | Fixed access/share/disposition/attributes and returned handle |
+| [Microsoft Learn GetFileSize](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesize) | Low32 result, null high-word pointer and `0xffffffff` ambiguity |
+| [Microsoft Learn GetModuleFileNameW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew) | Module handle, cache buffer and bounded NUL/truncation conditions |
+| [Microsoft Learn CloseHandle](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle) | Close attempt and success result, which native code ignores |
+| [MicrosoftDocs/sdk-api licence](https://github.com/MicrosoftDocs/sdk-api/blob/docs/LICENSE) | Documentation licence identity only |
+
+The dev25 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev25-linux/manifest.json`, SHA-256
+`860d30d59ab3c5819e01d0b850662168a8190a028b38bf8a09943d8fa961b911`.

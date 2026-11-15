@@ -85,5 +85,21 @@ Private receipt: `evidence/native-primary-output/focused/receipt.json`, SHA-256
 `5b453737cf5e24089c81c5a30d731f66ea6fbe20f8c41fa40cb4efaac138632a`.
 Frozen implementation SHA-256:
 `119b22693cdb5d21321051220ce984b4da0ac20bbcf064f1caea95c0eab23d42`.
-An independent scalar/record fixture was frozen before its author read this
-module; its comparison and production checks are recorded separately when run.
+
+**VERIFIED independent comparison:** the fixture was frozen before its author
+read the new module. An optimized harness passes 282 checks with zero failures,
+comparing eight complete normalized records, all matrix/extrema/status bits,
+four descriptor sequences with twelve steps plus twelve resumed steps, four
+exact atomic rejections, every destination byte and six triangle requests.
+Source records, geometry, color inputs and profiles remain unchanged. The two
+unused mesh-`0xffff` records uniquely determine the fixture's full extrema;
+selecting a mesh first would fail. The inverse-N translation is `4 + 1 ulp`,
+not an assumed exact four, and all eight words are compared exactly.
+
+Oracle SHA-256:
+`d95e9e9c073874611052601555ab6167655d4c00320063a63892cceb3d522e89`.
+`evidence/native-primary-output/comparison/receipt.json` SHA-256:
+`13eeaf8c60d41def383ea85faff0ce03590dc1e196ff7fa2f4241ad73a9e85dd`.
+All six frozen source hashes and the oracle remain unchanged. These are
+synthetic instruction-derived witnesses, not a native execution or live draw.
+The later dev25 production build and startup are recorded in `FINDINGS.md`.

@@ -166,10 +166,23 @@ or status is greater than 1. For status 0:
 - Index destination is `[owner+68] + [M+38] + 2 * firstIndex`.
   It copies `2 * count` bytes from the supplied scratch pointer.
 
-The multiply widths in these callback offsets/counts are 32-bit. Any bounded
-Rust adapter must reject overflowing spans rather than silently widening them
-and claiming native equivalence. Allocation-size arithmetic in `03e5f0` uses
-64-bit registers after receiving the zero-extended counts/stride.
+The vertex-callback products above are 32-bit. The index receiver is different:
+`03e363` zero-extends `firstIndex` through a DWORD move before 64-bit address
+scaling. `03e376` loads `indexCount` into R8D, and `03e37f` doubles it with
+64-bit `add R8,R8`. Its destination offset is therefore `2*zext(firstIndex)`
+and its copy length is `2*zext(indexCount)`, without 32-bit doubling wrap.
+Earlier caller `c08d9/c08dc` computes `3*firstTriangle` and `3*triangleCount`
+using **32-bit** LEAs, so that distinct seam retains its modulo-2^32 behavior.
+Allocation-size arithmetic in `03e5f0` also uses 64-bit registers after
+receiving zero-extended counts/stride. Bounded Rust adapters must preserve each
+seam's width and reject invalid spans; a blanket width assertion is incorrect.
+
+This corrects the earlier sentence assigning 32-bit products to both callbacks.
+The independent retained-byte audit checks 138 instructions / 659 bytes against
+the existing receiver and output-caller REA records, without a new capture.
+Private receipt: `evidence/native-primary-output/oracle/packing-triangle-audit/triangle/receipt.json`,
+SHA-256 `d3eb1f9aca63c26c71d7f456f8683e05994d8877e7b49133ef2208f71dfa3775`.
+The status-zero and batch-ordinal-zero conditions remain unchanged.
 
 Status 1 instead delegates vertex conversion to owner virtual `+50` and index
 transfer to owner `+58`. The ordinary finalize `03e2a0` calls owner `+68` with
