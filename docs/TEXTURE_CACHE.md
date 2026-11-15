@@ -3,7 +3,8 @@
 `src/texture_cache.rs` is an original bounded metadata reader and resolver for
 the observed 1.52-client `TextureFileCacheManifest.bin`. Its `payload.rs` child
 reads explicitly selected cache files and decodes the observed external LZO
-profile through the project's original UPK LZO decoder. It does not search for
+profile through the project's original UPK LZO decoder. The `binding.rs` child
+connects a saved Texture2D mip to that reader explicitly. It does not search for
 cache files automatically, write extracted assets or claim retail rendering.
 
 ## Actual layout and reference discrepancy
@@ -185,8 +186,8 @@ the original scanner and complete source ledger are `scan_wrappers.py` and
 The source inventory's historical whole-file record is 143,472,250 bytes with
 SHA-256 `23c9b90cd88f99888cbc71332251daeac1e494866c27eab80c6cf78e6f2c7777`.
 This range-copy operation did **not** recompute the whole-cache hash or establish
-that a complete local cache copy exists. Only the three selected ranges are
-currently transfer-verified by this evidence.
+that a complete local cache copy exists. Only the three selected ranges were
+transfer-verified by that initial evidence.
 
 **VERIFIED (synthetic Rust checks):** Three added tests cover every truncation of
 a small compressed envelope, trailing bytes, invalid tag/blocksize/totals and
@@ -209,8 +210,109 @@ The harness and transcript are `evidence/texture-cache-ranges/rust-smoke.rs` and
 its SHA-256 is
 `39a052aaff26a53bbadea8c7964e0ea9fe1567f118742a11dbbf1f70557c07c7`.
 The actual smoke uses the lower-level decoder on independently pinned ranges;
-full-cache `TextureCacheFile` reads have only synthetic range/name coverage in
-this increment.
+full-cache `TextureCacheFile` reads had only synthetic range/name coverage in
+that initial increment. The later complete-file check below closes that gap.
+
+## Complete cache files and explicit Texture2D binding
+
+**VERIFIED (later local full-file hashing):** these existing files under
+`pins/alienware-candidate/UnrealEngine3/MarvelGame/CookedPCConsole/` now match the
+complete saved source inventory. File device/inode, size, modification time and
+change time remained identical before opening, throughout hashing and after the
+actual payload smoke. No rsync destination was modified and no huge file was
+copied again.
+
+| Existing cache | Bytes hashed | Complete SHA-256 |
+| --- | ---: | --- |
+| Icons.tfc | 143,472,250 | `23c9b90cd88f99888cbc71332251daeac1e494866c27eab80c6cf78e6f2c7777` |
+| Lighting.tfc | 131,317,986 | `3a9a5a560cb02cb1a0497043d2b6559e70cc9647c2fc98b9b83bcf8aef8e93e8` |
+| CharTextures.tfc | 1,373,627,963 | `40742a138af46b6dcc6b2bf8e802c6b849247cfccda6213054f54b6854b204e5` |
+
+This establishes these three local file identities at the time of the checks,
+not completion of the full distribution transfer. Only Icons payloads were
+decoded in this increment. The complete receipt is
+`evidence/texture-cache-binding/full-cache-hash-receipt.json`, SHA-256
+`e10c4c0171104b0a671ddc6047b1d1b9e5a7c7e12e8a2834eeeb336a3fc0cd89`.
+
+The original new bridge is reexported from `texture_cache`:
+
+```rust,ignore
+let texture = Texture2D::from_export(package, export_index, &export_bytes)?;
+let qualified = qualified_texture_name(package, export_index)?;
+let bound = BoundExternalMip::resolve(&texture, mip_index, &manifest, &qualified)?;
+let rgba = bound.decode_rgba(&mut explicitly_selected_cache_file)?;
+```
+
+`qualified_texture_name` follows only the supplied package's saved outer
+references. It never substitutes the `.upk` basename. For these actual exports,
+the outer path starts with `marveluiicons_characterselect`, while the containing
+filename is `ICO__MarvelUIIcons_CharacterSelect_SF.upk`. Flattening uses periods;
+a period inside a single object-name component is rejected to avoid losing
+boundaries. Missing names, invalid signed references, outer cycles, more than
+64 object-path components, control characters and names over 4,096 bytes fail.
+
+`BoundExternalMip::resolve` requires:
+
+- The explicitly selected primary mip exists, is External, and has flags exactly
+  `0x11`. There is no inline, absent, or separate-payload fallback.
+- Its dimensions and pixel format give exactly the saved element count, and its
+  dimensions fit the texture descriptor.
+- A nonempty saved cache name agrees with the manifest record selected by exact
+  raw GUID, qualified object name and the same explicit mip index. Name matching
+  uses the existing ASCII-insensitive policy; ambiguous named matches fail.
+- The external offset/size pair is the observed `(-1, -1)` placeholder pair, or
+  an explicit nonnegative offset/positive size pair exactly agreeing with the
+  manifest. Explicit positive pairs have synthetic validation only; all 110
+  actual CharacterSelect mips use `(-1, -1)`. Mixed/other negative placeholders
+  and conflicting explicit ranges fail.
+
+`read_encoded` returns the selected decompressed mip bytes; `decode_rgba`
+additionally calls the existing pixel decoder. Both have `_with_limits` forms
+accepting `PayloadLimits`. The supplied `TextureCacheFile` still checks its own
+basename and actual file bounds. `resolved()`, `mip_index()` and `mip()` expose
+binding metadata without enabling reassignment. No file search, first-candidate
+selection, lower-mip fallback, mip-tail remapping, gamma conversion or alpha
+premultiplication is added. Pin authenticity remains the caller's responsibility.
+
+**OBSERVED (fresh independent descriptor/manifest scan):** all 110 CharacterSelect
+textures have one primary mip, index 0, and one exact GUID/name/mip binding. All
+have cache-name and qualified-path agreement after ASCII case folding. Formats
+are 83 BGRA8, 26 BC3/DXT5 and one BC1/DXT1. Fifty textures save MipTailBaseIdx=7;
+60 omit it, but all manifest indices are still 0. The bridge therefore does not
+add MipTailBaseIdx to the requested index. Other actual mip-chain layouts are not
+established by this sample. Sparse explicit indices have focused synthetic
+coverage, with absent indices returning NotFound.
+
+**VERIFIED (actual full-file loader):** the existing `TextureCacheFile::read_mip`
+and the new binding both read exports 3, 4 and 5 from the complete Icons file.
+All 731,056 decoded pixel-format bytes equal the earlier independently decoded
+liblzo2 oracle files byte for byte. The new RGBA path also reproduces all
+2,727,616 bytes of the earlier private RGBA outputs. This RGBA comparison is a
+regression check against the project's earlier decoder result, not a separate
+retail image oracle. All 110 actual descriptors also resolve through the new
+bridge; only the selected three payloads were decoded in this focused smoke.
+
+Three new focused tests pass: exact qualified-name/GUID/cache/index matching,
+ambiguous named records, sparse-index misses without fallback, invalid cache
+names/absence, bulk kind/flags/counts/dimensions, partial placeholders and explicit
+range conflicts. The actual harness also checks cyclic and extreme invalid outer
+references. Thirty-seven unrelated tests were filtered out; no full suite or
+rendered client check was run.
+
+Private evidence is under `evidence/texture-cache-binding/`: `full-file-check.rs`
+and `full-file-check.tsv`, `tests.txt`, `post-smoke-sources.json`,
+`independent/binding-receipt.json`, `source-ledger.json`, and `validation.json`.
+The original CharacterSelect package is 10,351 bytes with full SHA-256
+`367a51bd755b95b192c7b2f3a6fd70a0150433afb79d3e8835d9c225606619b9`; it and the
+manifest were rechecked against the source inventory. All asset bytes and
+receipts remain private. No root Texture2D or renderer hook was changed.
+
+No new third-party source was read for this bridge. The inputs were the owner's
+existing files, saved independent range/oracle receipts, and original project
+`src/texture.rs`, `src/upk.rs`, `src/texture_cache.rs`, `payload.rs`, and prior
+private harnesses. Existing BC/LZO decoders are reused without new dependencies.
+Exact paths/hashes are recorded in the private source ledger. The earlier outside
+source register below continues to apply to the underlying format readers.
 
 ## Source and licence register
 
@@ -229,6 +331,5 @@ newly written here; no reference implementation was copied.
 
 The implementation reuses the project's original `src/upk/lzo.rs` via
 `upk::decompress_lzo`; its existing source/provenance record still applies. Pixel
-conversion is delegated to `texture::decode_pixels`. Full-cache validation,
-unobserved compression profiles and retail renderer/runtime behavior remain
-outside this increment's verified scope.
+conversion is delegated to `texture::decode_pixels`. Unobserved compression
+profiles and retail renderer/runtime behavior remain outside the verified scope.

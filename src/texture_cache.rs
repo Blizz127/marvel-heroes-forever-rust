@@ -5,6 +5,10 @@
 //! Named cache reads validate stored byte ranges before decoding the observed
 //! external LZO mip format. Other payload flag combinations are unsupported.
 
+#[path = "texture_cache/binding.rs"]
+mod binding;
+pub use binding::{BoundExternalMip, qualified_texture_name};
+
 #[path = "texture_cache/payload.rs"]
 mod payload;
 pub use payload::{PayloadLimits, TextureCacheFile, decode_lzo_mip, decode_lzo_mip_with_limits};
