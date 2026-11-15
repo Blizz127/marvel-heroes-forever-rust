@@ -1462,7 +1462,7 @@ mod tests {
             source_tag: None,
             bytes: Span {
                 offset: 0,
-                length: 0,
+                len: 0,
             },
             kind: ActionKind::Clip {
                 event_flags: 8,
@@ -1479,7 +1479,7 @@ mod tests {
             code: 999,
             body: Span {
                 offset: 0,
-                length: 0,
+                len: 0,
             },
         });
         scene.unbound_action_tags.push(tag);
