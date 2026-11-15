@@ -6,6 +6,9 @@
 use std::collections::BTreeMap;
 use std::io;
 
+#[path = "gfx/text.rs"]
+pub mod text;
+
 #[path = "gfx/shapes.rs"]
 pub mod shapes;
 

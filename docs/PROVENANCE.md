@@ -123,3 +123,8 @@ The texture-cache ledger also records MIT UEViewer `UnCoreSerialize.cpp` ranges
 (GPL-2.0-or-later) was used solely as a private independent oracle for three
 owner-supplied cache ranges; it is neither copied, linked nor shipped. Full-cache
 identity and rendering are separate from the recorded range/decode checks.
+
+[Font and text reader](GFX_TEXT.md) registers Adobe SWF v19 chapters used for
+original font/glyph/static/editable-text parsing, plus the exact private Startup
+font movie and frontend samples. Glyph source spans are retained; font routing
+and native typography are not inferred from successful parsing.

@@ -5,14 +5,16 @@ claim is made. Milestone 1 is in progress; milestones 2–5 remain incomplete.
 
 ## Current original build
 
-`0.1.0-dev.2`: SIP/LZ4 reads, Calligraphy metadata and complete structural
-prototype decoding with lazy catalogue lookup, UE3 868/3 tables, LZO, checked
-serialized export reads and supported asset property tags. No renderer or server
-connection. Release build and focused catalogue/property CLI checks passed.
+`0.1.0-dev.3` candidate: the prior SIP/Calligraphy/UE3 readers plus inline texture
+decoding, external cache metadata/LZO payload reads, GFX structures/shapes/text,
+AVM1 structural decoding, saved-movie image binding and optional Vulkan image
+inspection. The integrated image-binding and native-size offscreen checks pass.
+Scripts and the full frontend are not running; no server connection is made.
 
 Private staging directory:
 `~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.2/`.
-Build 1 remains available. Publishing through the owner launcher is a
+This is the previous staged build while the dev.3 dependency notice collection
+and final packaging finish. Publishing through the owner launcher is a
 coordinator/publisher handoff; no Rust-client private channel is configured here.
 
 ## Active independent work
@@ -21,22 +23,21 @@ coordinator/publisher handoff; no Rust-client private channel is configured here
   `pins/alienware-candidate`. Source manifest is complete; all-file local hash
   verification must follow. Do not rename or modify this destination while its
   transfer is writing.
-- Texture helper: original inline Texture2D/mipmap/BC decode.
-- GFX helper: actual movie headers/dictionaries/timeline/place records, with
-  scripting and nested instantiation explicitly outside its first static pass.
-- Renderer helper: wgpu image-quad upload/render/readback with private original
-  texture validation. No mock UI or frontend parity claim.
-- Texture-cache helper: actual manifest GUID/mip/name lookup; preserve ambiguous
-  GUID mappings rather than silently choosing one.
-- UPK helper: frontend startup/composition research. The startup map opens
-  `frontend_manager`, not the login dialog directly. A small independent
-  `pins/frontend-startup` copy requests shared Startup/GFxUI/MarvelGame/vista
-  packages to resolve that dependency without waiting for the full transfer.
+- Shape tessellation: actual decoded fill geometry, curves and winding handling.
+- AVM1 execution core: bounded state and explicit native host boundary.
+- Native window preview: compiled; a fresh isolated Xvfb test exposed missing
+  X11 runtime library support before creating a window. Private runtime discovery
+  continues; no successful presentation is yet claimed.
+- Font routing: saved frontend imports/aliases need an actual dependency match.
+- Prototype effective values: default/parent inheritance remains to be resolved.
+- REA native alternative: bounded supported Rizin/objdump tools are being checked
+  after the separate Ghidra prerequisite failure.
 
 ## Next concrete work
 
-Integrate the actual texture and GFX paths, bind bitmap identifiers to original
-assets, implement the frontend scene/runtime and render it. Continue ordered
+The actual texture/GFX paths and bitmap binding are integrated. Implement the
+frontend scene/runtime and render it, retaining masks/text/script behavior.
+Continue ordered
 login/character/world/combat milestones after asset/frontend behavior is ready.
 Calligraphy parent-value merging, runtime classes and property assignment are
 still missing despite complete structural prototype decoding.

@@ -230,3 +230,9 @@ seven LZO blocks; all 731,056 decoded bytes match an independent liblzo2 oracle.
 Existing pixel conversion handles the selected BC3/BGRA samples. Range identities
 are verified separately; no whole-cache hash or native cache rendering claim is
 made. See `docs/TEXTURE_CACHE.md` and `evidence/texture-cache-ranges/`.
+
+**VERIFIED:** The original font/text reader structurally consumes 12 Font3
+definitions with 3,494 glyphs/107,711 outline edges, 13 static text definitions
+and 479 editable text fields across 22 private movies. Ten focused checks passed.
+Font aliasing, typography/layout, HTML and rendering remain unimplemented; no
+visual equivalence is claimed. See `docs/GFX_TEXT.md` and `evidence/gfx-fonts/`.
