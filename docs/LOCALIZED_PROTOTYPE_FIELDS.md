@@ -152,6 +152,35 @@ construction, ExternalInterface installation, the saved label-setting lifecycle
 and rendered retail parity remain separate work. Invalid-label native diagnostics
 and their uninitialized temporary-tooltip-bit caveat remain unchanged.
 
+## Original resource preparation API
+
+`frontend::localized_prototype::resolve` applies the bounded scalar contract to
+an existing `PrototypeSource`, explicit prototype ID and `ValueLimits`.
+`read_member` selects an exact member through `PrototypeReader`; it does not
+choose the native label-directory configuration or normalize a path.
+
+The admitted profile requires the same blueprint throughout the explicit data
+parent chain, the `UILocalizedInfoPrototype` binding, no schema parents or
+contributors, and the four recovered simple declarations. Both text declarations
+must be distinct String IDs with no subtype. TooltipStyle and TooltipFont retain
+their Prototype/Asset declaration types and subtype presence; their values are
+not used to synthesize either text reference. No unrelated schema is treated as
+the same native class merely because its name resembles this one.
+
+The existing bounded `PrototypeValues` loader checks parent identity, cycles,
+encoded/decoded budgets and structural field compatibility. The new preparation
+rejects mixed-copy groups, foreign declaring schemas, lists and ambiguous field
+assignments. Each text reference must have an explicit stored assignment in the
+chain. It never uses zero-filled allocation to invent a missing terminal value.
+The selected origin and complete bounded layer/assignment metadata are retained.
+
+`PreparedPrototype::localized_data` passes those references to the independent
+[plain result resolver](FRONTEND_LOCALIZED_DATA.md). Neither operation constructs
+a VM object, installs ExternalInterface, executes a script setter or changes a
+rendered field. The same-blueprint restriction is an intentionally bounded
+implementation profile; the native same-runtime-class check may permit other
+schema relationships that have not been established here.
+
 ## Evidence and provenance
 
 All retained binaries, package members, disassembly, raw text and probes remain

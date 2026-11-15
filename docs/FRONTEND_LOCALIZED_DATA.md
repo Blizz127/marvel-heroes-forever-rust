@@ -34,11 +34,13 @@ empty strings, select an alternate form, apply a fallback locale or interpret
 formatting. A zero tooltip reference is still a string lookup: this code does
 not invent its native fallback behavior when that entry is absent.
 
-**INFERRED boundary, deliberately unresolved:** Directly serialized optional
+**Boundary:** Directly serialized optional
 `UiKeyBinding` fields do not establish effective native prototype values.
 Deserialization may apply inherited or class defaults. There is no implicit
 conversion from those optional fields to this module's `References`; callers
-must resolve that separate contract first. The runtime callback, native receiver,
+must resolve that separate contract first. The separately evidenced
+[localized prototype preparation](LOCALIZED_PROTOTYPE_FIELDS.md) now supplies
+references for its bounded same-blueprint scalar profile. The runtime callback, native receiver,
 label-path lookup, object allocation and failure-return semantics remain outside
 this module. A successful pure lookup does not establish frontend execution or
 wire/behavior parity.

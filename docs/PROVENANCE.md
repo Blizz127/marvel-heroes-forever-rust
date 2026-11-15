@@ -227,8 +227,11 @@ original bounded skeletal reader. Animation and skinning are separate work.
 [Localization runtime trace](FRONTEND_LOCALIZATION_RUNTIME.md) records exact
 owned script/native callback, export linkage, reflected aggregate and prototype-ID
 formatting evidence. [Explicit-reference localization](FRONTEND_LOCALIZED_DATA.md)
-applies its bounded successful plain-text profile; effective inherited references,
-fallbacks and live callback startup remain separate unresolved contracts.
+applies its bounded successful plain-text profile.
+[Localized prototype preparation](LOCALIZED_PROTOTYPE_FIELDS.md) records the
+native parent-copy, explicit-zero assignment and postprocess evidence used for
+its original bounded scalar resolver. Broader schema/default cases, fallbacks
+and live callback startup remain separate contracts.
 [Persistent pointer controller](FRONTEND_POINTER.md) composes the existing
 original VM and display bridge, with the same Adobe/private-script provenance.
 [Native scene host](NATIVE_WINDOW.md) registers the pinned winit/wgpu contracts
@@ -248,5 +251,9 @@ claiming a runtime executor. [Initializer submission](FRONTEND_INIT_LEDGER.md)
 applies the per-instance/frame native ledger with explicit bounded-failure policy;
 it is separate from actual loader triggers and bytecode execution.
 [Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
-records read-only local Wine/capture-tool inspection and an isolated Python-only
-namespace check; retail execution and reference capture have not run.
+records local Wine/capture-tool inspection, namespace isolation checks and
+initialization of a new private Wine prefix. Retail execution and reference
+capture remain separate unverified steps.
+[Native enumeration](REA_ENUMERATION.md) records the owned-binary string hash,
+collision, growth, hidden-literal metadata and visitor evidence. Derived orders
+remain distinguished from retail process observations.
