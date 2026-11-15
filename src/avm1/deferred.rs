@@ -30,6 +30,8 @@ pub enum BuiltinFactory {
     },
     /// Bounded canonical native String graph and primitive-call boxing profile.
     String,
+    /// Canonical native flash.geom.Point zero-argument construction profile.
+    Point,
     /// Preserve the actual token; reject only when materialization is required.
     Unsupported,
 }
@@ -51,9 +53,11 @@ impl Vm {
         match self.objects[target.0].kind {
             Kind::Plain => {}
             Kind::AttachedOwner(clip) if self.attached_owner(clip)? == target => {}
-            _ => return self.fail(ErrorKind::Unsupported(
-                "builtin context target requires plain target or attached owner",
-            )),
+            _ => {
+                return self.fail(ErrorKind::Unsupported(
+                    "builtin context target requires plain target or attached owner",
+                ));
+            }
         }
         Ok(self.builtin_targets.contains_key(&target))
     }
@@ -132,6 +136,11 @@ impl Vm {
                 "String factory requires exact flags-one global token",
             ));
         }
+        if matches!(factory, BuiltinFactory::Point) && (name != "Point" || flags != 0) {
+            return self.fail(ErrorKind::Unsupported(
+                "Point factory requires exact flags-zero token",
+            ));
+        }
         self.deferred_namespace_profile(namespace)?;
         if self.descriptor(namespace, &key)?.is_some() {
             return self.fail(ErrorKind::Unsupported(
@@ -181,10 +190,14 @@ impl Vm {
         let required_flags = match entry.factory {
             BuiltinFactory::ExternalInterface { .. } => 0,
             BuiltinFactory::String => 1,
+            BuiltinFactory::Point => 0,
             BuiltinFactory::Unsupported => {
                 return self.fail(ErrorKind::UnsupportedDeferredBuiltin(name.0.clone()));
             }
         };
+        if matches!(entry.factory, BuiltinFactory::Point) {
+            self.point_namespace_profile(entry.namespace)?;
+        }
         self.deferred_namespace_profile(entry.namespace)?;
         if !matches!(
             self.objects[entry.namespace.0].properties.get(&name.0),
@@ -200,22 +213,35 @@ impl Vm {
         let property_count = self.properties;
         let string_units = self.string_units;
         let previous_string_graph = self.string_objects;
+        let previous_point_graph = self.point_objects;
         let constructor = match entry.factory {
             BuiltinFactory::ExternalInterface { call_binding } => {
                 self.build_external_interface(call_binding)?.constructor
             }
             BuiltinFactory::String => self.build_string_graph()?.constructor,
+            BuiltinFactory::Point => self.build_point_graph()?.constructor,
             BuiltinFactory::Unsupported => unreachable!(),
         };
-        if let Err(error) =
+        let publication = if matches!(entry.factory, BuiltinFactory::Point) {
+            // Native factory directly uses the cached namespace raw setter. The
+            // admitted existing data descriptor keeps its original flags.
+            self.raw_member(
+                entry.namespace,
+                name.0.clone(),
+                Property::Data(Value::Object(constructor)),
+                required_flags,
+            )
+        } else {
             self.set_key(entry.namespace, name.0.clone(), Value::Object(constructor))
-        {
+        };
+        if let Err(error) = publication {
             // Under the admitted own-data profile setter errors precede its
             // write. No host/reentrant factory runs between the guard and write.
             self.objects.truncate(object_count);
             self.properties = property_count;
             self.string_units = string_units;
             self.string_objects = previous_string_graph;
+            self.point_objects = previous_point_graph;
             return Err(error);
         }
         // No registry mutation or callback occurs during this supported factory.
@@ -224,7 +250,7 @@ impl Vm {
         Ok(constructor)
     }
 
-    fn deferred_namespace_profile(&self, namespace: ObjectId) -> Result<()> {
+    pub(super) fn deferred_namespace_profile(&self, namespace: ObjectId) -> Result<()> {
         self.check_object(namespace)?;
         if self.object_prototype == Some(namespace) {
             return self.fail(ErrorKind::Unsupported(

@@ -1985,3 +1985,36 @@ partial state. The ten existing saved-opcode checks also pass. During validation
 one older negative fixture failed because its synthetic standard-name map omitted
 `_x`; the mock now explicitly places that name at ID0. No native inventory or
 production classifier was changed by that fixture correction.
+
+### Deferred Point and explicit partial geometry namespaces
+
+`install_flash_geom_point` installs a fresh, checked native-style `flash.geom`
+path and flags-zero deferred Point token. It requires the cached Object prototype,
+a controlled data-only global/parent profile and no existing flash binding; it
+never repairs Undefined, a primitive or an existing namespace. The two namespace
+objects have linked `__proto__` metadata, global.flash flags1 and flash.geom flags0.
+Unmodeled namespace reads, raw reflection and mutation reject explicitly, so the
+partial namespace cannot claim that real Rectangle or other native bindings are
+absent. Ordinary script scope lookup still selects `flash`; no bytecode lookup is
+replaced with a remembered global path.
+
+The Point factory uses the active bound context and cached namespace, with exact
+current/cached path and token/flag checks before first publication. Cached tokens
+retain native name semantics. The partial typed C/P graph distinguishes prototype
+from instance, validates its public constructor/prototype links, and provides only
+proved metadata and fresh x/y reads. Zero-argument NewMethod allocates a distinct
+instance with own `__proto__`, x, y, then `__constructor__` metadata in native order;
+x/y are positive zero. The native Integer tag is represented by the existing
+AVM1 Number value, not preserved as an internal native tag. No current GLOBAL.Object
+comparison is performed for this argc0 path, in agreement with the native branch.
+Direct calls, positive argc, computed instance length, all Point writes, omitted
+methods, raw enumeration and constructor mutation remain unsupported. This is not
+the complete native object graph or an allocation-count equivalence claim.
+
+Static authority is `REA_POINT_CONSTRUCTION.md`, with private verification
+`rea-point-construction/verification.json` SHA-256
+`091b90e5310925301d80847204cb74a5cd87b23ce74233bdaec2ca839d533100`.
+Nine focused Rust checks pass for graph identities/metadata, source-independent
+current context, fresh NewMethod results, deferred publication, unchanged retained
+tokens, resource rejection and explicit unknown/mutation gates. Native/script
+retail execution has not been claimed from these synthetic checks.

@@ -25,6 +25,10 @@ mod execution_store;
 mod external_interface;
 #[path = "focus_rect.rs"]
 mod focus_rect;
+#[path = "geom_namespace.rs"]
+mod geom_namespace;
+#[path = "point.rs"]
+mod point;
 #[cfg(test)]
 #[path = "saved_checks.rs"]
 mod saved_checks;
@@ -32,11 +36,11 @@ mod saved_checks;
 mod saved_runtime;
 #[path = "saved_state.rs"]
 pub mod saved_state;
-#[path = "shared_calls.rs"]
-mod shared_calls;
 #[cfg(test)]
 #[path = "shared_call_checks.rs"]
 mod shared_call_checks;
+#[path = "shared_calls.rs"]
+mod shared_calls;
 #[path = "string.rs"]
 mod string;
 use applied_super::AttachedSuperCall;
@@ -62,6 +66,8 @@ pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 use execution_store::{ExecutionStore, RegisterBank, StoreError};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
+pub use geom_namespace::GeomNamespace;
+pub use point::PointObjects;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
 pub use saved_state::{SavedActionId, SavedActionSource, SavedEnvironmentState, SavedMode};
 pub use shared_calls::SavedScriptCallProfile;
@@ -412,6 +418,8 @@ enum Kind {
     MovieClipConstructor,
     ExternalInterfaceConstructor,
     ExternalInterfacePrototype,
+    PointConstructor,
+    PointObject(point::PointRole),
     StringConstructor,
     StringObject(string::StringState),
     StringMethod(string::StringMethod),
@@ -446,6 +454,7 @@ impl Kind {
                 | Self::FunctionConversion
                 | Self::MovieClipConstructor
                 | Self::ExternalInterfaceConstructor
+                | Self::PointConstructor
                 | Self::StringConstructor
                 | Self::StringMethod(_)
                 | Self::AddProperty
@@ -529,6 +538,8 @@ pub struct Vm {
     builtin_registry: BTreeMap<Text, deferred::BuiltinEntry>,
     builtin_targets: BTreeMap<ObjectId, ()>,
     string_objects: Option<StringObjects>,
+    point_objects: Option<PointObjects>,
+    geom_namespace: Option<GeomNamespace>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
     objects: Vec<Object>,
@@ -575,6 +586,8 @@ impl Vm {
             builtin_registry: BTreeMap::new(),
             builtin_targets: BTreeMap::new(),
             string_objects: None,
+            point_objects: None,
+            geom_namespace: None,
             code: Vec::new(),
             code_bytes: 0,
             objects: Vec::new(),
@@ -980,6 +993,24 @@ impl Vm {
         }
         Ok(())
     }
+    fn is_point_native(&self, id: ObjectId) -> bool {
+        self.objects.get(id.0).is_some_and(|object| {
+            matches!(object.kind, Kind::PointConstructor | Kind::PointObject(_))
+        })
+    }
+    fn reject_point_mutation_chain(&self, mut id: ObjectId) -> Result<()> {
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            if self.is_point_native(id) {
+                return self.fail(ErrorKind::Unsupported("Point native mutation profile"));
+            }
+            match self.objects[id.0].prototype {
+                Some(parent) => id = parent,
+                None => return Ok(()),
+            }
+        }
+        self.fail(ErrorKind::Budget("Point mutation prototype depth"))
+    }
     fn is_string_native(&self, id: ObjectId) -> bool {
         self.objects.get(id.0).is_some_and(|object| {
             matches!(
@@ -1233,6 +1264,11 @@ impl Vm {
     /// Own stored members only; no prototype lookup and no getter execution.
     pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
         self.check_object(id)?;
+        if self.is_point_native(id) || self.is_geom_namespace(id) {
+            return self.fail(ErrorKind::Unsupported(
+                "partial native own-member inspection",
+            ));
+        }
         if self.is_string_native(id) {
             return self.fail(ErrorKind::Unsupported(
                 "partial String native own-member inspection",
@@ -1255,6 +1291,11 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
+        if self.is_point_native(id) || self.is_geom_namespace(id) {
+            return self.fail(ErrorKind::Unsupported(
+                "partial native own-member inspection",
+            ));
+        }
         if self.is_string_native(id) {
             return self.fail(ErrorKind::Unsupported(
                 "partial String native own-member inspection",
@@ -1341,6 +1382,8 @@ impl Vm {
         } else {
             self.object_id(args[0].clone())?
         };
+        self.reject_point_mutation_chain(target)?;
+        self.reject_geom_mutation_chain(target)?;
         let prototype = matches!(
             self.objects[target.0].kind,
             Kind::MovieClip(MovieClipRole::UnboundPrototype)
@@ -1420,9 +1463,9 @@ impl Vm {
         let mut names = Vec::new();
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
-            if !matches!(self.objects[id.0].kind, Kind::Plain) {
+            if self.is_geom_namespace(id) || !matches!(self.objects[id.0].kind, Kind::Plain) {
                 return self.fail(ErrorKind::Unsupported(
-                    "enumeration on non-generic object class",
+                    "enumeration on non-generic or partial native class",
                 ));
             }
             self.visit_members(self.objects[id.0].properties.len())?;
@@ -1476,6 +1519,8 @@ impl Vm {
         self.check_object(id)?;
         self.check_member_target(id, key)?;
         self.reject_string_mutation_chain(id)?;
+        self.reject_point_mutation_chain(id)?;
+        self.reject_geom_mutation_chain(id)?;
         if !matches!(self.objects[id.0].kind, Kind::Plain) {
             return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
         }
@@ -1590,6 +1635,12 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if let Some(value) = self.point_read(id, key)? {
+                return Ok(value);
+            }
+            if let Some(value) = self.geom_namespace_member(id, key)? {
+                return Ok(value);
+            }
             if self.is_string_native(id) {
                 return self.string_member(id, key);
             }
@@ -1642,6 +1693,10 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if self.point_read(id, key)?.is_some() || self.geom_namespace_member(id, key)?.is_some()
+            {
+                return Ok(true);
+            }
             if self.is_string_native(id) {
                 self.string_member(id, key)?;
                 return Ok(true);
@@ -1672,6 +1727,12 @@ impl Vm {
     fn descriptor(&self, mut id: ObjectId, key: &Text) -> Result<Option<Property>> {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if let Some(value) = self.point_read(id, key)? {
+                return Ok(Some(Property::Data(value)));
+            }
+            if let Some(value) = self.geom_namespace_member(id, key)? {
+                return Ok(Some(Property::Data(value)));
+            }
             if self.is_string_native(id) {
                 return Ok(Some(Property::Data(self.string_member(id, key)?)));
             }
@@ -1759,6 +1820,8 @@ impl Vm {
     ) -> Result<()> {
         self.check_object(id)?;
         self.reject_string_mutation_chain(id)?;
+        self.reject_point_mutation_chain(id)?;
+        self.reject_geom_mutation_chain(id)?;
         if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
             return self.attached_text_field_write(field, key, value, host);
         }
@@ -1846,7 +1909,12 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        if self.is_point_native(id) && self.point_write(id, &key, value.clone())? {
+            return Ok(());
+        }
         self.reject_string_mutation_chain(id)?;
+        self.reject_point_mutation_chain(id)?;
+        self.reject_geom_mutation_chain(id)?;
         if matches!(
             self.objects[id.0].kind,
             Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
@@ -2643,6 +2711,9 @@ impl Vm {
                 ));
             }
             Kind::Script(function) => function,
+            Kind::PointConstructor => {
+                return self.fail(ErrorKind::Unsupported("direct Point invocation profile"));
+            }
             Kind::StringConstructor => {
                 return self.fail(ErrorKind::Unsupported("direct String invocation profile"));
             }
@@ -2792,6 +2863,8 @@ impl Vm {
                     return Ok(Value::Bool(false));
                 };
                 self.reject_string_mutation_chain(*receiver)?;
+                self.reject_point_mutation_chain(*receiver)?;
+                self.reject_geom_mutation_chain(*receiver)?;
                 if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
                     return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
                 }
@@ -3700,6 +3773,17 @@ impl Vm {
                         let args = self.args(frame)?;
                         let callable = self.materialize_value(callable)?;
                         let constructor = self.object_id(callable.clone())?;
+                        if matches!(self.objects[constructor.0].kind, Kind::PointConstructor) {
+                            if instruction.opcode != 0x53 || !args.is_empty() {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "Point construction requires zero-argument NewMethod",
+                                ));
+                            }
+                            let object = self.construct_point_zero(constructor)?;
+                            self.push(frame, Value::Object(object))?;
+                            pc += 1;
+                            continue;
+                        }
                         if matches!(self.objects[constructor.0].kind, Kind::StringConstructor) {
                             return self.fail(ErrorKind::Unsupported(
                                 "explicit String construction profile",
@@ -4055,6 +4139,7 @@ impl Vm {
                                         | Kind::AttachedSuper { .. }
                                         | Kind::MovieClip(_)
                                         | Kind::StringObject(_)
+                                        | Kind::PointObject(_)
                                 ) {
                                     return self.fail(ErrorKind::Unsupported(
                                         "special prototype/super typeof semantics",
@@ -4070,6 +4155,7 @@ impl Vm {
                                         | Kind::FunctionConversion
                                         | Kind::MovieClipConstructor
                                         | Kind::ExternalInterfaceConstructor
+                                        | Kind::PointConstructor
                                         | Kind::StringConstructor
                                         | Kind::StringMethod(_)
                                         | Kind::AddProperty
