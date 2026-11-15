@@ -454,3 +454,229 @@ the matrix oracle is
 All source licensing remains as recorded above: owned proprietary files for
 compatibility evidence, original project arithmetic/checking code, no copied or
 linked outside parser/renderer implementation.
+
+## Native output coordinates and packing
+
+**VERIFIED static instructions; conditional finite geometry profile.** The
+ordinary filled-shape route has a concrete output-coordinate stage after the
+Scale9 point helper. The presence of its mathematical contract does not prove
+that an executing modal selected this provider, layer, cache or output receiver.
+No renderer code or runtime capture is changed by this evidence increment.
+
+The selected chain is `0x1400c5d50 → 0x1400c4dd0 → 0x1400bff70`.
+The first caller's layer entries select the ordinary branch when the relevant
+`+0x10` and `+0x0c` selectors are zero; alternate branches remain distinct.
+On the non-null Scale9-context branch, `0x1400c4dd0` copies the context matrix
+`+0x70..+0x8c` to a local matrix. It passes that matrix and the primary tessellator
+to `0x1400bff70` at `0x1400c54aa`.
+
+The tessellator is tied to actual construction, not a nearby guessed table:
+
+| Constructor / caller | Observed relationship |
+| --- | --- |
+| `0x140071960` | Calls `0x140070bf0` with enclosing object `+0x58` |
+| `0x140070bf0` | Calls `0x1400ff0a0` with workspace `+0xa0` |
+| `0x1400ff0a0` | Installs table `0x1425096d0` at the constructed object |
+| `0x1400c4dd0` | Supplies `[context+0x50]+0x58+0xa0` to the output stage |
+| Table `+0x38` | `0x1401010d0`, vertex transform and extrema update |
+| Table `+0x40` | `0x140103270`, normalization and inverse-matrix result |
+| Table `+0x70` | `0x140100090`, unchanged selected-vertex export |
+
+### Inverse outer transform and normalization
+
+At `0x1400c01f4`, the output stage computes the inverse of its supplied matrix
+using the already recovered copy-inverse helper, with an identity-initialized
+destination. The call at `0x1400c0203` passes this inverse to tessellator `+0x38`.
+The concrete method transforms every stored output vertex's X/Y and recomputes
+extrema at tessellator `+0x214..+0x220`. Vertices have 20-byte records, in pages
+of sixteen, with count `+0x320` and page table `+0x338`.
+
+Its scalar order is `x'=(x*a+y*c)+tx`, `y'=(y*d+x*b)+ty`, each operation f32.
+Extrema begin at exact bit patterns `0x7149f2ca` and `0xf149f2ca`; ordered strict
+comparisons update them. This stage must not be algebraically cancelled against
+an earlier outer transform: the already rounded vertex values are its inputs.
+
+At `0x1400c0233`, tessellator `+0x40` receives destination bounds
+`[-32764,-32764,32764,32764]`, exact file-backed f32 constants. It initializes
+the output matrix to identity. For finite inputs, invalid/degenerate cached
+extrema trigger a fresh scan; normalization proceeds only when both final
+extents are strictly positive. Zero width or height leaves vertices unchanged
+and returns identity. Thus the call's destination bounds do not themselves
+establish a universal coordinate bound.
+
+On the positive-extent branch, it forms source corners TL/TR/BR from the actual
+stored extrema and corresponding destination corners from the supplied bounds,
+then calls the recovered three-point affine builder. It applies this matrix to
+all vertices with `x'=(x*a+y*c)+tx`, `y'=(x*b+y*d)+ty`, preserving the separate
+operations. Finally it copies and inverts that forward matrix into the result.
+The method does not update its extrema to the normalized destination rectangle.
+
+The selected export method `+0x70` copies all five words of matching 20-byte
+vertex records unchanged into the caller's buffer, up to its limit of 256.
+It selects records using the descriptor and stored per-vertex ID and advances
+the descriptor cursor. There is no further coordinate transform between this
+export and the following packing loop.
+
+### Packing is not generic rounding
+
+At `0x1400c0590..0x1400c05d9`, each exported coordinate `v` follows:
+
+```text
+adjusted = v < 0 ? f32(v - 0.5) : f32(v + 0.5)
+floored = imported MSVCR120.dll!floorf(adjusted)
+integer = CVTTSS2SI(floored)
+stored_word = integer's low sixteen bits
+```
+
+The constant is `0x3f000000`. Thunk `0x141c6f890` binds through IAT
+`0x141dbbfd8` to the PE import `MSVCR120.dll!floorf`; this is a static binding,
+not an observation of the loaded DLL. The output vertex stride is twelve bytes;
+X and Y occupy its first two 16-bit words. There is no saturating conversion on
+this path. Finite valid-i32 conditional examples include `-1 → -2`, `+1 → +1`,
+and both signed zeros taking the addition branch and producing zero. Pre-floor
+f32 rounding matters at adjacent negative half-unit inputs.
+
+Even strictly positive finite extents do not guarantee safe signed16 magnitudes.
+An independent synthetic witness with bounds `[100000000,0,100000008,8]`
+produces normalized X endpoints `0` and `65536` under the retained operation
+order; low16 packing then stores zero for both. A future implementation must
+either retain the exact wider conversion/truncation contract or explicitly
+admit a smaller numeric profile. It must not infer saturation from the intended
+normalization bounds. Nonfinite values, exceptional conversion behavior, actual
+MXCSR and loaded-CRT semantics remain outside these finite witnesses.
+
+The inverse normalization matrix is handed unchanged to output-receiver
+virtual `+0x08` at `0x1400c0441`. That receiver is the incoming R8 of
+`0x1400c5d50`, forwarded through the selected callers. Its concrete construction,
+matrix persistence and later reconstruction are not established by these
+records. Packed coordinates are therefore not labeled final pixels or world
+coordinates merely because their inverse matrix is now known.
+
+### Exact outer-matrix storage and remaining source binding
+
+Both ordinary context constructor `0x14003bf20` and alternate constructor
+`0x14003d450` call base `0x14003bda0`. The base copies all eight words of its
+incoming matrix to context `+0x70..+0x8c`; the wrappers do not replace them.
+On the previously recovered new-context path, this is the same supplied matrix
+that the hierarchy source producer copies into source record `I+0x70`.
+
+Two byte-pattern candidates for direct calls to `0x1400b0f10` were checked as
+actual complete function instructions. In `0x1400b1220`, the ordinary branch
+copies incoming render-state `+0xa0..+0xbc`; a separately gated path calls
+`0x1400b0a40`. In `0x1400b1570`, the non-bit4 branch obtains its eight words
+from a typed matrix handle reached through node `+0xb0`, using table
+`0x142adb5c4`; its bit4 branch also calls `0x1400b0a40`. Neither this direct-call
+search nor the copied words prove which native matrix handle an executing modal
+held. Saved Scene world matrices remain an explicit binding obligation.
+
+### Image-resource matrix boundary
+
+The previously retained fill route at `0x1400c3290..0x1400c32be` obtains an
+argument from `[[context+0x50]+0x50]` virtual `+0x1c8`, passes it to the selected
+image's virtual `+0xb0`, and left-composes the returned image matrix with its
+current fill matrix. Actual image selection is separate from the point and
+quantization math above.
+
+One concrete engine asset route, `0x141268d60`, obtains a Q object through
+renderer virtual `+0xd0`, constructs a 0x38-byte wrapper with table
+`0x1421c11c0`, stores Q at `+0x10`, leaves optional matrix `+0x20` null, and
+records width/height at `+0x2c/+0x30`. General constructor `0x14125e840` installs
+the same final table with supplied Q and dimensions. These are static successful
+construction profiles, not proof that the saved modal used this wrapper.
+
+For this table, `+0xa8 → 0x140031b60` returns Q, `+0x28 → 0x1400cb740` returns
+the stored dimensions, and `+0x30 → 0x14126e4c0` produces an unsigned rectangle
+`[0,0,width,height]`. Its `+0xb0 → 0x1400372d0` calls Q virtual `+0x38` for a
+matrix; null Q produces identity. With a non-null optional image matrix it takes
+a separate composition path. It then converts the image rectangle's first two
+u32 coordinates through zero-extended 64-bit conversion and adjusts translation
+using explicit products and additions. Zero rectangle offsets are still actual
+operations, not permission to drop signed-zero behavior.
+
+A concrete matching manager subtype is installed by `0x14125e8e0`: table
+`0x1421c2f50`, whose `+0xd0 → 0x141268c00` allocates and initializes Q with
+final table `0x1421c2dc8`. Its constructors initialize `Q+0x40` to zero, then
+OR mask `0x04`, and set `Q+0x5c` to an inline size/resource record. The observed
+external-resource initialization branch preserves a distinction between the
+size at `Q+0x30/+0x34` and the first pair in that record. Asset-query results can
+populate them from different fields. Calling one pair "logical" and the other
+"physical" is an interpretation, not a recovered field name.
+
+The concrete Q `+0x38 → 0x14126ea10` chooses `Q+0x30/+0x34` when
+`Q+0x40 & 0x01` is set, otherwise the pair through `Q+0x5c`. It zero-extends
+each u32 to 64 bits, converts to f32, and performs separate `1.0 / width` and
+`1.0 / height` operations. The other six matrix words are positive zero.
+There is no explicit zero-size or finite check here. Base-table method
+`0x14126ea60` always uses `Q+0x30/+0x34`; it must not substitute for this
+conditional subtype method. On the bounded fresh external-construction path,
+the explicit flag sequence is zero then `0x04`, so the record pair is selected.
+This does not establish later lifecycle state or successful asynchronous work.
+
+The recorded source asset queries, in precedence order, select record-size pairs
+from returned-object offsets `+0x180/+0x184`, `+0x104/+0x108`, or
+`+0xfc/+0x100`. The first result can separately replace `Q+0x30/+0x34` from
+`+0x188/+0x18c`. These are offset facts; the actual asset pointers, query branch
+and dimensions for the modal remain unobserved.
+
+There is a concrete filename-binding gap. Saved UISource44/tag89 contains the
+bare filename `Tooltip_Main_BG_PNG.tga` at `7920+23` and export key
+`Tooltip_Main_BG_PNG` at `7900+19`; its declared size is 64×64. The examined
+engine ImageCreator table `0x1421c3288`, installed as state ID 11 by
+`0x141273a20`, has a path method at `0x141277c30`. That method requires an
+initial slash somewhere in its incoming string, skips consecutive slashes,
+rewrites selected separators in the remainder and passes a resolved asset to
+`0x141268d60`. Directly supplying the bare saved filename would take its null
+return path. A native path producer or different route is therefore required;
+the filename must not silently be treated as proved input to that factory.
+Actual tag1009 loading, manager/asset selection and lifecycle state remain open.
+Saved 64×64 alone does not prove a runtime `1/64` UV matrix.
+
+### Conditional saved-input witness and validation
+
+An independent scalar witness uses exactly the modal's four authored outer
+corners, the retained native-operation nine matrices, and explicitly supplied
+`C=identity, M=G`. This is not an assertion that the native tessellator emits
+only those four vertices or that its executing caller supplied those matrices.
+After the point stages and inverse-outer stage, extrema are
+`[0,-0.000003814697265625,1280,1280]`. The normalization sends the four corners
+to exact ±32764 under this supplied profile. Packing produces unsigned-word
+pairs `(0x8003,0x8003)`, `(0x7ffc,0x8003)`, `(0x8003,0x7ffc)`,
+`(0x7ffc,0x7ffc)` in TL/TR/BL/BR order. The negative endpoint becomes −32765
+through the actual signed-half/floor contract. Native AA/tessellation output,
+loaded CRT/MXCSR and resulting pixels were not run or compared.
+
+All **11 new REA command records** completed with exit 0, untruncated output and
+unchanged artifact digests. Independent PE-section comparisons verify **3,096
+instructions / 13,475 bytes**, plus **1,744 data bytes**. Numerical checks retain
+twelve scalar packing cases, three normalization/degeneracy witnesses and the
+separate saved-input witness above. They are original instruction-derived
+checks, not substitutes for native execution.
+
+New evidence root:
+`~/.local/share/marvel-heroes-forever-rust/evidence/scale9-output/`.
+
+| Retained source | Use and provenance |
+| --- | --- |
+| `rea-output-stage.json`, `rea-context-and-quantization-constants.json`, `rea-outer-matrix-callers.json` | Owned executable: output handoff, context matrix copies, caller roles and exact constants |
+| `rea-primary-tessellator.json`, `rea-workspace-and-sentinels.json`, `rea-export-vertices.json` | Owned executable: constructor/table identity, concrete transform/normalization/export methods |
+| `rea-image-matrix-candidate.json`, `rea-engine-image-construction.json`, `rea-image-getters-and-path-caller.json`, `rea-texture-matrix-route.json`, `rea-image-creator-installation.json` | Owned executable: compiled conditional image/Q routes and explicit selection boundaries |
+| `image-candidates/saved-tooltip-lexical.json` | Owned pinned movies: exact source spans and independently reverified complete hashes |
+| `verification/`, `tessellator-candidates/`, `image-candidates/` | Original project byte comparisons, numerical derivations and candidate discovery; no external implementation copied |
+| Prior `scale9-rendering/rea-pe-imports.json` | Reused canonical PE import binding for `MSVCR120.dll!floorf`; no loaded-DLL observation |
+
+The executable hash and proprietary compatibility-study licence remain those
+recorded above. No SDK or other renderer implementation source was read. Installed
+REA skill v62/tool schemas, original prior project evidence and original scripts
+were the only additional workflow sources. The complete bundle contains the
+retained prior 45 records plus these 11 records:
+`complete.bundle.json`, SHA256
+`bf148c28f171ac9f564ac622f15ff226702e98f08a55d3ca175e47a6123905b9`.
+The source/Evidence index is `verification.json`, SHA256
+`309646bb2d5455c8179d8d4969c10f6e3dbbe7889443b0df74a398d2a523d08b`;
+the independent capture receipt is
+`verification/capture-validation.json`, SHA256
+`da60df1bee9ec3a5641d3feba18fccb9d601e74e1b9a3b42a6946651db168b2e`.
+The saved-input witness is `verification/quantization-independent/saved-modal-witness.json`,
+SHA256 `7cc54db97fa2f8d0512ab6785a78bdd8237f112454b9f0e024c85f7aede46fab`.
+Evidence was exported and REA resource close completed. No native client,
+renderer, GPU or live service was started for this increment.
