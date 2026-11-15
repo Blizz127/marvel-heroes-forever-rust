@@ -54,3 +54,60 @@ implementation is copied or linked.
 handler/null-receiver distinctions, override preservation, unrelated roots and
 context-budget rejection. These synthetic checks do not establish native
 startup or execution of the original wrapper through this new route.
+
+## Isolated original-script validation
+
+The private integration harness is under
+`~/.local/share/marvel-heroes-forever-rust/evidence/frontend-external-host-validation/`.
+Its source was frozen before compilation from commit
+`49aa8b6a60b99f5f10f43066deadbfd4879cfbd1`, tree
+`b5fde825ffcd943bdb4b146c0a36fa8022f850f9`. The immutable archive SHA256 is
+`55e215d2f27b87dd4e789eeb9a3dd7c18b8eb1b28164154f27ccbea8084f29ca`.
+`source-manifest.before.json` covers 161 source files; dependency and input
+manifests separately retain the private harness's toolchain, dependency graph,
+and owned input identities. The optional renderer is outside this check.
+
+The validation deliberately supplies an attached root and raw state, the
+namespace bindings, player/receiver identities, handler state, configured label
+table, and locale catalog. These are controlled inputs to the saved code and
+the new host route. They do not establish native initial-player creation,
+automatic namespace materialization, saved startup scheduling, or a functioning
+login screen. Retail scripts, binaries, data and harness extracts remain private.
+
+**VERIFIED focused Rust integration:** the unchanged selected original function
+records ran through the attached root, `Vm::build_external_interface(CALL_BINDING)`,
+`FrontendHost`, `ExternalHost`, and the actual `ConfiguredLabels`/`LocaleCatalog`
+backend. Three selected caller results and six directly inspected wrapper
+objects passed. A supplemental unchanged-wrapper call used the same native
+`call` function through a controlled alias object: the recorded native `this`
+changed while the active context remained the captured attached root. Its fresh
+result also passed, for **10 backend calls and seven distinct inspected result
+objects** in this executable. The four returned fields, their flags, prototype
+and constructor metadata were checked. Comparison with retained earlier Rust
+output passed 12 rows / 78 shared columns; that comparison and the direct
+known-member baseline are not native runtime oracles.
+
+A separate controlled executable passed **19 case groups** covering eight
+`this` variants, receiver overrides, absent handlers, null and unregistered
+receivers, missing/unregistered targets, context/receiver/depth limits, and a
+nine-request backend budget whose tenth request rejects without changing its
+counters or last resolution. An existing Selection listener and an existing
+class registration/event survived the external successes and failures; Selection
+routing remained operational afterward. Most controls construct explicit host
+requests; the original-script and alias proofs above pass through VM execution.
+
+Both executables built offline with the lockfile, `nice -n 19` and two build
+jobs. All 161 source files, 11 runtime/reference inputs, active dependency
+metadata, final harness files and executed binaries passed before/after identity
+checks. The dependency graph contains only the private harness and frozen
+project library, with default features disabled.
+
+The private first control run correctly rejected an attached owner incorrectly
+wrapped as an ordinary Object value. The fixture was corrected to use an
+ordinary Selection listener and the typed attached value; product code and its
+guards were unchanged. A retained-output comparison initially rejected an extra
+context annotation; its parser was corrected to compare the shared columns.
+Both initial failures and final receipts remain retained. `receipt.json`
+SHA256 is `7336fe8f38080d5e932494bf4e404be9bd839f7acdbc78cc864a4c99325aebe3`;
+`MANIFEST.json` indexes 237 private artifacts. No native client, full saved
+initializer, server, login, renderer or retail parity check was run.
