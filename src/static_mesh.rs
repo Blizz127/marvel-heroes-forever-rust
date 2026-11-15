@@ -331,9 +331,6 @@ impl<'a> Input<'a> {
     fn u8(&mut self) -> io::Result<u8> {
         Ok(self.take(1)?[0])
     }
-    fn u16(&mut self) -> io::Result<u16> {
-        Ok(u16::from_le_bytes(self.array()?))
-    }
     fn u32(&mut self) -> io::Result<u32> {
         Ok(u32::from_le_bytes(self.array()?))
     }

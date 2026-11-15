@@ -246,3 +246,26 @@ binary SHA-256 is `c23bad1abdd002bafaa825cc0b5dc767a4c6e9003af006a2cadc0084df3ea
 source commit `1cf6a2e` was clean. The package contains no game assets/captures.
 This is private staging, not confirmation of launcher publication. Receipt:
 `evidence/build-0.1.0-dev.3-package-validation.json`.
+
+**OBSERVED (dev.4 frontend foundations):** Saved References/ExportAssets resolve
+69/71 symbols across 26 movies with an explicit English font-library route.
+The two Strat2Regular exports remain absent. Login and character-select snapshots
+contain 147/264 nodes with no unresolved definitions. Original triangle rendering
+produces login artwork; saved character/manager composites remain black/white.
+The private `evidence/frontend-preview/` records exact sampling policy, all omitted
+effects/text/script work and source placement/color observations. These snapshots
+are not a completed frontend or native visual comparison.
+
+**OBSERVED:** The root persistent initializer CLI preserves 452 manager
+DoInitAction records separately from its ordinary frame action. It executes 218
+instructions before the unbound ASSetPropFlags call at12374; zero initializers
+complete. Two focused scheduler tests pass, including refusal to retry partial
+state. See `docs/FRONTEND_BOOTSTRAP.md` and its private receipts. Subsequent REA
+property-flag work must preserve the unresolved target-derived default mask.
+
+**OBSERVED:** Independent increments decode original English locale/UI keys,
+19 Vista StaticMeshes (94,385 vertices,73,737 triangles), and 51 supported plain
+EditText definitions (553 glyph placements). These counts are asset/source
+coverage; dynamic visibility, materials, gameplay and typography parity remain
+unverified. Evidence and outside-source licenses are linked from
+`docs/PROVENANCE.md` and the respective format documents.

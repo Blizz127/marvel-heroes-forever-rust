@@ -25,6 +25,89 @@ fn text(value: &OsString) -> Result<&str> {
 
 pub fn run(args: &[OsString]) -> Result<()> {
     match args {
+        [command, operation, package, selector, output, extra @ ..]
+            if command == "frontend" && operation == "render-static" =>
+        {
+            render_frontend(package, text(selector)?, Path::new(output), extra)?;
+        }
+        [command, operation, package, selector, extra @ ..]
+            if command == "frontend" && operation == "window-static" =>
+        {
+            let mut library_args = Vec::new();
+            let mut frames = None;
+            let mut index = 0;
+            while index < extra.len() {
+                if extra[index] == "--frames" {
+                    if frames.is_some() || index + 1 == extra.len() {
+                        return Err(invalid("--frames requires one positive frame count"));
+                    }
+                    let count = text(&extra[index + 1])?.parse::<u64>()?;
+                    if count == 0 {
+                        return Err(invalid("frame count must be positive"));
+                    }
+                    frames = Some(count);
+                    index += 2;
+                } else {
+                    library_args.push(extra[index].clone());
+                    index += 1;
+                }
+            }
+            window_frontend(package, text(selector)?, &library_args, frames)?;
+        }
+        [command, operation, package, selector]
+            if command == "frontend" && operation == "init-probe" =>
+        {
+            use marvel_heroes_forever::{
+                avm1::vm::{Limits, RejectHost},
+                frontend::bootstrap::{InitOutcome, InitSession},
+            };
+            let archive = PackageArchive::open(package)?;
+            let export = select(archive.package(), text(selector)?)?;
+            let assets = AssetSet::new(vec![archive])?;
+            let asset = assets.read_movie(AssetLocation { package: 0, export })?;
+            let mut session =
+                InitSession::new(asset.movie.header.version, Limits::default(), 2_000_000)?;
+            session.install_movie_clip_metadata(u32::MAX)?;
+            let plan = session.compile_frame(0, &asset, 0)?;
+            println!(
+                "OBSERVED {} frame 0: {} saved initializers; {} ordinary frame actions retained separately.",
+                plan.object_path,
+                plan.initializers.len(),
+                plan.frame_actions.len()
+            );
+            println!(
+                "Probe bindings: Object intrinsic and MovieClip class metadata; all external calls rejected."
+            );
+            match session.initialize(&plan, &mut RejectHost)? {
+                InitOutcome::Complete {
+                    initializers,
+                    instructions,
+                    host_calls,
+                } => {
+                    println!(
+                        "OBSERVED initializer phase completed: {initializers} actions, {instructions} instructions, {host_calls} host calls."
+                    );
+                    println!(
+                        "Ordinary frame scripts, display construction, imported-movie ordering and native parity were not run."
+                    );
+                }
+                InitOutcome::Stopped(failure) => {
+                    println!(
+                        "OBSERVED stopped after {} complete initializers and {} instructions: tag {}, source {}, {:?}.",
+                        failure.completed_initializers,
+                        failure.instructions,
+                        failure.action.key.tag,
+                        failure.action.source_offset,
+                        failure.error
+                    );
+                    println!("Partial VM state is halted; this is not a completed movie startup.");
+                    return Err(invalid(
+                        "initializer probe reached an unsupported operation",
+                    ));
+                }
+                InitOutcome::AlreadyInitialized => unreachable!("fresh probe session"),
+            }
+        }
         [command, operation, package, selector, extra @ ..]
             if command == "frontend" && operation == "scene" =>
         {
@@ -258,6 +341,142 @@ fn load_library(package: &OsString, extra: &[OsString]) -> Result<(AssetSet, Mov
     Ok((assets, library))
 }
 
+#[cfg(feature = "renderer")]
+fn frontend_frame(
+    package: &OsString,
+    selector: &str,
+    extra: &[OsString],
+) -> Result<marvel_heroes_forever::render::Readback> {
+    use marvel_heroes_forever::{
+        frontend::{
+            preview::{self, Background, BitmapMapping, Effects, PreviewPolicy},
+            scene_content,
+        },
+        gfx::scene::{Limits, MovieRef, Scene},
+        render::{
+            ImageEncoding, QuadRenderer,
+            mesh::{GradientAlpha, LinearRgbTransfer, TransformSpace},
+        },
+    };
+    let (assets, library) = load_library(package, extra)?;
+    let export = select(assets.archive(0)?.package(), selector)?;
+    let id = library
+        .id_for_location(AssetLocation { package: 0, export })
+        .ok_or_else(|| invalid("selected export is not a loaded movie"))?;
+    let entry = library
+        .entry(id)
+        .ok_or_else(|| invalid("movie library index missing"))?;
+    let scene = Scene::first_frame(
+        MovieRef::new(id, &entry.asset.movie),
+        &library,
+        Limits::default(),
+    )?;
+    let prepared =
+        scene_content::prepare(&assets, &library, &scene, scene_content::Limits::default())?;
+    let renderer = pollster::block_on(QuadRenderer::headless(
+        wgpu::TextureFormat::Rgba8Unorm,
+        false,
+    ))?;
+    let policy = PreviewPolicy {
+        background: Background::SavedRootTagOrTransparent,
+        colors: ImageEncoding::Linear,
+        color_transform_space: TransformSpace::Shader,
+        linear_rgb_transfer: LinearRgbTransfer::Srgb,
+        gradient_alpha: GradientAlpha::Straight,
+        bitmap_mapping: BitmapMapping::WholeImageReplacement,
+        unknown_texture_encoding: None,
+        effects: Effects::BaseGeometry,
+    };
+    let frame =
+        preview::render_static(&renderer, &prepared, entry.asset.movie.header.stage, policy)?;
+    println!(
+        "OBSERVED {} static geometry: {}x{}, {} submitted fills, {} submitted triangles, {} uploaded textures.",
+        entry.asset.object_path,
+        frame.readback.width,
+        frame.readback.height,
+        frame.coverage.fill_draws,
+        frame.coverage.triangles,
+        frame.coverage.uploaded_textures
+    );
+    println!(
+        "OBSERVED adapter: {:?}; explicit diagnostic policy: {:?}",
+        renderer.adapter_info(),
+        policy
+    );
+    println!(
+        "Limitations: {}; text instances omitted: {}; script bindings unexecuted: {}; unbound action tags: {}.",
+        frame.limitations.len(),
+        frame.coverage.text_instances_omitted,
+        frame.coverage.source_actions_unexecuted,
+        frame.coverage.unbound_action_tags_unexecuted
+    );
+    println!(
+        "Saved background: {:?}. Filters, scale9, non-normal blends and runtime visibility remain unverified; this is not a playable frontend.",
+        frame.saved_background_applied
+    );
+    Ok(frame.readback)
+}
+
+#[cfg(feature = "renderer")]
+fn render_frontend(
+    package: &OsString,
+    selector: &str,
+    output: &Path,
+    extra: &[OsString],
+) -> Result<()> {
+    let destination = private_output(output)?;
+    let frame = frontend_frame(package, selector, extra)?;
+    write_private_pam(&destination, &frame)?;
+    println!(
+        "OBSERVED private static-scene PAM: {}",
+        destination.display()
+    );
+    Ok(())
+}
+#[cfg(not(feature = "renderer"))]
+fn render_frontend(_: &OsString, _: &str, _: &Path, _: &[OsString]) -> Result<()> {
+    Err(invalid(
+        "this build lacks renderer support; build with --features renderer",
+    ))
+}
+
+#[cfg(feature = "window")]
+fn window_frontend(
+    package: &OsString,
+    selector: &str,
+    extra: &[OsString],
+    frames: Option<u64>,
+) -> Result<()> {
+    use marvel_heroes_forever::window::{PreviewImage, PreviewOptions, run_image_preview};
+    let frame = frontend_frame(package, selector, extra)?;
+    let mut options = PreviewOptions::new(frame.encoding);
+    options.title = format!("Marvel Heroes Forever — {selector} (static diagnostic)");
+    options.frame_limit = frames;
+    if frames.is_some() {
+        options.close_after = Some(std::time::Duration::from_secs(15));
+    }
+    let report = run_image_preview(
+        PreviewImage {
+            width: frame.width,
+            height: frame.height,
+            pixels: frame.pixels,
+            encoding: frame.encoding,
+        },
+        options,
+    )?;
+    println!("OBSERVED native static-scene presentation: {report:?}");
+    if frames.is_some_and(|expected| report.frames_presented != expected) {
+        return Err(invalid("preview closed before the requested frame count"));
+    }
+    Ok(())
+}
+#[cfg(not(feature = "window"))]
+fn window_frontend(_: &OsString, _: &str, _: &[OsString], _: Option<u64>) -> Result<()> {
+    Err(invalid(
+        "this build lacks native window support; build with --features window",
+    ))
+}
+
 #[cfg(not(feature = "window"))]
 fn window_texture(_package: &OsString, _selector: &str, _frames: Option<u64>) -> Result<()> {
     Err(invalid(
@@ -385,11 +604,7 @@ fn render_texture(_package: &OsString, _selector: &str, _output: &Path) -> Resul
 }
 
 #[cfg(feature = "renderer")]
-fn render_texture(package: &OsString, selector: &str, output: &Path) -> Result<()> {
-    use marvel_heroes_forever::render::{
-        BlendMode, ImageEncoding, ImageFilter, Quad, QuadRenderer, RgbaImage,
-    };
-    use std::io::Write;
+fn private_output(output: &Path) -> Result<std::path::PathBuf> {
     // Extracted pixels belong only in the private asset root. Existing outputs
     // are never overwritten, and movie identifiers are never filesystem paths.
     let root = std::env::var_os("HOME").ok_or_else(|| invalid("HOME is unavailable"))?;
@@ -412,6 +627,38 @@ fn render_texture(package: &OsString, selector: &str, output: &Path) -> Result<(
     if destination.exists() {
         return Err(invalid("output already exists"));
     }
+    Ok(destination)
+}
+
+#[cfg(feature = "renderer")]
+fn write_private_pam(
+    destination: &Path,
+    image: &marvel_heroes_forever::render::Readback,
+) -> Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(destination)?;
+    write!(
+        file,
+        "P7\nWIDTH {}\nHEIGHT {}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n",
+        image.width, image.height
+    )?;
+    file.write_all(&image.pixels)?;
+    Ok(())
+}
+
+#[cfg(feature = "renderer")]
+fn render_texture(package: &OsString, selector: &str, output: &Path) -> Result<()> {
+    use marvel_heroes_forever::render::{
+        BlendMode, ImageEncoding, ImageFilter, Quad, QuadRenderer, RgbaImage,
+    };
+    let destination = private_output(output)?;
     let texture = load_texture(package, selector)?;
     let image = texture.decode_mip(0)?;
     // This is a raw-byte inspection path. Linear sampling/target and replacement
@@ -440,20 +687,7 @@ fn render_texture(package: &OsString, selector: &str, output: &Path) -> Result<(
     if readback.pixels != image.pixels {
         return Err(invalid("GPU readback differs from decoded input pixels"));
     }
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&destination)?;
-    write!(
-        file,
-        "P7\nWIDTH {}\nHEIGHT {}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n",
-        image.width, image.height
-    )?;
-    file.write_all(&readback.pixels)?;
+    write_private_pam(&destination, &readback)?;
     println!(
         "VERIFIED GPU readback equals {} decoded RGBA bytes; private PAM written: {}",
         image.pixels.len(),

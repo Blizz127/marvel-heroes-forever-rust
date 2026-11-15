@@ -16,8 +16,15 @@ use std::{
     io,
 };
 
+#[path = "frontend/bootstrap.rs"]
+pub mod bootstrap;
 #[path = "frontend/library.rs"]
 pub mod library;
+#[cfg(feature = "renderer")]
+#[path = "frontend/preview.rs"]
+pub mod preview;
+#[path = "frontend/scene_content.rs"]
+pub mod scene_content;
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())

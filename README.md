@@ -10,8 +10,8 @@ See `FINDINGS.md` for measured evidence and `docs/PROVENANCE.md` for sources.
 
 Build the asset tools with `nice -n 19 cargo build --offline -j2` (Rust 1.88+).
 Their default build uses only the standard library. Add `--features renderer`
-for the optional wgpu Vulkan image renderer, or `--features window` for native
-image presentation. Required native libraries and verified runtime scope are
+for optional wgpu Vulkan image/triangle rendering, or `--features window` for native
+preview presentation. Required native libraries and verified runtime scope are
 recorded in [window support](docs/WINDOW.md). No server connection is made.
 
 The default preset is Forever; Original is one switch away. Only completed
@@ -51,7 +51,8 @@ mhf upk exports /private/path/MarvelFrontEnd_SF.upk
 ```
 
 This reads object tables and supported property/native payloads through bounded
-LZO decoding. Mesh rendering and the playable frontend remain unimplemented.
+LZO decoding. StaticMesh geometry can be read through the library; material/world
+rendering and the playable frontend remain unimplemented.
 
 Prototype bodies and supported asset properties now have separate commands:
 
@@ -63,7 +64,8 @@ mhf upk verify-objects /private/path/MarvelFrontEnd_SF.upk
 ```
 
 The prototype catalogue offers lazy lookup by data ID or exact member name and
-preserves typed serialized fields. Parent-value merging and runtime classes are
+preserves typed serialized fields. The library's effective-value resolver retains
+parent/default provenance and unresolved assignment contexts; runtime classes are
 not implemented. UPK property parsing reports unsupported class preambles and
 retains unknown array/structure payloads as spans.
 
@@ -83,11 +85,26 @@ native-size quad, checks every readback byte and writes a lossless RGBA PAM file
 inside the private asset root. It never overwrites an output. This displays one
 saved image, not a complete login screen. Frontend image binding uses each
 movie's explicit References plus qualified object paths; missing or ambiguous
-dependencies remain visible. Script execution, font routing and live render
-targets are still needed. See [frontend composition](docs/FRONTEND_COMPOSITION.md)
+dependencies remain visible. Full script initialization and live render targets
+are still needed; font routes remain explicit caller selections. See [frontend composition](docs/FRONTEND_COMPOSITION.md)
 and [renderer evidence](docs/RENDERER.md).
 
 `frontend scene` takes the same package/library inputs plus a movie selector and
 inspects the recovered static first-frame tree. Sprite nesting, display depth,
 transforms, imported symbols and unexecuted action bindings remain explicit.
 This is a structural snapshot; it is not the script-initialized game screen.
+
+The static diagnostic can also be rendered or shown in a native window:
+
+```sh
+mhf frontend render-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog ~/.local/share/marvel-heroes-forever-rust/evidence/login.pam /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en
+mhf frontend window-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en --frames 2
+mhf frontend init-probe /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager
+```
+
+Static rendering reports its explicit sampling/color policy and omitted behavior.
+It does not execute scripts, implement effects or establish a working login screen.
+Outputs stay private and are never overwritten. The initializer probe runs saved
+DoInitAction records in a persistent bounded VM with rejecting native bindings;
+it exits with an error at unsupported behavior. See
+[initializer phases](docs/FRONTEND_BOOTSTRAP.md) for its exact scope.

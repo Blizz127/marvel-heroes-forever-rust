@@ -9,14 +9,18 @@ use std::io;
 #[path = "gfx/text.rs"]
 pub mod text;
 
+#[path = "gfx/edit_layout.rs"]
+pub mod edit_layout;
+#[path = "gfx/glyphs.rs"]
+pub mod glyphs;
+#[path = "gfx/scale9.rs"]
+pub mod scale9;
+#[path = "gfx/scene.rs"]
+pub mod scene;
 #[path = "gfx/shapes.rs"]
 pub mod shapes;
 #[path = "gfx/tessellate.rs"]
 pub mod tessellate;
-#[path = "gfx/scene.rs"]
-pub mod scene;
-#[path = "gfx/glyphs.rs"]
-pub mod glyphs;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {

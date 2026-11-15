@@ -167,3 +167,22 @@ static-frame interpretation; no outside scene graph or UI implementation is used
 references and actual private English/static-text glyph evidence used for the
 original outlines and exact rational placement. Native rasterization and dynamic
 text layout remain separate from geometric decoding.
+
+[Triangle renderer](RENDERER_MESH.md) registers the exact primary wgpu and
+Adobe/Autodesk sampling, gradient and clipping references used for the original
+fill pipeline. Numerical policy choices and missing native rendering evidence
+are kept explicit. [Localization](LOCALIZATION.md) records the exact read-only
+AGPL MHServerEmu source study and private English locale/prototype files used for
+the original Unicode string and UI-key bridge; no translation data is shipped.
+
+[Plain editable text](EDIT_TEXT_LAYOUT.md) records the exact Adobe format and
+TextFormat references for saved-field layout. [Static mesh geometry](STATIC_MESH.md)
+records the read-only UE Viewer/UE3 study and private mesh evidence for the
+original bounded reader. [Scene content](FRONTEND_SCENE_CONTENT.md) and
+[initializer phases](FRONTEND_BOOTSTRAP.md) compose the existing original readers
+using their inherited provenance; they include no outside runtime implementation.
+[Static GPU composition](FRONTEND_PREVIEW.md) preserves those source ledgers and
+records its explicit diagnostic color, texture and unsupported-effect policy.
+[Scaling grids](GFX_SCALE9.md) registers the Adobe/Autodesk references and exact
+private geometry observations behind the original bounded deformation helper;
+native bitmap-fill paint averaging remains unresolved.

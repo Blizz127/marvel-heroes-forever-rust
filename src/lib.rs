@@ -8,12 +8,14 @@ pub mod avm1;
 pub mod calligraphy;
 pub mod frontend;
 pub mod gfx;
+pub mod localization;
 pub mod options;
 pub mod prototype_catalog;
 pub mod prototype_values;
 #[cfg(feature = "renderer")]
 pub mod render;
 pub mod sip;
+pub mod static_mesh;
 pub mod texture;
 pub mod texture_cache;
 pub mod upk;
