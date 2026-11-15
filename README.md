@@ -105,9 +105,10 @@ mhf frontend window-pointer /private/path/MarvelGame.upk MarvelFrontEnd.frontend
 ```
 
 Static rendering reports its explicit sampling/color policy and omitted behavior.
-Supported saved plain text uses original font glyphs and field clipping; authored
-placeholders remain unchanged. HTML representation is available in the library,
-but HTML layout and runtime text updates are unfinished.
+Supported saved plain and HTML text uses original imported font glyphs, kerning
+and field clipping; authored placeholders remain unchanged. HTML wrapping,
+some color cases and runtime text updates remain unsupported. See
+[saved HTML layout](docs/HTML_TEXT_LAYOUT.md) for the bounded profile.
 It does not execute scripts, implement effects or establish a working login screen.
 Outputs stay private and are never overwritten. The initializer probe runs saved
 DoInitAction records in a persistent bounded VM with explicit intrinsic/host bindings;

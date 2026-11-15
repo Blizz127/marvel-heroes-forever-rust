@@ -25,8 +25,9 @@ after an action and can exceed its threshold by at most one bounded action.
 `setup_vm` permits explicit intrinsic/host bindings before execution starts.
 `install_movie_clip_constructor` installs Object and the bounded typed unbound
 MovieClip intrinsic. It preserves the established native category and constructor
-callback profile; unproved subclass prototype-assignment effects reject before
-allocation. It does not create or attach a rendered display object. The older
+callback profile, including the evidenced subclass allocator and prototype mouse
+event-name marker. Other native/display member behavior remains gated. It does
+not create or attach a rendered display object. The older
 `install_movie_clip_metadata` API remains an explicitly non-executing inheritance
 study binding whose constructor calls reach the supplied Host; the CLI now uses
 the typed intrinsic. Neither setup creates a complete movie player.
