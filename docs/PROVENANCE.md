@@ -15,6 +15,10 @@ files, licences, usage and limits for each component.
 inventory, deferred binding identities and later conditional host submissions.
 Its source is the owner-held retail executable studied through REA; these static
 observations do not establish a live initialized namespace.
+[Configured localization labels](LOCALIZED_LABEL_RESOLVER.md) applies the owned
+native path/hash and explicit configuration-field evidence using original Rust.
+It retains one archive handle and typed resource origins; it does not install a
+native callback or invent a directory/default result.
 
 | Source | Licence / identity | Used for | Detailed file register |
 | --- | --- | --- | --- |
