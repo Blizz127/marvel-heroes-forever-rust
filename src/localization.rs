@@ -805,8 +805,14 @@ impl UiKeyBinding {
     /// This does not select locale variants, inherit missing fields, or create
     /// the complete ExternalInterface return object.
     pub fn prototype_reference_string(&self) -> String {
-        format!("0x{:X}", self.prototype_id)
+        format_prototype_reference(self.prototype_id)
     }
+}
+
+/// Successful native localization reference spelling, established through REA.
+/// Formatting an ID alone does not resolve or validate that prototype.
+pub fn format_prototype_reference(id: u64) -> String {
+    format!("0x{id:X}")
 }
 
 fn validate_ui_key(key: &str) -> std::io::Result<()> {

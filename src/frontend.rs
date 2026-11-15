@@ -26,6 +26,8 @@ pub mod display_state;
 pub mod host;
 #[path = "frontend/library.rs"]
 pub mod library;
+#[path = "frontend/localized_data.rs"]
+pub mod localized_data;
 #[path = "frontend/pointer.rs"]
 pub mod pointer;
 #[cfg(feature = "renderer")]
