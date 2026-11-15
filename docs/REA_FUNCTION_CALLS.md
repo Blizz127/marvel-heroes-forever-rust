@@ -66,9 +66,12 @@ as null by the native Push evidence cited below.
 
 This is deliberately **not a byte-for-byte value-wrapper identity claim**.
 The regular getter clears its auxiliary pointer and flags before the result
-setter copies the reference. Native and ordinary script-function interface
-tables both point to that getter in the inspected pin. The function object's
-own stored code/context stays in the same object, but semantics for auxiliary
+setter copies the reference. The inspected native function interface points
+to that getter; specialized script-function interface overrides remain a
+separate dependency. The prior ordinary-script classification of interface
+`0x142513260` was insufficiently grounded; the subsequent DefineFunction2 trace
+identifies the actual ScriptFunction interface as `0x142513090`. The function
+object's own stored code/context stays in the same object, but semantics for auxiliary
 frame state, specialized reference wrappers and bound native functions were
 not fully recovered. A Rust implementation must distinguish object identity
 from every native wrapper field.

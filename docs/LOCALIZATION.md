@@ -102,6 +102,14 @@ identity is needed by the authored `localizedPrototypeIdStr` consumer. It does
 not turn directly serialized fields into fully resolved native values or build
 an ExternalInterface result before its remaining contracts are implemented.
 
+**VERIFIED (saved identity):** An independent walk consumes all 85,186 raw
+directory records and matches the new IDs for all 27 original frontend keys.
+Reference strings have the native uppercase/unpadded spelling; display/tooltip
+IDs match the prior independent byte-derived table unchanged. Unknown and
+case-folded archive names reject. The private fixture's initial standalone-module
+path error was corrected without changing production code. Records and source
+hashes are in `evidence/localized-prototype-identity/verification.json`.
+
 Default table budgets are 64 MiB input, 65,535 entries, 255 locale flags, 256
 alternate forms per entry, 65,536 total alternates, 1 MiB per string and 64 MiB
 cumulative copied UTF-8 bytes. Partitions require bounded index/text offsets,
