@@ -205,3 +205,34 @@ and the investigation ledger reset after verification-oriented selection.
 | Existing original project localization, InitObject, Object.prototype and property-flag documentation and private REA receipts | Original project analysis; underlying target material proprietary | Join the new public interface path to already established constructor, metadata and setter behavior. |
 | Original private PE mapping / unwind helpers and system Python / objdump tools | Original project helpers; PSF / GNU tooling | Bounded address discovery, chained-unwind ranges, byte and hash verification. No recovered code copied into the client. |
 | REA skill and advertised target-free tool schema | Toolkit workflow instructions | Evidence lifecycle and bounded read-only analysis; no shared configuration changes. |
+
+## Focused current-crate integration check
+
+**VERIFIED controlled Rust execution:** a private Cargo harness depending on the
+current root crate resolves 27 original resources through `localized_prototype`,
+then passes `LocalizedObjectData::into_host_result` through four unchanged saved
+frontend-manager records: constant pool at 100257, `IsEmptyString` at 108846,
+the object wrapper at 110231 and string caller at 110321. The conversion source
+hash matches commit `dcae83e`; no copied product modules supply this execution.
+
+A separately frozen raw-data oracle matches all 27 string returns and 54 fresh
+wrapper objects. Each object has the four exact enumerable data fields with
+flags 0, the three metadata entries with flags 3, and original Object constructor
+and prototype identities. All 81 controlled host calls pass exact binding,
+receiver, argument and source-origin checks. The oracle comparison includes
+effective references, field origins, locale spans and lossless UTF-8/UTF-16
+values. All actual tooltip references are zero; one comes from the default layer.
+
+The successful build, execution, 1,242 scalar comparisons and frozen first-stage
+artifacts are private under `evidence/localized-vm-integration/known-members/`;
+the independent expectations are in its sibling `oracle/`. Receipts retain exact
+source/input hashes and an unrelated root `frontend::host` edit during execution;
+this fixture uses its own `ControlledHost`, and the used resolver/VM files stayed
+unchanged. Source snapshots do not claim full build-interval stability.
+
+This check uses an explicit known-member map and controlled namespaces/binding.
+It does not establish native configured-directory selection, ExternalInterface,
+global initialization or the label-display lifecycle. Inputs are the owner's
+proprietary frontend-manager movie, Calligraphy package and English locale files;
+their exact paths and hashes remain in the private receipt. No native process,
+rendering, account or server was run, and no original data enters git.
