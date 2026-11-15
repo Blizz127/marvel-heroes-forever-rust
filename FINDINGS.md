@@ -24,6 +24,15 @@ payload decoding. These component APIs are not a complete frontend lifecycle.
 The private package remains diagnostic tooling, with zero finished Forever
 upgrades and no retail frontend, login or gameplay parity claim.
 
+**VERIFIED private staging, 12:40 UTC:** `builds/0.1.0-dev.17` contains 384
+original-only selected files. Every manifest hash/size and the complete file set
+match; packaged version and Original-preset readback pass. Clean packaged source
+is `ff663cba7a1b20db344fea4e4c1bc64b4ddf1dba`, differing from the tested code
+only in documentation. Receipt:
+`evidence/build-0.1.0-dev.17-package-validation.json`. The queued coordinator
+intake supersedes dev16's Rust diagnostic only. Publication and owner-device
+validation remain unconfirmed.
+
 **VERIFIED initial prototype allocation:** the explicit-context selector preserves
 missing versus present-null prototype results and installs the selected identity
 directly, without allocating the lazy attached storage used by later setters.
