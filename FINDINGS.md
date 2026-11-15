@@ -5,7 +5,20 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev20 work in progress
+## 2026-11-15 dev20 diagnostic increment
+
+**VERIFIED combined build/startup:** clean tested source
+`6ed15b2770d7215c3e2c884c8fbd405c996d706e` builds with the window feature in
+23.37 seconds without warnings. All 45 CLI/image checks pass, including both
+actual-map Model bindings and wrong-model, omitted-component and order rejection.
+The isolated Rust window presents two frames with empty stderr; saved login and
+cursor pixels retain their previous diagnostic identities. Binary SHA-256:
+`354c23a2b7dcba6155ab9e3d1b6a609f95d46bae75a110989c87350031623ead`.
+Receipts: `evidence/dev20-build-result.json`,
+`evidence/build-0.1.0-dev.20-smoke.json` and
+`evidence/dev20-native-html/receipt.json`. The new native geometry/paint modules
+remain explicit-input components; these checks establish no renderer admission,
+native frontend, login or gameplay parity.
 
 **VERIFIED static conditional owner completion:** fresh target fields remain
 `6a=52004f80`, `88=000a`, `140=0001`, `b8=10` through owner and factory returns
@@ -18,7 +31,8 @@ follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
 `evidence/fresh-target-completion/receipt.json`, SHA-256
 `759da0d7f73102701424b891cd58876f7fe28b8c5cf5c6bafdee9bd841aed602`.
 
-Dev19 is the latest built and staged diagnostic; dev20 has not been built.
+Private dev20 staging follows the successful focused checks. Zero Forever
+upgrades are finished; all service/access holds remain in force.
 
 **VERIFIED native fill-matrix arithmetic:** explicit selected-fill bounds now
 produce the separate whole-fill affine, inverse, native inline composition and

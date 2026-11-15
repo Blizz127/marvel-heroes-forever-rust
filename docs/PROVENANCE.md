@@ -744,3 +744,8 @@ instruction-derived scalar oracle freezes operation-order witnesses before code
 comparison; the ledger distinguishes those supplied inputs from live provider
 or image state. No external implementation, dependency, native execution or
 renderer default was introduced.
+
+The dev20 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev20-linux/manifest.json`, SHA-256
+`c663f0fe8d2042ba6081d3041f7fcbd9ce03451b8f7c1701a2f34b80556ddea8`.
