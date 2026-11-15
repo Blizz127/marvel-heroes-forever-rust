@@ -67,14 +67,16 @@ as null by the native Push evidence cited below.
 This is deliberately **not a byte-for-byte value-wrapper identity claim**.
 The regular getter clears its auxiliary pointer and flags before the result
 setter copies the reference. The inspected native function interface points
-to that getter; specialized script-function interface overrides remain a
-separate dependency. The prior ordinary-script classification of interface
+to that getter. The prior ordinary-script classification of interface
 `0x142513260` was insufficiently grounded; the subsequent DefineFunction2 trace
-identifies the actual ScriptFunction interface as `0x142513090`. The function
-object's own stored code/context stays in the same object, but semantics for auxiliary
-frame state, specialized reference wrappers and bound native functions were
-not fully recovered. A Rust implementation must distinguish object identity
-from every native wrapper field.
+identifies the actual ScriptFunction interface as `0x142513090`.
+[The subsequent actual-interface proof](REA_SCRIPT_FUNCTION_CONVERSION.md)
+binds its `+0x60` slot to the same regular getter and establishes that conversion
+clears the result's auxiliary captured-frame link. The function object's own
+stored code/context stays in the same object. Arbitrary captured closures,
+specialized wrappers and bound native functions remain outside the admitted
+profile. A Rust implementation must distinguish object identity from every
+native wrapper field.
 
 The zero/multiple-argument branch allocates a different native object and was
 not needed by the saved bootstrap. Its complete constructor semantics remain
