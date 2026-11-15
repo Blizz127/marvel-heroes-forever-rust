@@ -544,6 +544,17 @@ about native failure handling outside the supported profile.
 
 ## Native Function conversion and empty apply lists
 
+**Correction / current gate:** The earlier native research incorrectly classified
+interface `0x142513260` as the ordinary script-function table. DefineFunction2
+actually uses interface `0x142513090`. Its exact `+0x60` getter must be proved before
+reusing the native function-reference result for script functions. Function
+conversion therefore rejects every ScriptFunction input pending that evidence;
+the native-callable/noncallable conversion and empty Apply lists remain supported.
+The historical original-adapter executions below are Rust observations, not proof
+of the unverified native ScriptFunction reference behavior. They are not runnable
+under this temporary gate. The corrected research document is
+`docs/REA_FUNCTION_CALLS.md` (root correction `112762e`).
+
 `install_function_conversion()` installs the verified one-argument global Function
 path after Object initialization. An existing supported callable returns the same
 underlying VM function object. Noncallable values return null. Other arities,
@@ -552,9 +563,9 @@ explicitly; no source-string function construction is inferred.
 
 The native function-reference getter clears auxiliary reference/frame fields while
 retaining the underlying function object. The VM currently models ordinary
-function-object references, not every native wrapper form. Script functions with
-nested activation or With scopes therefore stop at conversion; the supported
-script profile retains only the target/global scopes. This is deliberately not
+function-object references, not every native wrapper form. The earlier supported script profile retained only target/global scopes and
+rejected nested activation/With scopes. The table correction now gates even that
+profile until the actual ScriptFunction getter is grounded. This is deliberately not
 an assertion that a native function-value wrapper is byte-for-byte unchanged.
 
 Native apply forwards zero arguments for omitted, null and undefined lists and
