@@ -3,7 +3,7 @@
 `frontend::runtime_text` bridges an admitted `TextFieldHost` document to the
 existing per-instance `scene_content::RuntimeTextOverride` path. It performs no
 native format discovery, attachment, script execution, glyph layout or GPU work.
-Opaque native-derived format handles remain caller-supplied identities; their
+Opaque format handles remain caller-supplied identities; their
 numeric values do not encode an inferred renderer style.
 
 ## Public inputs and outputs
@@ -122,11 +122,56 @@ their distinct saved parent chains. Native attachment identities, format
 handles, absent services and effective styles remain explicit diagnostic
 fixture assertions; they are not inferred from these assets.
 
+**VERIFIED focused CPU fixture:** the selected node's admitted document differs
+from its last input, and its run profile differs from current defaults. The
+bridge uses the document/run pair. All 32 other text instances, including node
+136 sharing its definition, retain their saved fields/layout/glyph results.
+The source scene/movie bytes, host snapshots/statistics, trace count and VM
+storage identities remain unchanged by the snapshot calls and 20 typed
+rejections. A later host replacement prepares `BTN` with three glyphs while
+the previous batch stays frozen. Empty text first rejects without the explicit
+policy, then prepares zero glyphs with pending invalidation still retained.
+
+This controlled check compiled the exact module SHA256
+`2d52cd193826a7be09723531a6a993163acb800ab95203dec4780b31f8b7f3f7`
+on a frozen core source snapshot with only the private module hook. Its build
+and the single test process both exited zero. The later committed integration
+contains the same module. The sealed `actual/controlled-receipt.json` SHA256 is
+`f9b8fafa0132f2cf1e9820ae49a05a08002486de3442ab86344d98b96ecdfb96`.
+The receipt retains source/input hash checks and confirmed worker exit statuses.
+
+**VERIFIED original saved-action continuation:** a separate source freeze at
+root commit `7041d197cc63a002075aa239c04985954b73158f` executes the original
+true-uppercase path: 142 instructions and three host calls. The String call
+at source offset 94251 produces `LOG IN`, and the typed setter at 94252 stores
+that live document. Backend/controller cache remains `Log In`. The bridge reads
+the live host after this successful execution and prepares six glyph placements
+for node 89. The other 32 text instances, source scene/movie bytes and host
+snapshot metadata remain unchanged by preparation; invalidation remains pending.
+The fixture does not construct replacement text from an expected-result string.
+The effective style/attachment assertions remain conditional throughout.
+
+Both the post-action build and its single worker exited zero. Its sealed
+`actual/post-vm/receipt.json` SHA256 is
+`c8241a887c4eca684f141c72ee6edfe1487e2ed07f0c6babbb876e20adf49c59`.
+The receipt verifies 77 source files and 32 input files unchanged. No product
+fix or additional broad suite was needed; neither fixture ran a GPU or the
+native retail client.
+
+The combined private `actual/HANDOFF.md` identifies the frozen CPU manifests,
+binaries and source/input inventories. Its `handoff-receipt.json` SHA256 is
+`39ba359fb2edf6f875cf3b6ea724e2902f79e0fa997e0c2a6376bd4f5ade14c3`.
+For a separate GPU experiment, copy the harness into a new private directory
+and retain the `PreparedScene` returned by `src/vm_bridge.rs::check`, called
+immediately after successful execution in `src/bin/post_vm.rs`. Redirect that
+copy's output paths before running it. Completed CPU sources, manifests,
+receipts and binaries remain immutable.
+
 Code is original. Inputs are existing original `textfield_state`,
 `textfield_host`, `scene_content`, scene/VM association code and the private
 original-asset harnesses documented in `TEXTFIELD_RUNTIME.md` and
 `FRONTEND_SCENE_CONTENT.md`. This increment reads no new external implementation
 source and adds no dependency. Original assets and evidence stay private.
 The integrated library exposes `frontend::runtime_text`. The root window-feature
-compile passed; actual document-to-glyph verification remains separately recorded
-by the private fixture when complete.
+compile and the two scoped CPU document-to-glyph checks passed. Rendering and
+native effective-format parity remain separate work.
