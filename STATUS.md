@@ -44,8 +44,9 @@ notices; no retail executable, game assets, captures or extracted data.
   The manager frame reaches 290 instructions with successful Rectangle and three
   Point constructions, then stops at `Mouse.hide()`. Raw target state and root
   name in that replay remain explicitly supplied diagnostic inputs. The newly
-  added default-rejecting Mouse host interface installs no Mouse object and
-  does not hide a cursor.
+  integrated Mouse factory now builds the bounded native graph and reaches an
+  explicit default-rejecting user-event host boundary. No cursor effect is
+  implemented; the combined dev19 build has not yet run.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions
@@ -66,9 +67,10 @@ and the component ledgers linked from [PROVENANCE.md](docs/PROVENANCE.md).
 
 ## Next work and operational boundaries
 
-Continue the actual Mouse factory/user-event handler path, fresh target and root
-construction, class-default provenance, ModelComponent linkage and native Scale9
-geometry/resource inputs. Then connect the complete display lifecycle to the
+Continue the actual Mouse user-event handler path, fresh target and root
+construction, default application, ModelComponent linkage and native Scale9
+geometry/resource inputs. Saved class-default provenance and bounded source-path
+staging are integrated for dev19. Then connect the complete display lifecycle to the
 persistent renderer and input host. A callback stub, guessed default or synthetic
 check must not be presented as original startup success.
 

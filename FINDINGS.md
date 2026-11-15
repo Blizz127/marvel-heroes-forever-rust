@@ -53,6 +53,15 @@ No renderer defaults follow. Receipt:
 
 Dev18 remains the latest staged package; no dev19 build/startup result is claimed.
 
+**VERIFIED saved class-default preparation:** explicit archive namespaces and
+import bindings now produce checked class/default identities, parent chains,
+unresolved links and per-tag origins while retaining the AssetSet identity.
+Four focused checks and four original classes/defaults pass: 24 tags, 24 links,
+eight chains and 10,256 bytes compared. This does not merge effective defaults,
+apply configuration or construct native objects. Receipt:
+`evidence/class-defaults/receipt.json`, SHA-256
+`0f966182e06da345e8799bd8d2afbfeee4406854973e12605161afc0812487f1`.
+
 ## 2026-11-15 dev18 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested source

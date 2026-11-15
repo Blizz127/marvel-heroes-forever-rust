@@ -696,3 +696,10 @@ saved-source smoke do not infer triangle generation or actual provider inputs.
 package/native lineage through conditional archive state and resource dispatch;
 later helper and lifecycle boundaries remain explicit. Both ledgers identify
 their retained source/tool inputs, with no copied external implementation.
+
+[Saved class-default preparation](CLASS_DEFAULTS.md) composes the project's
+original UClass/property readers with checked archive identities. The source
+ledger records exact owned package/native evidence and the retained parser
+references already registered above. The four original default payloads use an
+explicit observed-file profile; unknown schemas remain unresolved. No effective
+default evaluator or copied external implementation was introduced.

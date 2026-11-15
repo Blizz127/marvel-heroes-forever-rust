@@ -23,6 +23,8 @@ pub mod action_queue;
 pub mod bootstrap;
 #[path = "frontend/class_registry.rs"]
 pub mod class_registry;
+#[path = "frontend/class_defaults.rs"]
+pub mod class_defaults;
 #[path = "frontend/current_scene.rs"]
 pub mod current_scene;
 #[path = "frontend/display_state.rs"]
