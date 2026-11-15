@@ -45,6 +45,14 @@ This original-code diagnostic contains no game assets, makes no server
 connection, and exposes zero finished upgrades. Private staging and launcher
 publication remain distinct; no Rust publication route has been confirmed.
 
+**VERIFIED private staging:** `builds/0.1.0-dev.11` contains 341 selected
+original/dependency-notice files from clean packaged commit
+`50b862442df7b5edb1b7aad4b150e9b98b8d6230`. Its complete file set, sizes, hashes
+and executable version passed readback verification; no game assets are bundled.
+Receipt: `evidence/build-0.1.0-dev.11-package-validation.json`. This supersedes
+the dev10 Rust diagnostic package for owner QA; it does not replace the retail
+launcher tile and has not been published.
+
 ## 2026-11-15 dev10 diagnostic increment
 
 **VERIFIED Rust execution:** source
