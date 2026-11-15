@@ -23,6 +23,15 @@ This remains private diagnostic tooling, with zero finished Forever upgrades.
 Native retail frontend, Rust login, gameplay and publication remain unverified;
 all inherited service/access holds remain in place.
 
+**VERIFIED private staging, 12:49 UTC:** `builds/0.1.0-dev.18` contains 389
+original-only selected files. Every manifest size/hash and the complete file set
+match; packaged version and Original-preset readback pass. Clean packaged source
+is `ae9dae0323e40a92d17b59827b0b923197bfc884`, differing from tested code only
+in documentation. Receipt:
+`evidence/build-0.1.0-dev.18-package-validation.json`. The queued coordinator
+intake supersedes dev17's Rust diagnostic only. Publication and owner-device
+validation remain unconfirmed.
+
 **VERIFIED archive association:** each MovieLibrary retains the identity of the
 AssetSet it loaded from. Content preparation rejects a different set even when
 its package bytes are identical, closing the previous caller-only association
