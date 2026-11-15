@@ -367,6 +367,10 @@ impl Vm {
         if [
             "gfx",
             "Function",
+            "Object",
+            "MarvelGlobals",
+            "flash",
+            "String",
             "disabled",
             "enableInitCallback",
             "localTextLabel",
@@ -443,9 +447,17 @@ impl Vm {
             depth += 1;
         }
         if native_clip_seen
-            && !["Function", "gfx", "onLoad"]
-                .iter()
-                .any(|name| key.as_ref() == text(name).as_ref())
+            && ![
+                "Function",
+                "gfx",
+                "onLoad",
+                "Object",
+                "MarvelGlobals",
+                "flash",
+                "String",
+            ]
+            .iter()
+            .any(|name| key.as_ref() == text(name).as_ref())
         {
             return self.fail(ErrorKind::Unsupported(
                 "attached missing builtin prototype member",

@@ -2929,10 +2929,19 @@ impl Vm {
                                 ));
                             }
                         };
-                        if matches!(
-                            self.objects[constructor.0].kind,
-                            Kind::ObjectConstructor | Kind::ArrayConstructor
-                        ) {
+                        if matches!(self.objects[constructor.0].kind, Kind::ObjectConstructor) {
+                            if instruction.opcode != 0x40 || !args.is_empty() {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "Object construction argument/method profile",
+                                ));
+                            }
+                            // Raw NewObject argc0 joins the same original native
+                            // allocation/callback metadata path as InitObject.
+                            // Direct Object() calls retain their separate profile.
+                            let object = self.object_literal()?;
+                            self.push(frame, Value::Object(object))?;
+                        } else if matches!(self.objects[constructor.0].kind, Kind::ArrayConstructor)
+                        {
                             // Native standard constructors select their constructed object;
                             // this is distinct from a script constructor's return value.
                             let object = self.invoke(
@@ -3999,6 +4008,52 @@ mod tests {
         .unwrap();
         assert_eq!(host.calls.last().unwrap().1, None);
         assert_eq!(host.calls.last().unwrap().3, None);
+    }
+    #[test]
+    fn new_object_zero_arguments_keeps_native_metadata_and_current_global_guard() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let mut bytes = push(&[Value::Number(0.0), Value::string("Object")]);
+        bytes.push(0x40);
+        let result = execute(&mut vm, &bytes).unwrap();
+        let [Value::Object(instance)] = result.stack.as_slice() else {
+            panic!()
+        };
+        assert_eq!(
+            vm.objects[instance.0].insertion_keys,
+            [
+                text("__proto__"),
+                text("__constructor__"),
+                text("constructor")
+            ]
+        );
+        for key in ["__proto__", "__constructor__", "constructor"] {
+            assert_eq!(vm.own_property_flags(*instance, key).unwrap(), Some(3));
+        }
+        assert_eq!(
+            vm.get(*instance, "constructor").unwrap(),
+            Value::Object(object)
+        );
+        assert_eq!(
+            vm.get(*instance, "__constructor__").unwrap(),
+            Value::Object(object)
+        );
+        assert_eq!(
+            vm.get(*instance, "__proto__").unwrap(),
+            vm.get(object, "prototype").unwrap()
+        );
+        let mut argument = push(&[Value::Null, Value::Number(1.0), Value::string("Object")]);
+        argument.push(0x40);
+        assert_eq!(
+            execute(&mut vm, &argument).unwrap_err().kind,
+            ErrorKind::Unsupported("Object construction argument/method profile")
+        );
+        vm.set(vm.root(), "Object", Value::Object(object)).unwrap();
+        vm.set(vm.global(), "Object", Value::Null).unwrap();
+        assert!(matches!(
+            execute(&mut vm, &bytes).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
     }
     #[test]
     fn host_context_survives_object_result_setter_reentry_and_error() {

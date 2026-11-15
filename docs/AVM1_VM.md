@@ -904,7 +904,7 @@ requires a pristine old root and no registered programs/script closures; integra
 must call it before installing a host whose context depends on that root. Existing
 Plain-object diagnostics retain their separate behavior.
 
-**VERIFIED static admission:** The selected names `gfx`, `Function`, `disabled`,
+**VERIFIED static admission:** The initially selected names `gfx`, `Function`, `disabled`,
 `enableInitCallback`, `localTextLabel`, `button` and `localizedText_tf` take the
 ordinary route under the original standard-member map and concrete case-3 owner.
 This is an exact-name profile backed by `rea-attached-member-names/combined-proof-receipt.json`,
@@ -984,6 +984,24 @@ remains absent. Private `avm1-attached-manager-init/receipt.json` and
 `rejected-operand.json` retain the frozen source hashes, complete child accounting
 and parsed operand evidence. This is distinct from the earlier 452-initializer
 Plain-root diagnostic; neither fixture establishes native startup parity.
+
+The following bounded increment admits exact `Object`, `MarvelGlobals`, `flash`
+and `String` names. Their absence from the complete native standard-member map
+and canonical builtin prototype inventory is separately verified in
+`rea-prototype-function-miss/object-extension.json`; all storage/child/prototype
+precedence and mutation guards remain. This extends an exact-name profile rather
+than inferring that arbitrary identifiers are ordinary native properties.
+
+Raw NewObject (`0x40`) with zero arguments resolving the unchanged native Object
+now uses the same proved allocation/metadata path as InitObject: own `__proto__`,
+`__constructor__`, `constructor` in that order, each flags 3. The direct `Object()`
+call and automatic script prototypes are separate paths. Nonzero-argument and
+NewMethod Object construction remain gated. The native opcode-to-shared-allocator
+join is retained in
+`rea-deferred-builtin-materialization/constructor/object-newobject-zero-arg.json`.
+One focused test verifies metadata, unchanged-global checks and argument gating;
+the five existing attached bridge tests also pass. This supersedes the old
+NewObject shortcut that created only the linked prototype metadata.
 
 ## Indexed movie-property host seam
 
