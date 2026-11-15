@@ -707,6 +707,31 @@ actual modeled namespace owners and class identities before the change.
 `init-order-qualified-variable.tsv`, `vm-tests-qualified-variable.txt` and
 `qualified-variable-runtime-evidence.json` retain the new controlled execution.
 
+## Original frame action after the controlled initializers
+
+**OBSERVED:** With the same modeled Plain root and minimal globals, all 452 original
+manager initializers still complete after the host-result change. The original
+root-frame DoAction at 5967 then reaches 31 instructions, counting the failed
+instruction. It stops at the original MarvelUtils adapter's Function call at
+855912, CodeId 139, opcode `0x3d`, with `unimplemented MovieClip native member`.
+No unknown native host callback was invoked.
+
+Private inspection establishes the immediate cause. Global Function already exists.
+The adapter has assigned a script prototype to the modeled root, so ordinary variable
+lookup searches its activation, then that root's chain, then global. The root chain
+passes through UIComponent.prototype and the unbound native MovieClip prototype.
+There is no modeled own `Function` along that chain; the explicit native-member
+boundary rejects before global fallback. This is neither a failure of the restored
+Function conversion nor proof that a real attached root lacks that member. No missing
+native member lookup was broadened to advance the diagnostic.
+
+`avm1-runtime/frame-after-inits-evidence.json`,
+`run-manager-frame-after-inits.rs` and `manager-frame-after-inits.tsv` retain the
+result; `avm1-frame-after-inits/lookup-context.txt` records the immutable inspection.
+The complete native global inventory and attached owner/storage/child semantics
+remain separate requirements. Completing the controlled initializers does not
+establish a completed retail frontend startup.
+
 ## Native Function conversion and empty apply lists
 
 **Corrected native binding, VERIFIED static:** The earlier research incorrectly
@@ -812,10 +837,23 @@ passes its existing check. Four checks are retained in
 `avm1-runtime/vm-tests-host-object-fields.txt` and
 `host-object-fields-evidence.json`.
 
+**OBSERVED original selected scripts with controlled data:** The actual
+MarvelGlobals.GetLocalizedStringByLabel definition at 110321 runs with its original
+GetLocalizedObjectDataByLabel and IsEmptyString definitions and constant pool. It
+executes 40 instructions, makes one strictly checked host request at 110311, reads
+`localizedText` at 110384 and returns the supplied text. Two separate calls to the
+original object-data wrapper each execute 25 instructions and retain distinct fresh
+objects with four flags-0 fields and three flags-3 metadata entries. Private
+`avm1-localized-result-probe/run-localized-selected.rs`, `probe.tsv`,
+`execution.json` and `source-snapshot.json` retain the frozen original code and
+source coordinates. The provided MarvelGlobals/ExternalInterface receivers and
+result data are explicitly controlled fixtures; no native global baseline, whole
+class initializer or locale resolver is substituted or claimed to run.
+
 This seam does not install a localization binding, select reflected fields, parse
 locale data or claim that a live native struct has no patched fields. The integrating
-host owns those data and patch-profile decisions. The result-object checks alone
-are not an original localized callback execution or retail runtime parity claim.
+host owns those data and patch-profile decisions. Neither the focused checks nor the selected-script probe executes the retail
+native callback or establishes runtime parity.
 
 ## Indexed movie-property host seam
 
