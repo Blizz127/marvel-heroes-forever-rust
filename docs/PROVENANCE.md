@@ -868,3 +868,10 @@ owned executable/packages and retained schema/copy evidence to distinguish the
 CDO-specific class serializer from ordinary UObject dispatch. Its exact-source
 ledger preserves cold-reference, alternate-input and later lifecycle limits;
 no effective StartPaused value was assumed or external source code copied.
+
+[First engine-name initialization](REA_ENGINE_NAME_STATE.md) and the extended
+[Mouse preservation ledger](REA_MOUSE_STATE_PRESERVATION.md) reuse the exact
+owned executable and private registered native records. They close stated
+forwarding, optional-task and publication intervals while retaining current
+provider, notification and later initialization boundaries. No runtime state
+or global handler absence was inferred from a prefix.

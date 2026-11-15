@@ -5,6 +5,37 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev23 work in progress
+
+**VERIFIED context diagnostic byte preparation:** the fixed native formatter's
+selected branch is now original Rust. Three focused tests and fifteen
+independently frozen instruction-span witnesses pass, including exact capacity
+boundaries, terminal LF handling, null context and bytewise encoding splits.
+All initialized output bytes, full lengths and truncation flags match. Source
+SHA-256: `dc50df21e2ed700ace17b27661eff5cf217b430fdb1de482a7e5d8569930b362`.
+Product receipt: `evidence/mouse-prefixed-diagnostic/product/receipt.json`,
+SHA-256 `ce196a99a9d0e217a71804e02497dab3297afa1e95ad206a77abd705635a4ac4`.
+Production library metadata compilation with window features passes without
+warnings in 12.70 seconds at clean source
+`0fb8d592140fada926ab8ca544c618ea316641e4`; receipt:
+`evidence/context-diagnostic-production/receipt.json`. A new executable/startup
+run has not occurred, and dev22 remains the latest staged build.
+
+**VERIFIED static formatter contract:** 23 complete bodies plus the selected
+generic-helper branch account for 957 distinct instructions / 3,515 bytes,
+with exact table, literal and import bindings. Four REA records are retained
+and reset; their automatic string-scan warnings are preserved. The aggregate
+56-file private manifest SHA-256 is
+`34b21be82254bac6271e0366c5b5340d430da9f6206771c3f88076dcb490b33b`.
+See [context diagnostics](docs/REA_CONTEXT_DIAGNOSTIC.md). This prepares bytes;
+it does not select the current diagnostic context, missing handler or log sink.
+
+Fresh-root composition now joins actual global/prototype producers through
+the conditional normal-return snapshot. CDO preload evidence also identifies
+its dedicated class-serializer route and retains the later default-state gaps.
+Current state-4 absence and effective StartPaused remain unproved. No host
+bypass, native execution, service probe or permission/hold change occurred.
+
 ## 2026-11-15 dev22 diagnostic increment
 
 **VERIFIED private staging, 13:51 UTC:** all 429 packaged file sizes/hashes and

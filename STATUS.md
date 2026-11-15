@@ -5,6 +5,11 @@ The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.23`; that increment has not been built.
 
+The new context-diagnostic byte formatter passes three focused tests, fifteen
+independent supplied-input comparisons and production library metadata checking.
+This does not bind a native logger or advance the unbound Mouse host. Dev22 is
+still the latest staged executable.
+
 ## Latest private diagnostic
 
 **VERIFIED:** `0.1.0-dev.22` is staged under
