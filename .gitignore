@@ -1,0 +1,12 @@
+/target
+*.sip
+*.upk
+*.bin
+*.dll
+*.exe
+/assets/
+/client-data/
+/capture/
+*.pcap
+*.log
+.env
