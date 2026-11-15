@@ -615,3 +615,16 @@ declarations and native property-link routines. The source ledger identifies
 all reused private files and REA records. Loaded-field preservation, active link
 mode and current resource state remain separate inputs; no renderer default or
 new external implementation follows from this static study.
+
+[Frontend movie defaults](FRONTEND_MOVIE_DEFAULTS.md) records selected owned
+package defaults, native tagged Boolean application and conditional property
+layout. Its source ledger identifies the retained MIT Unreal-Library profile
+corroboration and all private package/native inputs; no new outside implementation
+was copied. The original initial MovieClip selector implements the bounded
+presence distinctions already recorded in [fresh prototype evidence](FRESH_MOVIECLIP_PROTOTYPE.md)
+and verifies direct allocation separately from the later storage-creating setter.
+
+The dev17 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev17-linux/manifest.json`, SHA-256
+`1163dc008501337dc8837eff041345fee8ccf98e15682ee12cec8d4e858de2ce`.

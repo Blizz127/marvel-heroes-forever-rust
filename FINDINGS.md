@@ -7,6 +7,24 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev17 integration in progress
 
+**VERIFIED initial prototype allocation:** the explicit-context selector preserves
+missing versus present-null prototype results and installs the selected identity
+directly, without allocating the lazy attached storage used by later setters.
+Ten focused checks and production metadata compilation pass. Existing strict
+adoption APIs remain available. This supplies neither fresh target-state defaults
+nor a lifecycle execution claim. Receipt:
+`evidence/avm1-runtime/initial-prototype-checks.json`, SHA-256
+`f04206f113b657f467ef98ddbb7c044fe53c25efec3e24f06c563b7be912bea7`.
+
+**OBSERVED saved movie defaults:** the action default explicitly saves HUD-off
+display true, while the selected frontend player's default saves false. These
+are distinct objects; native action writes and configuration still govern the
+effective player value. StartPaused is declared but absent from the complete
+saved action defaults. Static evidence does not make it false. See
+`docs/FRONTEND_MOVIE_DEFAULTS.md`; private receipt
+`evidence/current-movie-defaults/receipt.json`, SHA-256
+`9f85369ef8096989ffc410cd4796afc0bc1fa0650996ccf1b263e6acaa16cb08`.
+
 **VERIFIED component preparation:** the new current-frame adapter combines the
 retained display snapshot with every bound TextField, including unchanged and
 hidden fields. Four focused composition checks pass. One unchanged original
