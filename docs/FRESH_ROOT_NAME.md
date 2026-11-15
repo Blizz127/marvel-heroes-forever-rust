@@ -149,9 +149,11 @@ stores it at wrapper `+0x34` at `0x14127740e`, reloads that same field at
 identity-preserving stores, not a filename-to-root inference.
 
 For the concrete MovieDef table `0x1425048b0`, `+0xc0` resolves to
-`0x140086ad0`, whose path reaches virtual `+0xb8`, `0x1400882c0`.
-That routine retains the original MovieDef in RSI, selects support state 23
-when the DataDef-state `+0xd0` bit 3 is clear (24 otherwise), and calls
+`0x140086ad0`. When its virtual `+0xb0` context construction succeeds, it
+reaches virtual `+0xb8`, `0x1400882c0`, with the same MovieDef.
+That routine retains the original MovieDef in RSI, selects support state
+**0x23** when `[[[[MovieDef+0x38]+0x18]+0x40]+0xd0]` bit 3 is clear
+(**0x24** otherwise), and calls
 support virtual `+8` at `0x140088349`. **On the selected AS2 support binding**
 this is `0x140178340`, constructing a MovieImpl and its AS2 root. It then
 obtains the root from returned MovieImpl `+0x18`, passes the same retained
@@ -180,6 +182,22 @@ constructed pointer in RBX, and returns it at `0x14004e6df`. That constructor
 installs the concrete table `0x1425048b0`. Subject to the selected successful
 return/filter branches, this supplies the concrete fresh MovieDef needed by
 the association above.
+
+The allocation must succeed; when an optional task-output pointer is supplied,
+its `0x14008a8e0` construction must also succeed. Otherwise the routine
+releases the MovieDef and returns null. The engine route supplies a null list
+to return filter `0x14004e340`; effective flag bit 0 requires a true result
+from `0x140086cf0(MovieDef+0x38, 0x200)`, otherwise bit 1 requires the same
+helper with `0x100`. With neither bit set, it accepts directly. Success
+returns the original pointer; failure releases it and returns null. The
+helper's broader completion semantics are not assigned here.
+
+Zero caller flags do not imply zero effective flags: `0x140031710` ORs in
+loader `+0x18`, and `0x14004ef00` conditionally ORs `0x11` when
+`[[context+0x10]+0x48]` is nonnull. An optional task virtual `+8` may execute
+before filtering. General nonnull-list cases have their own accept/reject
+rules, retained in the private association summary; this engine path does
+not justify dropping these branches from a general implementation.
 
 Lookup results other than 3 instead use the cached-pointer helper
 `0x14004c2e0`; their concrete category has not been established here. The
@@ -222,7 +240,7 @@ disassembly, captured assets or private bundle are committed with this doc.
 | `fresh-root-name/verification.json` | Exact PE mapping for 16 selected code ranges, 1,274 instructions / 4,678 bytes; complete chained unwind coverage where available; table/literal/import bindings. |
 | `fresh-root-name/import-bindings.json` | Executable PE bindings to `MSVCR120.dll` `isspace`, `isdigit`, `atoi`, `memcpy`; no DLL execution. |
 | `fresh-root-name/integer-zero/complete.bundle.json` and `receipt.json` | Four numeric-method records, 12 selected code/data ranges / 1,142 bytes, four complete unwind groups, exact zero output and cleanup. |
-| `fresh-root-name/movie-association/` | Bounded MovieDef creation/AS2 root association captures and retained-source joins. |
+| `fresh-root-name/movie-association/loader-bridge.bundle.json`, `finding-summary.json`, `receipt.json` | Three new records and retained-source joins; 3,116 instruction spans / 12,143 bytes plus 88 table bytes; exact fresh-allocation, effective-flag and AS2 support conditions. |
 | `fresh-root-name/receipt.json` | Joined task receipt, original document hash, source hashes and explicit remaining boundaries. |
 | `rea-attached-root-name/verification.json` and `checkpoint.bundle.json` | Existing root setup, exact literal, producer, name setter/handle stores and later rename boundaries. |
 | `rea-enumeration-callback/constructor-and-pool-final.bundle.json` | Reused complete StringManager byte-length/interning wrapper, record `ev_aab6a42276a45efe8236d3bdbf7e1df13827f7e052fed26d812cc12c9271dccf`. |
