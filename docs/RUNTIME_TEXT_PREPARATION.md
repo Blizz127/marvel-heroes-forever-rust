@@ -127,4 +127,6 @@ Code is original. Inputs are existing original `textfield_state`,
 original-asset harnesses documented in `TEXTFIELD_RUNTIME.md` and
 `FRONTEND_SCENE_CONTENT.md`. This increment reads no new external implementation
 source and adds no dependency. Original assets and evidence stay private.
-The integrator supplies the `frontend::runtime_text` module hook separately.
+The integrated library exposes `frontend::runtime_text`. The root window-feature
+compile passed; actual document-to-glyph verification remains separately recorded
+by the private fixture when complete.

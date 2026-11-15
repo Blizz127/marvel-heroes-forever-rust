@@ -402,3 +402,8 @@ checks remain distinct from execution of original login methods.
 setter and mask getter. The original typed VM implementation requires supplied
 raw target state and preserves unrelated bits; no fresh-state or renderer-policy
 default is inferred from its focused checks.
+
+[Runtime text preparation](RUNTIME_TEXT_PREPARATION.md) projects admitted
+per-instance document text and exact format handles into explicit renderer
+inputs. Native style mapping and empty-document policy remain supplied; no
+authored text, default style or rendered result is substituted by the bridge.

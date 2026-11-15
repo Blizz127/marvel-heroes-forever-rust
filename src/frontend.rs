@@ -47,6 +47,8 @@ pub mod pointer;
 #[cfg(feature = "renderer")]
 #[path = "frontend/preview.rs"]
 pub mod preview;
+#[path = "frontend/runtime_text.rs"]
+pub mod runtime_text;
 #[path = "frontend/scene_content.rs"]
 pub mod scene_content;
 #[path = "frontend/selection.rs"]
