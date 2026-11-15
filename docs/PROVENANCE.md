@@ -721,3 +721,11 @@ selection and explicit reference-cleanup paths. Its ledger identifies exact
 REA, PE-import and retained source evidence plus the ordinary imported memset
 contract. No CRT DLL or client ran, and unresolved bootstrap preservation is
 not replaced by an initialized-state assumption.
+
+[Fresh root resources](FRESH_ROOT_RESOURCE.md) retains the owned root/factory
+dispatch and secondary-reference cleanup proof, including the exact inherited
+allocator assumptions. [Texture resource construction](SCALE9_TEXTURE_RESOURCE.md)
+records the selected owner-receiving constructor and remaining concrete update
+dispatch boundaries. Both extend private owner-binary evidence with original
+checking scripts; no native state, renderer defaults or external implementation
+was substituted for the remaining conditions.

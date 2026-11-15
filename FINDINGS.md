@@ -20,6 +20,21 @@ follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
 
 Dev19 is the latest built and staged diagnostic; dev20 has not been built.
 
+**VERIFIED static post-resource checkpoint:** under the recorded factory-return,
+receiver, valid-list and ordinary allocation/free profile, the exact caller
+checkpoint `0x1402102dd` preserves the three earlier fields and changes source
+WORD +0x140 to `0x0011`. Temporary reference lifetimes and their zero-field
+callback exclusions are closed; generic heap internals and later publication
+remain outside this result. Receipt: `evidence/fresh-root-resource/receipt.json`,
+SHA-256 `2b45658a223d0b9e744560b148c19a54d42d0bfc8728d66a924cb0aaff55615b`.
+
+**VERIFIED static texture resource constructor:** the selected constructor
+retains its Texture2D owner and has no direct dimension access in its complete
+body. Concrete manager and resource callbacks remain transitive preservation
+boundaries; no initialized dimensions or renderer inputs were promoted.
+Receipt: `evidence/scale9-texture-resource/final-index.json`, SHA-256
+`65192ecef263e82ba57c6dc83563a3a3714f84d46c38fc698968072f9ee3cac0`.
+
 ## 2026-11-15 dev19 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested source
