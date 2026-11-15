@@ -11,7 +11,7 @@ use crate::gfx::scene::{
 };
 use crate::gfx::shapes::{self, Color, Fill, FillRule, Shape};
 use crate::gfx::tessellate::{self, Mesh};
-use crate::gfx::text::{EditText, FontDefinition};
+use crate::gfx::text::{EditFlags, EditLayout, EditText, FontDefinition};
 use crate::gfx::{CharacterKind, TagData};
 use crate::texture::{BulkPayload, Descriptor, RgbaImage};
 use std::collections::{BTreeMap, BTreeSet};
@@ -114,6 +114,7 @@ pub enum Limitation {
     MorphRatioNotApplied(u16),
     TextNotPrepared,
     SavedTextStateOnly,
+    SuppliedRuntimeTextState,
     TextBoundsClippingNotApplied,
     TextBorderNotPrepared,
     FontRasterizationUnverified,
@@ -199,12 +200,58 @@ pub struct HtmlFontRoute {
     pub resolved_font: FontIdentity,
 }
 
+/// Explicit local font reference and the identity its declared route must reach.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RuntimeFont {
+    pub movie_id: MovieId,
+    pub character_id: u16,
+    pub expected_resolved: FontIdentity,
+}
+
+/// Extra effective style must be explicitly known inactive for layout_plain.
+/// None is unresolved; it never selects a renderer or native default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RuntimeTextEffects {
+    pub kerning: Option<bool>,
+    pub letter_spacing_twips: Option<i32>,
+    pub underline: Option<bool>,
+    pub block_indent_twips: Option<i32>,
+}
+
+/// Caller-resolved effective layout inputs, not raw native TextField flags or
+/// a conversion from opaque TextFieldState format handles. No style defaults.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RuntimeTextStyle {
+    pub flags: EditFlags,
+    pub font: RuntimeFont,
+    pub height_twips: u16,
+    pub color_rgba: [u8; 4],
+    pub layout_twips: EditLayout,
+    pub effects: RuntimeTextEffects,
+}
+
+/// One explicit structural instance. Provenance identifies the caller's style
+/// resolution evidence; this adapter neither resolves nor verifies that evidence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTextOverride {
+    pub node: NodeId,
+    pub expected_definition: DefinitionRef,
+    pub text: String,
+    pub style: RuntimeTextStyle,
+    pub provenance: String,
+}
+
+pub const MAX_RUNTIME_PROVENANCE_BYTES: usize = 4096;
+
 #[derive(Clone, Debug)]
 pub struct TextAsset {
     pub definition: DefinitionRef,
+    /// Exact caller input for this one instance; None keeps the saved cache path.
+    pub runtime: Option<RuntimeTextOverride>,
+    /// Original saved definition, including unchanged initial text and spans.
     pub field: Option<EditText>,
     pub font_binding: Option<FontBinding>,
-    /// Saved initial geometry, from the unchanged plain path or html_layout.
+    /// Saved initial geometry or explicit per-instance PlainUpdate geometry.
     /// HTML glyph source indices address original markup, never stripped text.
     pub layout: Option<EditTextLayout>,
     pub layout_error: Option<EditLayoutError>,
@@ -288,6 +335,19 @@ pub fn prepare(
     scene: &Scene<'_>,
     limits: Limits,
 ) -> io::Result<PreparedScene> {
+    prepare_with_text_overrides(assets, library, scene, &[], limits)
+}
+
+/// Prepare explicit runtime strings for exact instances, retaining saved-cache
+/// behavior for every other node. Invalid/unsupported overrides return Err;
+/// there is no saved-text fallback or mutation of the source movie/definition.
+pub fn prepare_with_text_overrides(
+    assets: &AssetSet,
+    library: &MovieLibrary,
+    scene: &Scene<'_>,
+    overrides: &[RuntimeTextOverride],
+    limits: Limits,
+) -> io::Result<PreparedScene> {
     if scene.nodes.len() > limits.max_nodes || limits.max_import_hops > 256 {
         return Err(invalid("scene-content node/import budget exceeded"));
     }
@@ -308,6 +368,7 @@ pub fn prepare(
             return Err(invalid("scene MovieId and library movie identity differ"));
         }
     }
+    let runtime = admit_overrides(library, scene, overrides, limits)?;
     let mut builder = Builder {
         assets,
         library,
@@ -362,20 +423,32 @@ pub fn prepare(
                     }
                 }
                 CharacterKind::Text => {
-                    let index = builder.text(definition)?;
+                    let index = if let Some(input) = runtime.get(&node.id) {
+                        builder.runtime_text(definition, input)?
+                    } else {
+                        builder.text(definition)?
+                    };
                     let asset = &builder.result.texts[index];
                     if asset.layout.is_none() {
                         limitations.push(Limitation::TextNotPrepared);
                     } else {
-                        limitations.push(Limitation::SavedTextStateOnly);
+                        limitations.push(if asset.runtime.is_some() {
+                            Limitation::SuppliedRuntimeTextState
+                        } else {
+                            Limitation::SavedTextStateOnly
+                        });
                         limitations.push(Limitation::TextBoundsClippingNotApplied);
                         limitations.push(Limitation::FontRasterizationUnverified);
                     }
-                    if asset
-                        .field
-                        .as_ref()
-                        .is_some_and(|field| field.flags.border())
-                    {
+                    if asset.runtime.as_ref().map_or_else(
+                        || {
+                            asset
+                                .field
+                                .as_ref()
+                                .is_some_and(|field| field.flags.border())
+                        },
+                        |input| input.style.flags.border(),
+                    ) {
                         limitations.push(Limitation::TextBorderNotPrepared);
                     }
                     text = Some(index);
@@ -401,6 +474,127 @@ pub fn prepare(
         });
     }
     Ok(builder.result)
+}
+
+fn admit_overrides<'a>(
+    library: &MovieLibrary,
+    scene: &Scene<'_>,
+    overrides: &'a [RuntimeTextOverride],
+    limits: Limits,
+) -> io::Result<BTreeMap<NodeId, &'a RuntimeTextOverride>> {
+    if overrides.len() > limits.max_nodes || overrides.len() > limits.max_texts {
+        return Err(invalid("runtime text override count budget exceeded"));
+    }
+    let mut result = BTreeMap::new();
+    let mut bytes = 0usize;
+    let mut glyphs = 0usize;
+    for input in overrides {
+        let node = scene
+            .nodes
+            .get(input.node)
+            .ok_or_else(|| invalid("runtime text node is outside scene"))?;
+        if node.id != input.node
+            || node.kind.definition() != Some(input.expected_definition)
+            || input.expected_definition.kind != CharacterKind::Text
+        {
+            return Err(invalid("runtime text node/definition identity differs"));
+        }
+        if result.insert(input.node, input).is_some() {
+            return Err(invalid("duplicate runtime text override for node"));
+        }
+        check_definition(library, input.expected_definition)?;
+        if library
+            .entry(input.expected_definition.movie_id)
+            .unwrap()
+            .asset
+            .movie
+            .tags
+            .get(input.expected_definition.tag_index)
+            .is_none_or(|tag| tag.code != 37)
+        {
+            return Err(invalid("runtime text requires an actual DefineEditText"));
+        }
+        if input.provenance.is_empty()
+            || input.provenance.len() > MAX_RUNTIME_PROVENANCE_BYTES
+            || input.provenance.trim().is_empty()
+        {
+            return Err(invalid(
+                "runtime text needs bounded nonempty style provenance",
+            ));
+        }
+        if input.text.len() > edit_layout::MAX_TEXT_BYTES
+            || input.text.len() > edit_layout::MAX_TEXT_SCALARS
+        {
+            return Err(invalid("runtime text layout byte/scalar budget exceeded"));
+        }
+        if let Some((offset, _)) = input
+            .text
+            .bytes()
+            .enumerate()
+            .find(|(_, b)| !(b' '..=b'~').contains(b) || matches!(b, b'<' | b'&'))
+        {
+            return Err(invalid(format!(
+                "runtime text requires printable ASCII without markup/entities at byte {offset}"
+            )));
+        }
+        if !input.style.flags.has_font()
+            || !input.style.flags.has_text_color()
+            || !input.style.flags.has_layout()
+        {
+            return Err(invalid(
+                "runtime text style lacks explicit font/color/layout flags",
+            ));
+        }
+        if input.style.effects.kerning != Some(false)
+            || input.style.effects.letter_spacing_twips != Some(0)
+            || input.style.effects.underline != Some(false)
+            || input.style.effects.block_indent_twips != Some(0)
+        {
+            return Err(invalid(
+                "runtime text effects are unsupported or unresolved",
+            ));
+        }
+        add_budget(
+            &mut bytes,
+            input.text.len(),
+            limits.max_text_bytes,
+            "runtime text",
+        )?;
+        add_budget(
+            &mut bytes,
+            input.provenance.len(),
+            limits.max_text_bytes,
+            "runtime provenance",
+        )?;
+        add_budget(
+            &mut glyphs,
+            input.text.len(),
+            limits.max_glyph_placements,
+            "runtime glyph preflight",
+        )?;
+    }
+    Ok(result)
+}
+
+fn check_definition(library: &MovieLibrary, definition: DefinitionRef) -> io::Result<()> {
+    let entry = library
+        .entry(definition.movie_id)
+        .ok_or_else(|| invalid("definition movie not in library"))?;
+    let character = entry
+        .asset
+        .movie
+        .dictionary
+        .get(&definition.character_id)
+        .ok_or_else(|| invalid("definition ID not in library dictionary"))?;
+    if character.tag_index != definition.tag_index
+        || character.kind != definition.kind
+        || character.bounds != definition.bounds
+    {
+        return Err(invalid(
+            "definition reference disagrees with library dictionary",
+        ));
+    }
+    Ok(())
 }
 
 fn verified_html_font_route(
@@ -519,25 +713,7 @@ struct Builder<'a> {
 }
 impl Builder<'_> {
     fn check_definition(&self, definition: DefinitionRef) -> io::Result<()> {
-        let entry = self
-            .library
-            .entry(definition.movie_id)
-            .ok_or_else(|| invalid("definition movie not in library"))?;
-        let character = entry
-            .asset
-            .movie
-            .dictionary
-            .get(&definition.character_id)
-            .ok_or_else(|| invalid("definition ID not in library dictionary"))?;
-        if character.tag_index != definition.tag_index
-            || character.kind != definition.kind
-            || character.bounds != definition.bounds
-        {
-            return Err(invalid(
-                "definition reference disagrees with library dictionary",
-            ));
-        }
-        Ok(())
+        check_definition(self.library, definition)
     }
     fn mesh(&mut self, definition: DefinitionRef) -> io::Result<usize> {
         let key = (definition.movie_id, definition.character_id);
@@ -667,6 +843,7 @@ impl Builder<'_> {
         let index = self.result.texts.len();
         let mut asset = TextAsset {
             definition,
+            runtime: None,
             field: None,
             font_binding: None,
             layout: None,
@@ -807,6 +984,116 @@ impl Builder<'_> {
         }
         self.texts.insert(key, index);
         self.result.texts.push(asset);
+        Ok(index)
+    }
+
+    fn runtime_text(
+        &mut self,
+        definition: DefinitionRef,
+        input: &RuntimeTextOverride,
+    ) -> io::Result<usize> {
+        if self.result.texts.len() >= self.limits.max_texts {
+            return Err(invalid("scene-content runtime text budget exceeded"));
+        }
+        let movie = &self.library.entry(definition.movie_id).unwrap().asset.movie;
+        let tag = movie
+            .tags
+            .get(definition.tag_index)
+            .ok_or_else(|| invalid("runtime text tag index out of bounds"))?;
+        if tag.code != 37 {
+            return Err(invalid("runtime text requires an actual DefineEditText"));
+        }
+        for (bytes, name) in [
+            (tag.body.len, "runtime text source"),
+            (input.text.len(), "runtime text"),
+            (input.provenance.len(), "runtime provenance"),
+        ] {
+            add_budget(
+                &mut self.result.stats.text_bytes,
+                bytes,
+                self.limits.max_text_bytes,
+                name,
+            )?;
+        }
+        if input.text.len() > self.limits.max_glyph_placements - self.result.stats.glyph_placements
+        {
+            return Err(invalid("runtime glyph placement preflight budget exceeded"));
+        }
+        let field = EditText::parse(tag.body.bytes(movie.bytes())?, tag.body.offset)?;
+        if field.id != definition.character_id {
+            return Err(invalid("runtime EditText ID differs from definition"));
+        }
+        // Keep the original field in the asset. Only this temporary layout input
+        // receives supplied style; authored initial text/spans stay untouched.
+        let mut effective = field.clone();
+        effective.flags = input.style.flags;
+        effective.font_id = Some(input.style.font.character_id);
+        effective.font_height = Some(input.style.height_twips);
+        effective.color = Some(input.style.color_rgba);
+        effective.layout = Some(input.style.layout_twips);
+        let binding =
+            self.font_binding(input.style.font.movie_id, input.style.font.character_id)?;
+        if !binding.issues.is_empty() {
+            return Err(invalid(format!(
+                "runtime text font binding: {:?}",
+                binding.issues
+            )));
+        }
+        let font_index = binding
+            .font
+            .ok_or_else(|| invalid("runtime text font did not resolve"))?;
+        let font = &self.result.fonts[font_index];
+        let identity = FontIdentity {
+            movie_id: font.definition.movie_id,
+            character_id: font.definition.character_id,
+        };
+        if identity != input.style.font.expected_resolved {
+            return Err(invalid(
+                "runtime text resolved font differs from supplied identity",
+            ));
+        }
+        let decoded = font
+            .font
+            .as_ref()
+            .ok_or_else(|| invalid("runtime text font failed decoding"))?;
+        let layout = edit_layout::layout_plain(&effective, &input.text, |id| {
+            if id != input.style.font.character_id {
+                return Err(EditLayoutError::UnresolvedFont { local_id: id });
+            }
+            Ok(ResolvedFont {
+                identity,
+                definition: decoded,
+            })
+        })
+        .map_err(|e| invalid(format!("runtime text layout: {e}")))?;
+        let mut asset = TextAsset {
+            definition,
+            runtime: Some(input.clone()),
+            field: Some(field),
+            font_binding: Some(binding),
+            layout: None,
+            layout_error: None,
+            html_layout: None,
+            html_layout_error: None,
+            html_font_route: None,
+            glyphs: Vec::new(),
+            issues: Vec::new(),
+        };
+        self.text_geometry(&mut asset, &effective, layout)?;
+        // Glyph caches preserve failures for saved assets. An explicit override
+        // must instead fail visibly rather than displaying missing-glyph fallback.
+        for glyph in &asset.glyphs {
+            let cached = &self.result.glyphs[glyph.glyph];
+            if cached.mesh.is_none() || !cached.issues.is_empty() {
+                return Err(invalid(format!(
+                    "runtime text glyph preparation failed: {:?}",
+                    cached.issues
+                )));
+            }
+        }
+        let index = self.result.texts.len();
+        self.result.texts.push(asset);
+        // Deliberately do not enter the saved definition cache.
         Ok(index)
     }
 
