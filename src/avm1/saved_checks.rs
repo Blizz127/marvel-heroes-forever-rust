@@ -411,3 +411,76 @@ fn saved_supplied_stack_ceiling_preserves_partial_stack_bank_and_pool_on_error()
     );
     assert_eq!(vm.instruction_count(), instructions);
 }
+
+#[test]
+fn saved_installer_rejects_empty_and_initial_end_without_publishing_wrapper() {
+    let (mut vm, owner) = fixture();
+    for bytes in [&[][..], &[0][..], &[0, 0x17][..]] {
+        let program = Arc::new(Program::parse_at(bytes, 700).unwrap());
+        let source = SavedActionSource {
+            span: program.span,
+            code: vm.register(program).unwrap(),
+        };
+        assert!(vm.install_saved_action(owner, source, 1).is_err());
+        assert!(vm.saved_actions.is_empty());
+    }
+    let (action, source) = install(&mut vm, owner, &[0x17, 0, 0xff, 0xab]);
+    // Full source includes opaque bytes after End, as copied by the native
+    // loader. They are neither trimmed nor executed by the action decoder.
+    assert_eq!(source.span.len, 4);
+    assert_eq!(vm.saved_action_info(action).unwrap().source.span.len, 4);
+}
+
+#[test]
+fn saved_environment_adoption_blocks_untracked_diagnostic_and_script_execution() {
+    let (mut vm, owner) = fixture();
+    let target = vm.attached_owner(owner).unwrap();
+    // A valid old DefineFunction with an anonymous, one-byte End body. Its
+    // object exists before Environment adoption; invocation is the boundary.
+    let definition = Arc::new(Program::parse(&[0x9b, 5, 0, 0, 0, 0, 1, 0, 0]).unwrap());
+    let function_code = vm.register(definition).unwrap();
+    let function = vm
+        .alloc(
+            Kind::Script(ScriptFunction {
+                target,
+                code: function_code,
+                offset: 0,
+                scopes: vec![target, vm.global()],
+                pool: Arc::new(Vec::new()),
+            }),
+            None,
+        )
+        .unwrap();
+    let env = environment(&mut vm, owner, vec![Value::Number(23.0)], 8);
+    let program = Arc::new(Program::parse(&[0x17]).unwrap());
+    let code = vm.register(program).unwrap();
+    vm.instructions = 77;
+    assert_eq!(
+        vm.execute(code, target, &mut RejectHost).unwrap_err().kind,
+        ErrorKind::Unsupported("diagnostic execution after saved Environment adoption")
+    );
+    assert_eq!(vm.instructions, 77);
+    assert_eq!(
+        vm.call(
+            Value::Object(function),
+            vm.attached_value(owner).unwrap(),
+            &[],
+            &mut RejectHost,
+        )
+        .unwrap_err()
+        .kind,
+        ErrorKind::Unsupported(
+            "script call after saved Environment adoption requires shared state profile"
+        )
+    );
+    assert_eq!(
+        vm.saved_environment_state(env).unwrap().stack(),
+        &[Value::Number(23.0)]
+    );
+    assert_eq!(
+        vm.saved_environment_state(env).unwrap().registers(),
+        &supplied_registers()
+    );
+    assert!(!vm.saved_environment_halted(env).unwrap());
+    assert!(vm.attached_info(owner).unwrap().storage.is_none());
+}
