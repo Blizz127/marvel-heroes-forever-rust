@@ -8,7 +8,7 @@
 //! metadata. This original helper models that fresh graph only. VM resource
 //! failure rollback is an engineering policy, not a claim about native OOM.
 
-use super::{text, ErrorKind, Kind, NativeMarker, ObjectId, Property, Result, Value, Vm};
+use super::{ErrorKind, Kind, NativeMarker, ObjectId, Property, Result, Value, Vm, text};
 
 /// Four distinct objects produced by one fresh factory invocation.
 ///
@@ -115,8 +115,8 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Limits;
     use super::*;
-    use crate::avm1::vm::Limits;
 
     fn setup() -> Vm {
         let mut vm = Vm::new(15, Limits::default()).unwrap();

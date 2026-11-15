@@ -9,11 +9,14 @@ use std::sync::Arc;
 mod attached;
 #[path = "attached_events.rs"]
 mod attached_events;
+#[path = "external_interface.rs"]
+mod external_interface;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
     AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
+pub use external_interface::ExternalInterfaceObjects;
 
 pub type Text = Arc<[u16]>;
 pub fn text(value: &str) -> Text {
@@ -304,6 +307,8 @@ enum Kind {
     ArrayConstructor,
     FunctionConversion,
     MovieClipConstructor,
+    ExternalInterfaceConstructor,
+    ExternalInterfacePrototype,
     MovieClip(MovieClipRole),
     AttachedOwner(AttachedClipId),
     BoundStorage(AttachedClipId),
@@ -328,6 +333,7 @@ impl Kind {
                 | Self::ArrayConstructor
                 | Self::FunctionConversion
                 | Self::MovieClipConstructor
+                | Self::ExternalInterfaceConstructor
                 | Self::AddProperty
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
@@ -338,10 +344,15 @@ impl Kind {
 #[derive(Debug, Clone)]
 enum Property {
     Data(Value),
+    NativeMarker(NativeMarker),
     Accessor {
         getter: Value,
         setter: Option<Value>,
     },
+}
+#[derive(Debug, Clone, Copy)]
+enum NativeMarker {
+    ExternalAvailable,
 }
 #[derive(Debug, Clone, Copy)]
 struct ClassBase {
@@ -885,6 +896,14 @@ impl Vm {
             unreachable!();
         }
         if let Value::Object(selected) = selected {
+            if matches!(
+                self.objects[selected.0].kind,
+                Kind::ExternalInterfaceConstructor
+            ) {
+                return self.fail(ErrorKind::Unsupported(
+                    "ExternalInterface allocator profile",
+                ));
+            }
             if matches!(self.objects[selected.0].kind, Kind::ArrayConstructor) {
                 return self.fail(ErrorKind::Unsupported("Array subclass allocation profile"));
             }
@@ -1309,6 +1328,9 @@ impl Vm {
             if let Some(property) = object.properties.get(key) {
                 return match property {
                     Property::Data(value) => Ok(value.clone()),
+                    Property::NativeMarker(NativeMarker::ExternalAvailable) => self.fail(
+                        ErrorKind::Unsupported("ExternalInterface.available active handler query"),
+                    ),
                     Property::Accessor { .. } => self.fail(ErrorKind::Unsupported(
                         "accessor requires executable property access",
                     )),
@@ -1413,6 +1435,7 @@ impl Vm {
                         | Kind::ArrayConstructor
                         | Kind::FunctionConversion
                         | Kind::MovieClipConstructor
+                        | Kind::ExternalInterfaceConstructor
                         | Kind::AddProperty
                         | Kind::RegisterClass
                         | Kind::SetPropertyFlags
@@ -1445,6 +1468,14 @@ impl Vm {
         host: &mut impl Host,
     ) -> Result<()> {
         self.check_object(id)?;
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
+        ) {
+            return self.fail(ErrorKind::Unsupported(
+                "ExternalInterface member mutation profile",
+            ));
+        }
         if matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
             return self.set_key(id, key, value);
         }
@@ -1517,6 +1548,14 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
+        ) {
+            return self.fail(ErrorKind::Unsupported(
+                "ExternalInterface member mutation profile",
+            ));
+        }
         if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
             self.check_value(&value)?;
             if key.as_ref() == text("__proto__").as_ref() {
@@ -1553,6 +1592,9 @@ impl Vm {
             ));
         }
         self.check_value(&value)?;
+        if matches!(self.descriptor(id, &key)?, Some(Property::NativeMarker(_))) {
+            return self.fail(ErrorKind::Unsupported("native special-property assignment"));
+        }
         if matches!(self.descriptor(id, &key)?, Some(Property::Accessor { .. })) {
             return self.fail(ErrorKind::Unsupported(
                 "accessor requires executable property assignment",
@@ -2279,6 +2321,14 @@ impl Vm {
                 if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
                     return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
                 }
+                if matches!(
+                    self.objects[receiver.0].kind,
+                    Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
+                ) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "ExternalInterface addProperty profile",
+                    ));
+                }
                 if name.is_empty()
                     || !self.callable(&args[1])
                     || (!matches!(args[2], Value::Null) && !self.callable(&args[2]))
@@ -2322,6 +2372,16 @@ impl Vm {
                     }
                     _ => Value::Undefined,
                 });
+            }
+            Kind::ExternalInterfaceConstructor => {
+                if constructor_context.is_some() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "ExternalInterface construction profile",
+                    ));
+                }
+                // Verified native callback18c560 writes Undefined; no host call,
+                // allocation or receiver-dependent effects are performed here.
+                return Ok(Value::Undefined);
             }
             Kind::FunctionConversion => {
                 if constructor_context.is_some() || args.len() != 1 {
@@ -2920,6 +2980,14 @@ impl Vm {
                                 "Function dynamic construction profile",
                             ));
                         }
+                        if matches!(
+                            self.objects[constructor.0].kind,
+                            Kind::ExternalInterfaceConstructor
+                        ) {
+                            return self.fail(ErrorKind::Unsupported(
+                                "ExternalInterface construction profile",
+                            ));
+                        }
                         let prototype = match self.get(constructor, "prototype")? {
                             Value::Object(id) => Some(id),
                             Value::Undefined | Value::Null => None,
@@ -3224,6 +3292,7 @@ impl Vm {
                                         | Kind::ArrayConstructor
                                         | Kind::FunctionConversion
                                         | Kind::MovieClipConstructor
+                                        | Kind::ExternalInterfaceConstructor
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
@@ -4054,6 +4123,90 @@ mod tests {
             execute(&mut vm, &bytes).unwrap_err().kind,
             ErrorKind::Unsupported(_)
         ));
+    }
+    #[test]
+    fn external_interface_execution_keeps_native_boundaries_explicit() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let graph = vm.build_external_interface(17).unwrap();
+        assert!(vm.callable(&Value::Object(graph.constructor)));
+        assert!(!vm.callable(&Value::Object(graph.prototype)));
+        let result = vm
+            .call(
+                Value::Object(graph.constructor),
+                Value::Null,
+                &[Value::string("ignored by native callback")],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Undefined);
+        assert_eq!(result.host_calls, 0);
+        assert!(matches!(
+            vm.call(
+                Value::Object(graph.add_callback),
+                Value::Object(graph.constructor),
+                &[],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::UnsupportedNativeFunction(_)
+        ));
+        assert_eq!(vm.host_calls, 0);
+        for target in [graph.constructor, graph.prototype] {
+            assert!(vm.set(target, "example", Value::Null).is_err());
+            assert!(
+                vm.write_property(target, "example", Value::Null, &mut RejectHost)
+                    .is_err()
+            );
+            assert!(vm.delete_member(target, &text("constructor")).is_err());
+        }
+        assert_eq!(
+            vm.get(graph.constructor, "available").unwrap_err().kind,
+            ErrorKind::Unsupported("ExternalInterface.available active handler query")
+        );
+        assert!(
+            vm.read_property(graph.constructor, "available", &mut RejectHost)
+                .is_err()
+        );
+        let derived = vm.alloc(Kind::Plain, Some(graph.constructor)).unwrap();
+        assert!(vm.set(derived, "available", Value::Bool(false)).is_err());
+        vm.set(vm.global(), "EI", Value::Object(graph.constructor))
+            .unwrap();
+        let mut bytes = push(&[Value::Number(0.0), Value::string("EI")]);
+        bytes.push(0x40);
+        let before = vm.object_count();
+        assert_eq!(
+            execute(&mut vm, &bytes).unwrap_err().kind,
+            ErrorKind::Unsupported("ExternalInterface construction profile")
+        );
+        assert_eq!(vm.object_count(), before);
+        // The installed method remains an explicit host binding. No handler is
+        // installed by building the fresh graph, and default hosts reject it.
+        assert!(matches!(
+            vm.call(
+                Value::Object(graph.call),
+                Value::Object(graph.constructor),
+                &[],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Host(_)
+        ));
+        let mut host = BoundHost { calls: 0 };
+        assert_eq!(
+            vm.call(
+                Value::Object(graph.call),
+                Value::Object(graph.constructor),
+                &[Value::Number(7.0)],
+                &mut host
+            )
+            .unwrap()
+            .value,
+            Value::Number(42.0)
+        );
+        assert_eq!(host.calls, 1);
     }
     #[test]
     fn host_context_survives_object_result_setter_reentry_and_error() {

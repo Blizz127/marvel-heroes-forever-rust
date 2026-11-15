@@ -826,6 +826,40 @@ distinct from their controlled ExternalInterface receiver. Private
 The controlled namespace/host fixture does not install a native ExternalInterface
 factory, select a retail handler or resolve actual locale resources.
 
+## Fresh ExternalInterface graph
+
+`build_external_interface(call_binding)` constructs the verified fresh callable,
+separate prototype and two native method identities. It returns their ObjectIds
+without installing a namespace entry or factory cache. It uses the cached Function
+and Object prototypes directly, preserving them even when public bindings change.
+The callable owns `available` (flags 0), `addCallback` and `call` (flags 7), and
+`prototype` (flags 3); linked-parent and prototype-constructor metadata retain flags 3.
+The prototype adds no methods. The complete setup and rights/evidence ledger are
+in `docs/EXTERNAL_INTERFACE_BINDING.md`.
+
+The native callable callback returns undefined without invoking a host.
+`addCallback` remains an identified unsupported native function. `available` is an
+explicit native special-property marker whose active-handler query rejects until
+implemented; it is never represented by a guessed Boolean or missing property.
+The supplied `call_binding` forwards through the existing HostCall/HostResult
+boundary. No callback registration or handler is created by the builder.
+Construction with `new`, native-object mutation, accessor installation and native
+metadata rewriting remain gated. A failed unpublished factory allocation restores
+its newly allocated graph and counters; this is an engineering rollback policy,
+not a native out-of-memory behavior claim.
+
+**OBSERVED:** Five focused checks cover the exact fresh ledger, cached-parent
+selection, distinct identities, allocation-budget rollback, callback boundaries,
+unsupported available/construction/mutation paths and rejecting default host.
+The original selected localization caller still runs 40 instructions; two wrapper
+calls run 25 each, return distinct four-field objects and carry the captured root
+context at original CallMethod 110311. This time the receiver is the grounded
+ExternalInterface callable graph. The surrounding namespace and returned locale
+data remain controlled fixtures, and no lazy-token materialization or actual engine
+handler is claimed. Private `avm1-runtime/external-interface-evidence.json`,
+`run-owned-external-interface.rs`, `owned-external-interface.tsv` and
+`vm-tests-external-interface.txt` retain these results.
+
 ## Fresh Object results from native hosts
 
 `Host::call_result` is backward compatible: its default calls the existing `call`

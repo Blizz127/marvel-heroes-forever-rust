@@ -441,6 +441,10 @@ impl Vm {
                 return Ok(match property {
                     Property::Data(value) => PrototypeMember::Data(value.clone()),
                     Property::Accessor { .. } => PrototypeMember::Accessor,
+                    Property::NativeMarker(_) => {
+                        return self
+                            .fail(ErrorKind::Unsupported("attached native descriptor lookup"));
+                    }
                 });
             }
             cursor = object.prototype;
@@ -502,6 +506,9 @@ impl Vm {
             if let Some(member) = self.objects[storage.0].properties.get(key) {
                 return match member {
                     Property::Data(value) => Ok(AttachedMember::Present(value.clone())),
+                    Property::NativeMarker(_) => {
+                        self.fail(ErrorKind::Unsupported("attached native descriptor lookup"))
+                    }
                     Property::Accessor { .. } => {
                         self.fail(ErrorKind::Unsupported("attached own accessor read"))
                     }
