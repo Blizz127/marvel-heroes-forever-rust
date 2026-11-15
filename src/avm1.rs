@@ -1,6 +1,10 @@
-//! Bounded, non-executing AVM1 action decoder. No host callbacks or I/O.
+//! Bounded AVM1 action decoder with a separate, partial execution core in `vm`.
+//! Decoding itself never executes actions or invokes host callbacks.
 //!
 //! See docs/AVM1_FORMAT.md for source provenance and measured coverage.
+#[path = "avm1/vm.rs"]
+pub mod vm;
+
 use std::collections::BTreeMap;
 use std::io;
 
