@@ -5,12 +5,12 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev14 runtime integration in progress
+## 2026-11-15 dev14 diagnostic increment
 
 **VERIFIED Rust integration:** the window-feature check passes after native
 `tabEnabled`, complete scene adoption, saved-handler VM binding and recovered
 Scale9 arithmetic are compiled together. The integration receipt is
-`evidence/dev14-adopter-tab-integration.json`. This is not yet a dev14 package.
+`evidence/dev14-adopter-tab-integration.json`.
 
 The [scene adopter](docs/LOGIN_INSTANCE_INPUTS.md) binds the original saved login
 from explicitly supplied runtime inputs: 75 clips, 33 fields and 95 named child
@@ -41,7 +41,22 @@ new visibility success is claimed. Receipt:
 The new [Scale9 arithmetic](docs/SCALE9_RENDERING.md) passes 37 focused numeric
 checks under its finite IEEE arithmetic profile. Final renderer coordinate and
 resource binding remain unimplemented; it is not enabled as a visual upgrade.
-The latest staged build remains dev13, with no confirmed publication route.
+**VERIFIED build/startup:** clean tested source
+`52d2876ed88e7dfa8a83d54ddb4d0511f5b2f56c` builds with the window feature.
+Binary SHA-256 `93651c28729c76f005cf68a7163dd13c55a54d56b1fa06685e47d71bf7412be5`
+passes nine CLI/image checks and an isolated two-frame window smoke with empty
+stderr. Saved login and cursor pixels keep their retained identities. Four
+original entry-map generic property commands now succeed, preserving opaque
+native tails; WorldInfo correctly remains with the actor reader. The input
+package is unchanged. Receipts: `evidence/build-0.1.0-dev.14-smoke.json`,
+`evidence/dev14-native-html/receipt.json` and `evidence/dev14-entry-cli.json`.
+
+Linux notices cover 121 dependencies and 231 notice files, manifest SHA-256
+`4ab8d0d1b2740aec3cbdfdcf148788090bc73a3ee61dbc3f390375ddb78c8689`.
+This remains an original-code diagnostic with zero finished upgrades and no
+playable login. Native script-call operand/register behavior is still being
+reconciled; saved ordinary calls remain gated. No Rust publication route is
+confirmed. Private staging/readback is recorded separately when complete.
 
 ## 2026-11-15 dev13 diagnostic increment
 
