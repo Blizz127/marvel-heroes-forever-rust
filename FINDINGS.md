@@ -5,6 +5,23 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev19 integration in progress
+
+**VERIFIED static fresh target checkpoint:** the concrete fresh root-source and
+ordinary successful Environment-allocation path reaches native `0x14020366e`
+with target DWORD +0x6a=`0x52004f80`, WORD +0x88=`0x000a`, source WORD
++0x140=`0x0001` and QWORD +0xb8=`0x10`. This is before frame-capacity, ledger,
+prototype and later resource/root work; the values are not current adopted
+instance defaults. Twenty-six ranges (1,203 instructions/4,897 bytes) and six
+pointers match the owned executable. Receipt:
+`evidence/fresh-target-state/receipt.json`, SHA-256
+`f5cee982cc7d0584d36aac0137df2f8217f9f77ff33a0668657dea335849741e`.
+
+The new Mouse host interface rejects unbound user-event delivery by default.
+It installs no Mouse object and performs no cursor mutation. Native factory
+and actual engine handler work continue separately. Dev18 remains the latest
+staged package; no dev19 build/startup result is claimed.
+
 ## 2026-11-15 dev18 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested source

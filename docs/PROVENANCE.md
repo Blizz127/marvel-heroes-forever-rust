@@ -671,3 +671,9 @@ manager assets and explicit diagnostic associations. The private ledger freezes
 source, three package inputs, harness and pixel reference; existing Mesa/wgpu
 tool provenance applies. No third-party implementation or native current-state
 default was added.
+
+[Fresh target state](FRESH_TARGET_STATE.md) records exact owned constructor
+stores, conditional DataDef/getter identities and ordinary allocation
+assumptions through one specific owner checkpoint. Its evidence ledger retains
+all selected native ranges and independent checks privately. The values do not
+replace snapshots for already adopted targets or prove later preservation.
