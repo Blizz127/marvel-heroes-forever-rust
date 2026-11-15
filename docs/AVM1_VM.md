@@ -39,6 +39,47 @@ Function bodies capture lexical object scopes and the current constant pool.
 Function2 parameter registers, supported preloads, local variables, arguments and
 return values are represented directly. With blocks add a temporary scope.
 
+Ordinary invocation still uses isolated operand vectors and a private type-1
+register vector. `SAVED_SCRIPT_CALLS.md` now establishes that the native selected
+Environment shares those operands, and type1 shares its persistent fixed bank.
+General call-stack behavior therefore remains a diagnostic limitation; saved
+execution rejects ordinary calls until its shared-state path is implemented.
+No successful source probe is promoted to full call/runtime parity from balanced
+compiler output alone.
+
+## Function2 isolated register bounds
+
+Function2 now allocates exactly the serialized register count `N`, correcting
+the previous `N+1` allowance. The **VERIFIED static** contract in
+`SAVED_SCRIPT_CALLS.md` and private
+`rea-saved-script-registers/register-index-contract.json` establishes that valid
+isolated indices are strictly below `N`. Native indices outside that range can
+reach an outer dynamic register extent or fixed register0; this VM rejects them
+explicitly instead of allocating an extra local slot. `N=0` grants no local
+register. Parameter register0 still denotes a named activation binding, and
+supported preloads are assigned after parameters beginning at index1.
+
+**OBSERVED source audit:** the original parser found 7,297 Function2 definitions
+and 90,398 active register indices in the manager. Across all 21 authenticated
+owned frontend movies there are 18,815 such definitions and 212,996 active
+indices. Every active index is below its declared count; counts range2..50 and
+no zero-count header occurs. The independent byte check covers every header and
+all 214,557 related parameter/preload/operand rows, including non-bank records.
+Private `avm1-function2-register-audit/receipt.json`, SHA256
+`11e4a898c6981294607f446fd423ba186f05ff5a7d1fd9313c45de08f722eada`,
+records frozen parser/input hashes, compile/run/check exit0 and eight harmless
+unused-reexport warnings. This is a static compiler-profile observation, not
+function execution or native fallback validation.
+
+**OBSERVED focused execution checks:** seven checks pass for the exact boundary,
+zero-register profile and existing Apply/Super/typed-construction/pool behavior.
+Three synthetic super fixtures previously declared2 while using register2;
+their counts are corrected to3. The first focused run's resulting fixture
+failure is preserved in `avm1-runtime/function2-bounds-attempt1.json`. Final
+results and hashes are in `avm1-runtime/function2-bounds-final-checks.json`,
+SHA256 `bac0411a865ecfd52a27911c57584e1bf846d1a9685219a2ccfc9a5a4c52a135`.
+No outside-range native alias/fallback or shared operand behavior is claimed.
+
 ## Host boundary
 
 A native function must first be created with `native(binding_id)` and installed

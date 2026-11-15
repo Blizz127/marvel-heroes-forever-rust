@@ -2872,7 +2872,10 @@ impl Vm {
             stack: Vec::new(),
             registers: vec![
                 Value::Undefined;
-                definition.register_count.map_or(4, |n| usize::from(n) + 1)
+                // Native Function2 appends exactly N slots. Outside-N indices
+                // can alias outer/fixed native banks, which this isolated-frame
+                // profile deliberately rejects instead of granting slot N.
+                definition.register_count.map_or(4, usize::from)
             ],
             scopes,
             pool: function.pool.clone(),
@@ -5935,7 +5938,7 @@ mod tests {
         }
         fn definition(name: &str, body: &[u8]) -> Vec<u8> {
             let mut payload = name.as_bytes().to_vec();
-            payload.extend([0, 0, 0, 2, 0x19, 0]);
+            payload.extend([0, 0, 0, 3, 0x19, 0]);
             payload.extend((body.len() as u16).to_le_bytes());
             let mut bytes = action(0x8e, &payload);
             bytes.extend(body);
@@ -6080,7 +6083,7 @@ mod tests {
         body.extend(action(0x96, &[4, 2, 3])); // zero args, super register2, undefined name
         body.extend([0x52, 0x3e]);
         let mut payload = b"Tween\0".to_vec();
-        payload.extend([0, 0, 2, 0x19, 0]);
+        payload.extend([0, 0, 3, 0x19, 0]);
         payload.extend((body.len() as u16).to_le_bytes());
         let mut definition = action(0x8e, &payload);
         definition.extend(body);
@@ -6568,12 +6571,66 @@ mod tests {
         bytes
     }
     fn anonymous_function2(flags: u16, body: &[u8]) -> Vec<u8> {
-        let mut payload = vec![0, 0, 0, 2];
+        // The super fixtures preload indices1 and2; native allocation needs
+        // N=3 for both to be inside this function's isolated register range.
+        let mut payload = vec![0, 0, 0, 3];
         payload.extend(flags.to_le_bytes());
         payload.extend((body.len() as u16).to_le_bytes());
         let mut bytes = action(0x8e, &payload);
         bytes.extend(body);
         bytes
+    }
+    #[test]
+    fn function2_register_count_does_not_grant_an_extra_or_outer_slot() {
+        fn invoke_count(n: u8, flags: u16, body: &[u8]) -> Result<Execution> {
+            let mut vm = setup();
+            let mut definition = anonymous_function2(flags, body);
+            definition[6] = n; // Serialized register_count byte in this fixture.
+            let code = vm
+                .register(Arc::new(Program::parse(&definition).unwrap()))
+                .unwrap();
+            let function = vm
+                .execute(code, vm.root(), &mut RejectHost)
+                .unwrap()
+                .stack
+                .pop()
+                .unwrap();
+            vm.call(function, Value::Object(vm.root()), &[], &mut RejectHost)
+        }
+        let mut body = action(0x96, &[4, 1]);
+        body.push(0x3e);
+        assert!(matches!(
+            invoke_count(2, 0x29, &body).unwrap().value,
+            Value::Object(_)
+        ));
+        assert_eq!(
+            invoke_count(1, 0x29, &body).unwrap_err().kind,
+            ErrorKind::InvalidRegister(1)
+        );
+        let mut outside = action(0x96, &[4, 2]);
+        outside.push(0x3e);
+        assert_eq!(
+            invoke_count(2, 0x29, &outside).unwrap_err().kind,
+            ErrorKind::InvalidRegister(2)
+        );
+        let mut store = push(&[Value::Number(9.0)]);
+        store.extend(action(0x87, &[2]));
+        assert_eq!(
+            invoke_count(2, 0x29, &store).unwrap_err().kind,
+            ErrorKind::InvalidRegister(2)
+        );
+        let mut no_registers = push(&[Value::Number(7.0)]);
+        no_registers.push(0x3e);
+        assert_eq!(
+            invoke_count(0, 0x2a, &no_registers).unwrap().value,
+            Value::Number(7.0)
+        );
+        assert_eq!(
+            invoke_count(0, 0x2a, &action(0x96, &[4, 0]))
+                .unwrap_err()
+                .kind,
+            ErrorKind::InvalidRegister(0)
+        );
     }
     #[test]
     fn attached_apply_preserves_display_this_and_captured_environment() {
