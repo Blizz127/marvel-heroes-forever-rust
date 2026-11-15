@@ -2,7 +2,12 @@
 //!
 //! A GUID alone is not unique in the owner's manifest. Ambiguous lookups fail;
 //! callers can select an exact qualified texture name instead of guessing.
-//! This module resolves stored byte ranges. It does not decompress TFC payloads.
+//! Named cache reads validate stored byte ranges before decoding the observed
+//! external LZO mip format. Other payload flag combinations are unsupported.
+
+#[path = "texture_cache/payload.rs"]
+mod payload;
+pub use payload::{PayloadLimits, TextureCacheFile, decode_lzo_mip, decode_lzo_mip_with_limits};
 
 use std::collections::HashMap;
 use std::fs::File;

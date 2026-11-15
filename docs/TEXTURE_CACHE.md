@@ -1,9 +1,10 @@
 # Marvel texture-cache manifest
 
-`src/texture_cache.rs` is an original, std-only bounded metadata reader and
-resolver for the observed 1.52-client `TextureFileCacheManifest.bin`. It does not
-open texture caches automatically, extract files, decode stored blocks, or claim
-that an image has been rendered.
+`src/texture_cache.rs` is an original bounded metadata reader and resolver for
+the observed 1.52-client `TextureFileCacheManifest.bin`. Its `payload.rs` child
+reads explicitly selected cache files and decodes the observed external LZO
+profile through the project's original UPK LZO decoder. It does not search for
+cache files automatically, write extracted assets or claim retail rendering.
 
 ## Actual layout and reference discrepancy
 
@@ -109,7 +110,107 @@ The private Rust harness is `evidence/texture-cache-smoke.rs`; complete parsed
 metadata is emitted only to `evidence/texture-cache-rust-records.tsv`. Summary and
 comparison receipts are `evidence/texture-cache-rust-smoke.txt` and
 `evidence/texture-cache-validation.json`. No actual TFC payload was read or
-decoded by this validation.
+decoded by that initial manifest validation; the separate payload validation
+below covers three selected ranges.
+
+## Named cache reads and payload decoding
+
+`TextureCacheFile::open(explicit_path)` opens a regular `.tfc` file read-only.
+It records the supplied path's basename without constructing any path from
+manifest strings. `read_mip(resolved, texture_cache_name, bulk_flags,
+decoded_size)` requires agreement between the file basename, resolved manifest
+cache name and Texture2D cache name, using ASCII-insensitive comparison. A wrong
+cache name fails before reading. The caller must first resolve the texture's
+GUID, serialized mip index and qualified name using the manifest APIs.
+
+The range must fit the currently opened file's metadata length; the reader seeks
+to that offset and reads exactly the bounded stored length. A concurrent
+truncation fails the read. Filename and length agreement do **not** authenticate
+a cache's contents: callers select their private verified pin, and pin hashing
+remains a separate responsibility. There is no fallback to another cache, the
+first GUID candidate, or a Texture2D's negative placeholder offset.
+
+`decode_lzo_mip(stored_bytes, bulk_flags, decoded_size)` supports privately
+pinned ranges or other already-located bytes. It does not establish their cache
+identity. Both APIs have `_with_limits` variants accepting `PayloadLimits`:
+64 MiB stored bytes, 128 MiB decoded bytes and 1,024 blocks by default. The
+decoded length is the Texture2D mip's byte element count, independently checked
+against its pixel format/dimensions by the texture decoder.
+
+**OBSERVED (three owner cache ranges):** Bulk flags are exactly `0x11`; source
+Texture2D stored offsets and sizes are `-1`, so the manifest supplies the actual
+ranges. Each selected range contains a little-endian envelope:
+
+1. u32 tag `0x9e2a83c1`.
+2. i32 block size `131072` (128 KiB).
+3. i32 total compressed payload bytes and i32 total decoded bytes.
+4. `ceil(decoded_bytes / 131072)` pairs of i32 compressed/decoded block sizes.
+5. Consecutive raw LZO1X version-0 streams, one per block.
+
+The manifest's stored size includes the 16-byte header and 8-byte entries. The
+header's compressed total excludes them. All blocks except the last decode to
+128 KiB; the final block accounts for the exact remainder. Every table total,
+decoded texture length and stored range length must agree before decompression.
+The raw LZO decoder additionally rejects invalid references, overruns, truncated
+streams and trailing bytes. Other bulk-flag combinations and block sizes return
+`Unsupported`; this increment does not claim to cover every cache profile.
+
+## Actual payload evidence
+
+Three read-only source ranges were selected from `Icons.tfc` through the existing
+`alienware-bazzite` SSH alias with strict host checking and batch mode. Remote and
+local SHA-256 checks agree for each range, and source file size, modification time
+and inode stayed stable during the read. Exact offsets, hashes, source metadata
+and local filenames are in
+`evidence/texture-cache-ranges/range-copy-receipt.json`, SHA-256
+`d2ebc690926e4e6c1649cf34eeb60689026bc8a0cfce623e421deed6f6214954`.
+The original private script is `pin_ranges.py` in that directory.
+
+**VERIFIED (range transfer and independent decoding):**
+
+| CharacterSelect export | Stored offset | Stored bytes | LZO blocks | Decoded bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 3, full portrait | 6,289,438 | 130,164 | 5 | 641,200 |
+| 4, small portrait | 18,897,908 | 13,111 | 1 | 24,320 |
+| 5, power icon | 50,869,458 | 58,694 | 1 | 65,536 |
+
+The independent original Python wrapper parser and separately installed
+`liblzo2` 2.10 validation oracle consumed all seven blocks successfully. No
+library code was copied or linked into the client. Receipt
+`evidence/texture-cache-study/wrapper-scan.json` has SHA-256
+`5723c0df6f053850661a8db974d742ad1c49140f1bdcc68c8e1d0b35ad9f1543`;
+the original scanner and complete source ledger are `scan_wrappers.py` and
+`wrapper-sources.json` alongside it.
+
+The source inventory's historical whole-file record is 143,472,250 bytes with
+SHA-256 `23c9b90cd88f99888cbc71332251daeac1e494866c27eab80c6cf78e6f2c7777`.
+This range-copy operation did **not** recompute the whole-cache hash or establish
+that a complete local cache copy exists. Only the three selected ranges are
+currently transfer-verified by this evidence.
+
+**VERIFIED (synthetic Rust checks):** Three added tests cover every truncation of
+a small compressed envelope, trailing bytes, invalid tag/blocksize/totals and
+negative fields, corrupt LZO termination, unsupported bulk flags, resource caps,
+wrong cache names, exact range selection, out-of-bounds reads and short reads.
+Together with the five manifest tests, all eight pass. The focused transcript is
+`evidence/texture-cache-ranges/rust-tests.txt`.
+
+**VERIFIED (Rust, three actual selected ranges):** A private harness parses each
+actual Texture2D export, resolves its GUID/mip/qualified name against the actual
+manifest, verifies cache name and range metadata, and decodes all 731,056 encoded
+pixel bytes. Those bytes match the independent `liblzo2` outputs byte for byte.
+Passing them to `texture::decode_pixels` succeeds for 700×916 BC3, 152×160 BC3 and
+128×128 BGRA8 textures, producing 2,564,800, 97,280 and 65,536 RGBA bytes. The
+RGBA files stay private; successful conversion is not a rendered-image or retail
+parity check.
+
+The harness and transcript are `evidence/texture-cache-ranges/rust-smoke.rs` and
+`rust-smoke.txt`. `rust-validation.json` records output and implementation hashes;
+its SHA-256 is
+`39a052aaff26a53bbadea8c7964e0ea9fe1567f118742a11dbbf1f70557c07c7`.
+The actual smoke uses the lower-level decoder on independently pinned ranges;
+full-cache `TextureCacheFile` reads have only synthetic range/name coverage in
+this increment.
 
 ## Source and licence register
 
@@ -119,10 +220,15 @@ newly written here; no reference implementation was copied.
 | Source | Licence / identity | Used for |
 | --- | --- | --- |
 | [UEViewer `Unreal/UnrealMaterial/UnTexture3.cpp`](https://github.com/gildor2/UEViewer/blob/a0bfb468d42be831b126632fd8a0ae6b3614f981/Unreal/UnrealMaterial/UnTexture3.cpp), lines 566–640; private snapshot `evidence/upk-reference/Unreal__UnrealMaterial__UnTexture3.cpp` | MIT; commit `a0bfb468d42be831b126632fd8a0ae6b3614f981` | Reference manifest fields and GUID/mip relationship; actual extra FString and collision behavior were independently established from the owner's bytes. |
-| [UEViewer `Unreal/UnCoreSerialize.cpp`](https://github.com/gildor2/UEViewer/blob/a0bfb468d42be831b126632fd8a0ae6b3614f981/Unreal/UnCoreSerialize.cpp), FString section lines 359–436; private matching snapshot | MIT, same commit | FString count/termination encoding; Unicode is validated here rather than reproducing the reference's lossy conversion. |
+| [UEViewer `Unreal/UnCoreSerialize.cpp`](https://github.com/gildor2/UEViewer/blob/a0bfb468d42be831b126632fd8a0ae6b3614f981/Unreal/UnCoreSerialize.cpp), lines 359–436, 1036–1168 and 1531–1570; private matching snapshot | MIT, same commit | FString encoding, UE3 chunk framing and bulk codec selection. Actual block size/totals are independently checked, rather than copying the reference's permissive behavior. |
 | [UEViewer `LICENSE.txt`](https://github.com/gildor2/UEViewer/blob/a0bfb468d42be831b126632fd8a0ae6b3614f981/LICENSE.txt), private matching snapshot | MIT, copyright 2022 Konstantin Nosov | Confirm licence text. |
 | Owner's copied manifest and `evidence/alienware-distribution-inventory.json` | Proprietary Gazillion game data; owner-authorized private interoperability study | Identity, actual format, candidate collisions and source-cache bounds. No data included in git or builds. |
 | Original project `evidence/upk-object-research.json` and its private logical package observations | Project-generated analysis of proprietary owner data; the report's reference-source ledger is retained privately | CharacterSelect texture GUID/mip/cache references and qualified object paths; no runtime assertion. |
+| Owner's three exact `Icons.tfc` ranges; `evidence/texture-cache-ranges/range-copy-receipt.json` | Proprietary Gazillion game data; owner-authorized private interoperability study | Actual compressed wrapper grammar and sampled decoded pixel payloads. No game bytes enter git or builds. |
+| System `liblzo2` 2.10, `/usr/lib/x86_64-linux-gnu/liblzo2.so.2.0.0`; licence `/usr/share/doc/liblzo2-2/copyright`; [upstream LZO](https://www.oberhumer.com/opensource/lzo/) | GPL-2.0-or-later; separately installed private validation oracle | Independent decoded-byte comparison only. No source copied, runtime dependency or linkage added to the Rust client. |
 
-Cache decompression, actual cache-byte reads, texture pixel reconstruction and
-retail renderer behavior are outside this module's implemented/verified scope.
+The implementation reuses the project's original `src/upk/lzo.rs` via
+`upk::decompress_lzo`; its existing source/provenance record still applies. Pixel
+conversion is delegated to `texture::decode_pixels`. Full-cache validation,
+unobserved compression profiles and retail renderer/runtime behavior remain
+outside this increment's verified scope.
