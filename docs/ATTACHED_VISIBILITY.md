@@ -192,6 +192,25 @@ for arbitrary movie options or live state. No guessed option value, default
 flags, panel-name heuristic or synthetic write may substitute for the original
 constructor reaching its actual SetMember operations.
 
+## Bounded Rust getter
+
+The typed attached-member reader now admits exact `_visible` and returns Bool
+from the supplied current target-state bit 14. An installed name inventory must
+classify that key as standard ID 7. The read precedes lazy storage, children
+and prototype lookup, preserves the shared event-state word and creates no
+ordinary property. It does not read effective parent visibility or acknowledge
+renderer work. The named setter remains gated by the dependencies above.
+
+**VERIFIED focused Rust check:** one test passes with no warnings, covering
+opposite parent/child local states, no storage allocation, unchanged native
+state, native precedence over an injected ordinary accessor, independently
+updated current bits, invalid target and inconsistent native-name inventory.
+The existing setter rejection is retained. Private terminal output and exact
+source hash are in `attached-visibility/getter-test-result.json` and
+`getter-rust-verification.json`, whose SHA-256 is
+`051d3d42344aecb9187f84488a09b1d9a33b0f11f811ce1d1703659f4c8e0fd3`.
+This is neither an original-action execution nor a live retail visibility test.
+
 ## Evidence and provenance
 
 Primary native source is the owner's proprietary final build 1.52.0.1700:

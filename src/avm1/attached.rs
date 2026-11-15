@@ -725,6 +725,21 @@ impl Vm {
     }
     pub(super) fn attached_lookup(&self, id: AttachedClipId, key: &Text) -> Result<AttachedMember> {
         self.check_attached(id)?;
+        if key.as_ref() == text("_visible").as_ref() {
+            if self.attached_name_profile.as_ref().is_some_and(|profile| {
+                profile.classify_attached_name(key) != AttachedNameClass::Standard(7)
+            }) {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached visibility native ID profile",
+                ));
+            }
+            // Native ID 7 getter reads this target's +0x6a WORD bit 14.
+            // Parent/effective visibility and render-node state are separate.
+            // The setter has additional effects and remains unsupported here.
+            return Ok(AttachedMember::Present(Value::Bool(
+                self.attached[id.0].spec.event_state.target_flags & 0x4000 != 0,
+            )));
+        }
         if self.attached_focus_rect_name(key)? {
             let Some(info) = self.attached[id.0].focus_rect else {
                 return self.fail(ErrorKind::Unsupported(
@@ -1077,6 +1092,89 @@ mod tests {
         let ordinary = vm.object().unwrap();
         assert!(vm.bind_loaded_movie_target(ordinary, 11).is_err());
         vm.bind_loaded_movie_target(ordinary, 15).unwrap();
+    }
+
+    #[test]
+    fn visibility_getter_reads_local_native_bit_without_storage_or_parent_effects() {
+        let mut vm = vm();
+        let parent = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let mut child_spec = spec(2, Some(parent));
+        child_spec.event_state.target_flags |= 0x4000;
+        let child = vm.create_attached_movie_clip(child_spec).unwrap();
+        let object_count = vm.objects.len();
+        let properties = vm.properties;
+        let parent_state = vm.attached_event_state(parent).unwrap();
+        let child_state = vm.attached_event_state(child).unwrap();
+        // No complete child snapshot or lazy storage is needed for ID 7.
+        assert_eq!(
+            vm.read_attached_member(parent, "_visible").unwrap(),
+            AttachedMember::Present(Value::Bool(false))
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "_visible").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        assert_eq!(vm.objects.len(), object_count);
+        assert_eq!(vm.properties, properties);
+        assert!(vm.attached_info(parent).unwrap().storage.is_none());
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        assert_eq!(vm.attached_event_state(parent).unwrap(), parent_state);
+        assert_eq!(vm.attached_event_state(child).unwrap(), child_state);
+        assert!(
+            vm.write_attached_member(child, "_visible", Value::Bool(false))
+                .is_err()
+        );
+        assert_eq!(vm.attached_event_state(child).unwrap(), child_state);
+
+        vm.write_attached_member(child, "disabled", Value::Bool(false))
+            .unwrap();
+        let storage = ObjectId(vm.attached_info(child).unwrap().storage.unwrap().0);
+        vm.raw_member(
+            storage,
+            text("_visible"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: None,
+            },
+            7,
+        )
+        .unwrap();
+        assert_eq!(
+            vm.read_attached_member(child, "_visible").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        assert!(matches!(
+            vm.objects[storage.0].properties.get(&text("_visible")),
+            Some(Property::Accessor { .. })
+        ));
+        assert_eq!(vm.own_flags(storage, &text("_visible")), 7);
+
+        // Supplied current native state changes independently of the parent.
+        let mut parent_after = parent_state;
+        parent_after.target_flags |= 0x4000;
+        let mut child_after = child_state;
+        child_after.target_flags &= !0x4000;
+        vm.update_attached_event_state(parent, parent_after)
+            .unwrap();
+        vm.update_attached_event_state(child, child_after).unwrap();
+        assert_eq!(
+            vm.read_attached_member(parent, "_visible").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "_visible").unwrap(),
+            AttachedMember::Present(Value::Bool(false))
+        );
+        assert_eq!(vm.attached_event_state(child).unwrap(), child_after);
+        assert!(
+            vm.read_attached_member(AttachedClipId(999), "_visible")
+                .is_err()
+        );
+        // This synthetic inventory deliberately does not identify _visible as
+        // ID 7. An inconsistent installed profile must not be ignored.
+        vm.install_attached_name_profile(synthetic_profile())
+            .unwrap();
+        assert!(vm.read_attached_member(child, "_visible").is_err());
     }
 
     #[test]

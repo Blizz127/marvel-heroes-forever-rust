@@ -465,3 +465,22 @@ alone is not presented as that complete setter. [Scale9 rendering](SCALE9_RENDER
 extends owned-binary evidence to hierarchy, region transforms and fill mapping,
 while retaining final coordinate/resource-binding gaps and the older helper's
 inferred status.
+
+[Login instance inputs](LOGIN_INSTANCE_INPUTS.md) inventories all saved nodes,
+bindings and required supplied runtime state without manufacturing native
+defaults. [Stage VM binding](STAGE_VM_BINDING.md) records the retained native
+factory/listener contracts separately from property/resize effects.
+[Attached property flags](REA_ATTACHED_PROPERTY_FLAGS.md) grounds the bounded
+existing-own-storage operation in owned executable evidence.
+
+The [startup-map entry comparison](FRONTEND_STARTUP_MAP.md) adds the owner's
+pinned `MarvelEntry.upk` metadata and explicit unsupported object-preamble
+results. This original-reader inspection does not execute an entry-map handoff
+or redistribute its payloads; the owned proprietary source remains private.
+
+[Saved clip-action loading](SAVED_CLIP_ACTION_LOADING.md) closes the owned native
+record-mask and byte-span framing path while retaining the separate timeline
+handoff requirement. [Native frontend startup stages](NATIVE_FRONTEND_STARTUP_STAGE.md)
+records the bitmap splash, initialization ordering and conditional request wait;
+it also registers the exact Microsoft API/bitmap pages, X11 headers and private
+comparison tools used. Its bitmap mismatch and observation limits remain intact.

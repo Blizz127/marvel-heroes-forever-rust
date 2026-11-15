@@ -13,6 +13,25 @@ referenced action bodies remain explicitly unprepared. This result establishes
 saved graph preparation, not completed map initialization or a running login
 screen.
 
+The supplied frontend map is not automatically the process's initial map.
+**OBSERVED separate entry package:** the pinned `MarvelEntry.upk` is 1,221
+stored bytes (SHA-256
+`2b11493012b90c8ef95ea775f2b57e8ece60a9a9ab6d09dcca55703a3de36f33`),
+with 20 names, six imports and five exports. The five classes are Engine Level,
+Model, Polys, World and WorldInfo. Running this preparation API on that archive
+selects zero sequence/event/movie/player objects; it does not reveal a transition
+to the frontend map. The generic object reader separately rejects all five
+property streams because their class preambles are not yet established.
+This is an explicit parser boundary, not evidence that the native objects are
+empty or that runtime startup has no further behavior.
+
+These read-only observations used the immutable dev13 binary, SHA-256
+`d963ba5138f2c7310ff4761a20fa8553acdcedbc55b4238d6520d38725f704cf`.
+The source identity agrees with the complete selected-distribution inventory.
+Private command outputs and exact exit codes are retained in
+`evidence/entry-map-study/`; no native client, sequence, VM or network operation
+was executed by these inspections.
+
 ## API and retained source identity
 
 `StartupMap` contains `sequences`, `level_loaded`, `open_movies`,
