@@ -47,6 +47,7 @@ observed heads and evidence limits. The private reference hash manifest is
 | `/home/blizz/dev/dcuo-rust/FINDINGS.md`; names/structure under `/home/blizz/.local/share/dcuo-rust/` | Local owner-project documentation; licence not inspected | Private pins/evidence/build directory pattern and existing Alienware SSH route |
 | Devbox Steam `steamapps/libraryfolders.vdf` and matching config path | Owner configuration metadata | Bounded search for installed client; no secrets or values copied into source |
 | `/home/blizz/dev/mh-retail-accuracy-research.md` and targeted search results under `/home/blizz/dev/marvel-heroes/research/` | Local research; no separate licence inspected | Locate prior client/version and support notes; no implementation copied |
+| `/home/blizz/dev/marvel-heroes/research/STATUS-marvel-heroes.md` and filename inventory of `/home/blizz/dev/marvel-heroes/run/` | Owner operational notes and distribution metadata; no separate licence inspected | Locate normal startup/wake context. The dated status is historical, not a current server observation; no executable, account, configuration or live data changed |
 | `/home/blizz/dev/banshee-marvel-pack/docs/MARVEL_HEROES_TABULA_RASA.md`, `docs/channels/marvel-heroes.json`, targeted search results from `scripts/publish-marvel-heroes-channel.sh`, `docs/{ARCHITECTURE,ENB_INTEGRATION,SETTINGS,HALO_INTEGRATION}.md` and `docs/channels/README.md` | Local owner launcher project; licence not inspected | Client executable/install location and existing channel identification only; no downloads, publishing, launcher edits or launcher source copying |
 | `/home/blizz/dev/mh-omega-study` filename discovery | Local owner research; licence not inspected | Look for existing UE3 study material; no implementation source found/copied |
 | `/home/blizz/.local/share/devbox-coordinator/coordinator.py` report interface | Owner local operational tool; implementation not read | Authorized task status/handoff reporting only |
@@ -396,3 +397,8 @@ records private preservation checks and the installed GNU coreutils 9.7
 (GPLv3-or-later) reflink capability probe. The native String implementation uses
 the existing [owned executable study](STRING_NATIVE_METHODS.md); its synthetic
 checks remain distinct from execution of original login methods.
+
+[Attached focus rectangle](ATTACHED_FOCUSRECT.md) records the native exact-false
+setter and mask getter. The original typed VM implementation requires supplied
+raw target state and preserves unrelated bits; no fresh-state or renderer-policy
+default is inferred from its focused checks.
