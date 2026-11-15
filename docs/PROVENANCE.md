@@ -282,8 +282,10 @@ environment, retained source, handler and constructor ordering from REA, includi
 remaining display lookup, delivery-state and error-policy gaps.
 [Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
 records local Wine/capture-tool inspection, namespace isolation checks and
-initialization of a new private Wine prefix. Retail execution and reference
-capture remain separate unverified steps.
+initialization of a new private Wine prefix, plus two bounded retail runs that
+did not reach the frontend. [Native startup postmortem](NATIVE_STARTUP_SETTINGS.md)
+ties the captured null hostname-resolution fault to the owned executable and
+distinguishes the later settings verification and error-handler fault.
 [Native enumeration](REA_ENUMERATION.md) records the owned-binary string hash,
 collision, growth, hidden-literal metadata and visitor evidence. Derived orders
 remain distinguished from retail process observations.
@@ -296,3 +298,6 @@ onLoad gates without substituting generic-object behavior.
 [Native HTML wrapping](HTML_WRAPPING.md) records rounding and word-break evidence
 while retaining unresolved translator/font-state gates; the existing diagnostic
 layout is not promoted to native parity by a conditional mathematical model.
+[Camera math](CAMERA_MATH.md) records explicit-input native rotation, view and
+projection arithmetic plus private instruction/byte comparisons. Its original
+mathematical replay does not establish the selected runtime camera or GPU output.

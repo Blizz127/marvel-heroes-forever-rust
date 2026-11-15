@@ -113,7 +113,43 @@ mod tests {
             assert!(session.is_halted());
             assert!(session.initialize(&plan, &mut vm::RejectHost).is_err());
             assert!(session.compile_frame(0, &asset, 0).is_err());
+            assert!(session.into_initialized().is_err());
         }
+    }
+
+    #[test]
+    fn handoff_requires_complete_plans_and_retains_vm_and_ordinary_code() {
+        let asset = fixture(&[&[0x17, 0]]);
+        let mut pending = InitSession::new(15, vm::Limits::default(), 100).unwrap();
+        pending.compile_frame(0, &asset, 0).unwrap();
+        assert!(pending.into_initialized().is_err());
+
+        let mut session = InitSession::new(15, vm::Limits::default(), 100).unwrap();
+        let root = session.vm().root();
+        session
+            .setup_vm()
+            .unwrap()
+            .set(root, "retained", Value::Number(7.0))
+            .unwrap();
+        let plan = session.compile_frame(0, &asset, 0).unwrap();
+        session.initialize(&plan, &mut vm::RejectHost).unwrap();
+        let mut handoff = session.into_initialized().unwrap();
+        assert_eq!(handoff.frames, vec![plan.clone()]);
+        assert_eq!(
+            handoff.vm.get(root, "retained").unwrap(),
+            Value::Number(7.0)
+        );
+        // The saved ordinary action remains executable only at the caller's
+        // explicit request. RejectHost rejects its Stop command, as before.
+        let error = handoff
+            .vm
+            .execute(plan.frame_actions[0].code, root, &mut vm::RejectHost)
+            .unwrap_err();
+        assert!(matches!(error.kind, vm::ErrorKind::Host(_)));
+        assert_eq!(
+            error.source_offset,
+            Some(plan.frame_actions[0].source_offset)
+        );
     }
 }
 
@@ -159,6 +195,14 @@ pub enum InitOutcome {
     },
     AlreadyInitialized,
     Stopped(PhaseFailure),
+}
+
+/// A consuming handoff of completed initializer phases and their retained code.
+/// The caller owns subsequent display construction, frame actions and lifecycle.
+/// This does not assert that those phases form a complete native startup order.
+pub struct InitializedFrames {
+    pub vm: Vm,
+    pub frames: Vec<FramePlan>,
 }
 
 struct RegisteredAction {
@@ -209,6 +253,21 @@ impl InitSession {
     }
     pub fn is_halted(&self) -> bool {
         self.halted
+    }
+
+    /// Release the same VM only after every compiled frame's initializer phase
+    /// completed. Halted or pending phases cannot become a continuation state.
+    pub fn into_initialized(self) -> Result<InitializedFrames> {
+        if self.halted || !self.started || self.plans.keys().any(|key| !self.visited.contains(key))
+        {
+            return Err(invalid(
+                "initializer handoff requires all compiled phases to complete",
+            ));
+        }
+        Ok(InitializedFrames {
+            vm: self.vm,
+            frames: self.plans.into_values().collect(),
+        })
     }
 
     /// Explicit bootstrap bindings only. No script execution may have begun.

@@ -22,6 +22,14 @@ is required. This applies to VM errors and the cumulative phase budget.
 The VM also enforces each action's instruction budget; the cumulative check runs
 after an action and can exceed its threshold by at most one bounded action.
 
+`into_initialized` consumes a session only when execution has begun, every
+compiled frame has completed its initializer phase and the session is not halted.
+It returns `InitializedFrames { vm, frames }`, retaining the same heap, program
+identities and compiled plans for an explicit caller-owned continuation. It does
+not run ordinary actions, create display objects or establish native queue order.
+Pending and failed phases cannot be released through this API. This handoff is
+an original bounded-state policy, not a recovered native ABI.
+
 `setup_vm` permits explicit intrinsic/host bindings before execution starts.
 `install_movie_clip_constructor` installs Object and the bounded typed unbound
 MovieClip intrinsic. It preserves the established native category and constructor
@@ -66,10 +74,27 @@ first failure and does not continue past partial failure.
 **OBSERVED (integrated dev.7 CLI):** The typed MovieClip subclass path reaches
 118 complete manager initializers and 18,572 instructions, retaining one Selection
 listener. The next initializer begins at source757488; its call into UIObject
-stops on Enumerate2 at source750939 (CLI CodeId114), because native hash-order
-enumeration remains unsupported. Code IDs are session-local. Receipt:
+stops on Enumerate2 at source750939 (CLI CodeId114), at the then-unsupported native
+hash-order enumeration boundary. Code IDs are session-local. Receipt:
 `evidence/dev7-integration/initialization.json`. The native scheduling queue is a
 separate bounded module and is not used by this isolated initializer driver.
+
+**OBSERVED (integrated dev.8 CLI):** All 452 initializers complete in 49,244
+instructions with six host calls, one Selection listener and five class
+registrations. This is a minimal-global model with an initially parentless Plain
+root, not the complete [native global baseline](AS2_GLOBAL_BASELINE.md) or an
+attached display root. The separate original first frame action stops after 31
+instructions at source855912 on the unimplemented MovieClip member boundary.
+Receipts: `evidence/build-0.1.0-dev.8-smoke.json` and
+`evidence/avm1-runtime/manager-frame-after-inits.tsv`.
+
+**VERIFIED (dev.9 handoff):** Three focused bootstrap tests pass, including
+rejection of pending/halted handoffs and retention of heap values and ordinary
+code. A private harness against the integrated crate repeats all 452 initializers,
+consumes the session and reaches the same 31-instruction original frame boundary
+using the retained program, listener and registry. Receipt:
+`evidence/dev9-bootstrap-handoff/receipt.json`. These checks do not expand the
+native-global or attached-display scope above.
 
 This driver is original code. Its only external format basis is the Adobe SWF
 specification already itemized in [AVM1 execution](AVM1_VM.md); original asset
