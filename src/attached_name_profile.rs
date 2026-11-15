@@ -112,6 +112,7 @@ pub struct NativeNameProfile {
     source_sha256: [u8; 32],
     inventory_sha256: [u8; 32],
     standard: BTreeMap<String, u8>,
+    folded_standard: BTreeSet<String>,
     baseline: BTreeMap<String, BaselineOwners>,
 }
 
@@ -242,6 +243,7 @@ impl NativeNameProfile {
         Ok(Self {
             source_sha256: source,
             inventory_sha256: actual,
+            folded_standard: standard.keys().map(|name| name.to_ascii_lowercase()).collect(),
             standard,
             baseline,
         })
@@ -269,6 +271,13 @@ impl NativeNameProfile {
         } else {
             AttachedNameClass::Ordinary
         }
+    }
+
+    /// Conservative membership only: an ASCII-folded match is not an admitted
+    /// native alias and supplies no getter/setter behavior. Invalid input stays
+    /// distinct from absence; callers retain their live-state/route guards.
+    pub fn has_ascii_folded_standard_name(&self, name: &[u16]) -> Result<bool, UnsupportedName> {
+        Ok(self.folded_standard.contains(&ascii_name(name)?.to_ascii_lowercase()))
     }
 
     /// Original builtin inventory membership, not lookup on a live object.
@@ -419,6 +428,23 @@ mod tests {
             profile.classify_attached_name(&units("_NATIVE000")),
             AttachedNameClass::UnsupportedName(UnsupportedName::UnderscoreRoute)
         );
+    }
+
+    #[test]
+    fn folded_standard_membership_never_promotes_aliases_or_invalid_names() {
+        let fixture = String::from_utf8(fixture()).unwrap().replace("native022", "MixedCase022");
+        let profile = parse(fixture.as_bytes()).unwrap();
+        for spelling in ["MixedCase022", "mixedcase022", "MIXEDCASE022", "_NATIVE000"] {
+            assert_eq!(profile.has_ascii_folded_standard_name(&units(spelling)), Ok(true));
+        }
+        assert_eq!(profile.classify_attached_name(&units("mixedcase022")), AttachedNameClass::Ordinary);
+        assert_eq!(profile.classify_attached_name(&units("_NATIVE000")),
+            AttachedNameClass::UnsupportedName(UnsupportedName::UnderscoreRoute));
+        assert_eq!(profile.has_ascii_folded_standard_name(&units("_privateField")), Ok(false));
+        assert_eq!(profile.has_ascii_folded_standard_name(&units("mc000")), Ok(false));
+        for name in [vec![], vec![0], vec![0x100], vec![b'a' as u16; MAX_NAME_CODE_UNITS + 1]] {
+            assert!(profile.has_ascii_folded_standard_name(&name).is_err());
+        }
     }
 
     #[test]

@@ -1674,6 +1674,24 @@ increment7 receipt SHA256 is
 This preserves the earlier unknown-name frontier and does not supply a retail
 root name, native parent observation or full initializer/runtime parity.
 
+The native follow-up `ATTACHED_UNDERSCORE_NAMES.md` now supports a conservative
+ordinary route for nonempty printable ASCII underscore keys. The VM excludes
+every exact or ASCII-folded standard-map spelling, exact `_root`/`_global` and
+reserved metadata, plus lowercase `_level` followed immediately by a digit
+regardless of suffix. It enables no standard alias and performs no key folding
+for storage. Authenticated inventory membership is queried through the additive
+`NativeNameProfile::has_ascii_folded_standard_name` method, which returns an error
+for invalid input and exposes no private name table. The original exact classifier
+API stays unchanged.
+
+All live own-property/Undefined, child-shadowing, prototype/inventory, resolver,
+watch, accessor and read-only guards still apply. Four focused checks pass for
+the generic underscore rule, original mixed-case key identity, descriptor and
+child behavior, invalid/alias/level exclusions and the prior ordinary route.
+Private `avm1-runtime/underscore-member-checks.json` retains exact checked sources
+and output. Native normalization's interner/cache allocations are not modeled
+or counted by this membership predicate; no native allocation parity is claimed.
+
 ## Conditional staged attached visibility
 
 `bind_attached_visibility_policy(root, no_invisible_advance)` supplies the current

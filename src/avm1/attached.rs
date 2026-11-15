@@ -3,7 +3,7 @@
 use super::{
     AttachedEventState, AttachedFocusRectState, AttachedNameClass, AttachedTextFieldId,
     BaselineMembership, BaselineOwners, CodeOrigin, ErrorKind, Kind, NativeNameProfile, ObjectId,
-    Property, Result, Text, Value, Vm, text,
+    Property, Result, Text, UnsupportedName, Value, Vm, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -725,6 +725,23 @@ impl Vm {
                 AttachedNameClass::Standard(_) => self.fail(ErrorKind::Unsupported(
                     "attached standard native member requires its native implementation",
                 )),
+                AttachedNameClass::UnsupportedName(UnsupportedName::UnderscoreRoute) => {
+                    // The selected native route may look up an ASCII-lower node,
+                    // but it forwards the original key to ordinary storage.
+                    // Exclude every folded standard spelling, not only aliases.
+                    let level_candidate = key.starts_with(&[95, 108, 101, 118, 101, 108])
+                        && key.get(6).is_some_and(|unit| (48..=57).contains(unit));
+                    let reserved = ["_root", "_global", "__proto__", "__constructor__", "__resolve"]
+                        .iter().any(|name| key.as_ref() == text(name).as_ref());
+                    if key.iter().all(|unit| (0x21..=0x7e).contains(unit))
+                        && !reserved && !level_candidate
+                        && profile.has_ascii_folded_standard_name(key) == Ok(false)
+                    {
+                        Ok(())
+                    } else {
+                        self.fail(ErrorKind::Unsupported("attached underscore native route"))
+                    }
+                }
                 AttachedNameClass::UnsupportedName(_) => self.fail(ErrorKind::Unsupported(
                     "attached native member-name profile",
                 )),
@@ -1219,7 +1236,7 @@ mod tests {
             vm.read_attached_member(root, "unsupportedChild").unwrap(),
             AttachedMember::Present(Value::Undefined)
         );
-        for key in ["native022", "_unmodeled", "é"] {
+        for key in ["native022", "_NATIVE000", "é"] {
             assert!(vm.read_attached_member(root, key).is_err());
             assert!(
                 vm.write_attached_member(root, key, Value::Undefined)
@@ -1242,6 +1259,57 @@ mod tests {
             vm.read_attached_member(root, "onUnrecognized").unwrap(),
             AttachedMember::Missing
         );
+    }
+
+    #[test]
+    fn underscore_members_preserve_spelling_presence_children_and_descriptor_guards() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.set_attached_children(root, vec![AttachedChild::Unsupported {
+            name: text("_privateChild"), target: DisplayTargetId(2),
+        }]).unwrap();
+        assert!(vm.write_attached_member(root, "_bMouseOver", Value::Bool(false)).is_err());
+        vm.install_attached_name_profile(synthetic_profile()).unwrap();
+        assert_eq!(vm.read_attached_member(root, "_bMouseOver").unwrap(), AttachedMember::Missing);
+        assert_eq!(vm.write_attached_member(root, "_bMouseOver", Value::Bool(false)).unwrap(), AttachedWrite::Created);
+        assert_eq!(vm.write_attached_member(root, "_bShowTooltip", Value::Bool(true)).unwrap(), AttachedWrite::Created);
+        assert_eq!(vm.read_attached_member(root, "_bMouseOver").unwrap(), AttachedMember::Present(Value::Bool(false)));
+        assert_eq!(vm.read_attached_member(root, "_bmouseover").unwrap(), AttachedMember::Missing);
+        assert!(vm.read_attached_member(root, "_privateChild").is_err());
+        vm.write_attached_member(root, "_privateChild", Value::Undefined).unwrap();
+        assert_eq!(vm.read_attached_member(root, "_privateChild").unwrap(), AttachedMember::Present(Value::Undefined));
+        let storage = ObjectId(vm.attached_info(root).unwrap().storage.unwrap().0);
+        assert!(vm.objects[storage.0].properties.contains_key(&text("_bMouseOver")));
+        assert!(!vm.objects[storage.0].properties.contains_key(&text("_bmouseover")));
+        vm.raw_member(storage, text("_bMouseOver"), Property::Data(Value::Bool(false)), 4).unwrap();
+        assert_eq!(vm.write_attached_member(root, "_bMouseOver", Value::Bool(true)).unwrap(), AttachedWrite::ReadOnly);
+        assert_eq!(vm.read_attached_member(root, "_bMouseOver").unwrap(), AttachedMember::Present(Value::Bool(false)));
+        let prototype = vm.attached[root.0].prototype.unwrap();
+        vm.raw_member(prototype, text("_privateAccessor"), Property::Accessor {getter: Value::Undefined, setter: None}, 0).unwrap();
+        assert!(vm.read_attached_member(root, "_privateAccessor").is_err());
+        assert!(vm.write_attached_member(root, "_privateAccessor", Value::Bool(true)).is_err());
+        vm.raw_member(storage, text("__resolve"), Property::Data(Value::Undefined), 0).unwrap();
+        assert!(vm.read_attached_member(root, "_bMouseOver").is_err());
+        assert!(vm.write_attached_member(root, "_anotherPrivateField", Value::Bool(false)).is_err());
+    }
+
+    #[test]
+    fn underscore_admission_excludes_native_aliases_metadata_and_level_candidates() {
+        let mut vm = vm();
+        vm.install_attached_name_profile(synthetic_profile()).unwrap();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.set_attached_children(root, vec![]).unwrap();
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        for name in ["_native000", "_NATIVE000", "_root", "_global", "__proto__", "__constructor__", "__resolve",
+                     "_level0", "_level9suffix", "_level000000000000000000000000000000", "_has space", "_tab\t", "_nul\0", "_nonasciié"] {
+            assert!(vm.attached_member_name(&text(name)).is_err(), "{name:?}");
+        }
+        for name in ["_private", "_level", "_levelX", "_Level0", "_bMouseOver"] {
+            vm.attached_member_name(&text(name)).unwrap();
+            assert_eq!(vm.read_attached_member(root, name).unwrap(), AttachedMember::Missing);
+        }
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
     }
 
     #[test]
