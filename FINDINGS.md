@@ -58,6 +58,14 @@ playable login. Native script-call operand/register behavior is still being
 reconciled; saved ordinary calls remain gated. No Rust publication route is
 confirmed. Private staging/readback is recorded separately when complete.
 
+**VERIFIED private staging, 11:37 UTC:** `builds/0.1.0-dev.14` contains 363
+selected original/dependency-notice files at clean packaged source `0c5d9c4`
+(tested code `52d2876`). All file hashes/sizes, the complete file set and version
+and Original-preset checks pass. Receipt:
+`evidence/build-0.1.0-dev.14-package-validation.json`. The coordinator intake is
+queued and supersedes dev13's Rust diagnostic only. Staging does not confirm
+delivery, publication, acknowledgement or owner-device validation.
+
 ## 2026-11-15 dev13 diagnostic increment
 
 **VERIFIED Rust build/startup:** source
