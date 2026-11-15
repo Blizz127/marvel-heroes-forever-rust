@@ -797,3 +797,16 @@ consulted Intel's [SetDenormAreZeros documentation](https://www.intel.com/conten
 (copyright Intel; documentation only) to distinguish DAZ-controlled subnormal
 behavior from the unobserved native floating-point mode. No Intel implementation
 was copied. Original integer/double conversion retains that unsupported boundary.
+
+[The selected format query](SCALE9_TEXTURE_FORMAT_QUERY.md) binds its returned
+format key separately from stored image dimensions and matrix state.
+[Fresh inherited default copying](FRESH_MOVIE_DEFAULT_COPY.md) closes the selected
+finite property graph under explicit construction/allocator conditions. Both
+reuse the owned executable/packages and original validation tools named in
+their private ledgers. Neither establishes current texture state or effective
+StartPaused without the remaining lifecycle evidence.
+
+The dev21 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev21-linux/manifest.json`, SHA-256
+`a80c24af0fe897a30ad9b0930ae4c36a271a975a355cb3eb3df30e4fb99db15f`.

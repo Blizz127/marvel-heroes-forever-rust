@@ -7,6 +7,18 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev21 work in progress
 
+**VERIFIED combined dev21 build/startup:** clean source
+`3c6f73c0740563c4410bdb054a39f7a87b3516da` builds with the window feature in
+31.74 seconds without warnings. All seventeen focused CLI/image checks pass,
+including selected/empty/duplicate geometry and invalid selection rejection.
+The isolated Rust window presents two frames with empty stderr. Saved cursor
+and login pixels retain their prior diagnostic identities. Binary SHA-256:
+`4344fd50b742d9fd645f748d9f0438c98b513d3b70fdf8aa2a79989d489af0d2`.
+Receipts: `evidence/dev21-build-result.json`,
+`evidence/build-0.1.0-dev.21-smoke.json` and
+`evidence/dev21-native-html/receipt.json`. This validates the Rust diagnostic,
+not native startup, current render options, login or gameplay parity.
+
 **VERIFIED numeric extension conversion:** original Rust now admits the proved
 integer/double conversion used by the original `gfxExtensions = 1` assignment.
 Nineteen focused checks, including raw Integer Push through the interpreter,
@@ -22,7 +34,7 @@ frontend Nodes to 48 ordered corners and all sixteen referenced position
 records. Four focused tests and all 106 independent comparison rows pass.
 Receipt: `evidence/model-node-geometry/final-receipt.json`, SHA-256
 `fd90d8435c975e77879a463c5faea43f330a0c2d7f43b81431b9ad1829ae0647`.
-The new explicit-selection CLI is integrated; its combined build/smoke is pending.
+The new explicit-selection CLI passes the combined focused smoke above.
 These saved-record joins do not generate triangles or evaluate materials.
 
 **VERIFIED positive-tolerance rectangle subset:** finite nonnegative supplied
@@ -77,7 +89,8 @@ dimension fields. Remaining resource/backend effects prevent a lifetime-wide
 or current-input claim. Receipt: `evidence/scale9-texture-updates/final-index.json`,
 SHA-256 `7eb1f851612741b7f867475e03ef0977e23a06a4520bcbb9eb6ee507293131b8`.
 
-Dev20 remains the latest built and staged diagnostic. Dev21 has not been built.
+Dev21 is built and validated; private staging is next. Dev20 remains the latest
+staged diagnostic until a separate package receipt is recorded.
 
 ## 2026-11-15 dev20 diagnostic increment
 
