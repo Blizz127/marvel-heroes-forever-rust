@@ -2224,3 +2224,31 @@ handler and cursor effect unresolved. No unconditional OS cursor operation is
 inferred. The prior Plain GLOBAL `gfxExtensions` write also remains a diagnostic
 limit: the native setter has context, version-property and marker effects beyond
 storing a Boolean. The exact Mouse.hide read does not depend on that switch.
+
+### Original manager reaches the unbound Mouse host
+
+OBSERVED controlled increment11 on frozen `48f8e45`: the same 452 initializers
+complete in 49,244 instructions, and the frame reaches 290 instructions. The
+original Mouse.hide CallMethod6391, CodeId452, now reports
+`Host("Mouse.hide user-event host is unbound")` through the default host method.
+The native graph has materialized: global Mouse retains flags1 and becomes
+callable15928, with prototype15936. C.hide15934 and P.hide15940 are distinct;
+`_listeners` exposes protected handle15932. Listener contents and raw native
+object flags remain unsupported inspection paths, separate from execution.
+
+Only the real deferred Mouse token was added relative to increment10. Existing
+cached Array setup, geometry and root effects, Selection/class registry host,
+supplied state/name and ordering remain unchanged. No host override, successful
+cursor action, extra globals, new initial-prototype API, SavedEnvironment,
+visibility profile or native extension-state default was introduced. Adding the
+native token did not change the observed initializer count in this fixture;
+that is not a complete native-global or lifecycle equivalence claim.
+
+Private `avm1-attached-manager-frame-action-increment11/receipt.json` SHA-256:
+`4719305722d4d0d88f63ea52fddbf5937bcf069109c5ed79c795ad11a79e6d62`.
+The single build/run used 27 frozen entries; root host modules and all owned
+inputs were unchanged. The receipt explicitly names increment10 as its comparison
+baseline instead of retaining the earlier ambiguous no-new-globals Boolean.
+The prior Plain `gfxExtensions` property remains distinct from native context,
+version-property and marker effects; the installed Mouse handler/effect remains
+unresolved. No native/window operation was performed by this replay.
