@@ -5,16 +5,19 @@ claim is made. Milestone 1 is in progress; milestones 2–5 remain incomplete.
 
 ## Current original build
 
-`0.1.0-dev.3` candidate: the prior SIP/Calligraphy/UE3 readers plus inline texture
+`0.1.0-dev.3`: the prior SIP/Calligraphy/UE3 readers plus inline texture
 decoding, external cache metadata/LZO payload reads, GFX structures/shapes/text,
 AVM1 structural decoding, saved-movie image binding and optional Vulkan image
 inspection. The integrated image-binding and native-size offscreen checks pass.
 Scripts and the full frontend are not running; no server connection is made.
 
 Private staging directory:
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.2/`.
-This is the previous staged build while the dev.3 dependency notice collection
-and final packaging finish. Publishing through the owner launcher is a
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.3/`.
+The development-profile binary (debug information disabled) passed focused
+startup, 716-image binding, GPU byte-identity and private-output boundary checks.
+All 154 packaged files match their manifest hashes; dependency notices cover
+61 selected Cargo crates. Previous builds remain available.
+Publishing through the owner launcher is a
 coordinator/publisher handoff; no Rust-client private channel is configured here.
 
 ## Active independent work

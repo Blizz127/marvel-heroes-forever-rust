@@ -236,3 +236,13 @@ definitions with 3,494 glyphs/107,711 outline edges, 13 static text definitions
 and 479 editable text fields across 22 private movies. Ten focused checks passed.
 Font aliasing, typography/layout, HTML and rendering remain unimplemented; no
 visual equivalence is claimed. See `docs/GFX_TEXT.md` and `evidence/gfx-fonts/`.
+
+**VERIFIED (private dev.3 staging):** The optional-renderer development-profile
+binary, with debug information disabled, passed the five final focused checks
+in `evidence/build-0.1.0-dev.3-smoke.json`. All 154 packaged file hashes and the
+packaged version/Original startup checks pass. Dependency texts cover 61 selected
+Cargo crates and retain upstream notice gaps/provenance explicitly. The staged
+binary SHA-256 is `c23bad1abdd002bafaa825cc0b5dc767a4c6e9003af006a2cadc0084df3ea333`;
+source commit `1cf6a2e` was clean. The package contains no game assets/captures.
+This is private staging, not confirmation of launcher publication. Receipt:
+`evidence/build-0.1.0-dev.3-package-validation.json`.
