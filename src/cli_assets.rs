@@ -93,6 +93,7 @@ pub fn run(args: &[OsString]) -> Result<()> {
             let mut session =
                 InitSession::new(asset.movie.header.version, Limits::default(), 2_000_000)?;
             session.install_movie_clip_metadata(u32::MAX)?;
+            session.setup_vm()?.install_array_constructor()?;
             session.setup_vm()?.install_property_flags()?;
             let mut host = FrontendHost::install(session.setup_vm()?, asset.movie.header.version)?;
             let plan = session.compile_frame(0, &asset, 0)?;
@@ -103,7 +104,7 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 plan.frame_actions.len()
             );
             println!(
-                "Probe bindings: Object/property-flags intrinsics, MovieClip metadata, Selection listeners and root-context class registry; other host operations rejected."
+                "Probe bindings: Object/Array/property-flags intrinsics, MovieClip metadata, Selection listeners and root-context class registry; other host operations rejected."
             );
             let outcome = session.initialize(&plan, &mut host)?;
             println!(
