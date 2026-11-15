@@ -5,6 +5,21 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev20 work in progress
+
+**VERIFIED static conditional owner completion:** fresh target fields remain
+`6a=52004f80`, `88=000a`, `140=0001`, `b8=10` through owner and factory returns
+under the recorded positive-capacity, successful allocation, effective original
+prototype-binding and positive-reference cleanup profile. The ledger checkpoint
+before prototype selection is independently closed. Eager bootstrap registration
+does not establish later binding preservation; collector/failure paths remain
+outside this completion profile. No current-instance defaults or native/VM run
+follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
+`evidence/fresh-target-completion/receipt.json`, SHA-256
+`759da0d7f73102701424b891cd58876f7fe28b8c5cf5c6bafdee9bd841aed602`.
+
+Dev19 is the latest built and staged diagnostic; dev20 has not been built.
+
 ## 2026-11-15 dev19 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested source

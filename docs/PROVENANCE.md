@@ -714,3 +714,10 @@ The dev19 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev19-linux/manifest.json`, SHA-256
 `7b839d6c672df00331859dba2e899a83fa850bf8cf1b78c473404bfc18cbe74d`.
+
+[Conditional source-owner completion](FRESH_TARGET_COMPLETION.md) extends
+the owned constructor evidence through ledger allocation, actual prototype
+selection and explicit reference-cleanup paths. Its ledger identifies exact
+REA, PE-import and retained source evidence plus the ordinary imported memset
+contract. No CRT DLL or client ran, and unresolved bootstrap preservation is
+not replaced by an initialized-state assumption.
