@@ -53,7 +53,8 @@ pub fn run(args: &[OsString]) -> Result<()> {
             )?;
         }
         [command, operation, package, selector, extra @ ..]
-            if command == "frontend" && operation == "window-static" =>
+            if command == "frontend"
+                && (operation == "window-static" || operation == "window-pointer") =>
         {
             let mut library_args = Vec::new();
             let mut frames = None;
@@ -74,7 +75,11 @@ pub fn run(args: &[OsString]) -> Result<()> {
                     index += 1;
                 }
             }
-            window_frontend(package, text(selector)?, &library_args, frames)?;
+            if operation == "window-pointer" {
+                window_pointer(package, text(selector)?, &library_args, frames)?;
+            } else {
+                window_frontend(package, text(selector)?, &library_args, frames)?;
+            }
         }
         [command, operation, package, selector]
             if command == "frontend" && operation == "init-probe" =>
@@ -471,41 +476,10 @@ fn apply_pointer_probe(
     prepared: &mut marvel_heroes_forever::frontend::scene_content::PreparedScene,
     pointer: [f64; 2],
 ) -> Result<()> {
-    use marvel_heroes_forever::{
-        avm1::{
-            Program,
-            vm::{Limits as VmLimits, Vm},
-        },
-        frontend::display_state::{DisplayState, Limits},
-        gfx::scene::ActionKind,
-    };
-    let mut bindings = scene.actions.iter().filter(|action| {
-        matches!(action.kind,
-        ActionKind::Clip { event_flags, .. } if event_flags & 0x08 != 0)
-    });
-    let action = bindings
-        .next()
-        .ok_or_else(|| invalid("scene has no saved MouseMove clip handler"))?;
-    if bindings.next().is_some() {
-        return Err(invalid(
-            "multiple MouseMove handlers require an established event dispatch order",
-        ));
-    }
-    let movie = scene
-        .movies
-        .get(&action.movie_id)
-        .ok_or_else(|| invalid("clip action movie is missing"))?;
-    let mut vm = Vm::new(movie.header.version, VmLimits::default())?;
-    let target = vm.object()?;
-    let mut display = DisplayState::from_scene(scene, Limits::default())?;
-    display.bind_object(target, action.owner)?;
-    display.set_pointer_stage_twips(Some([pointer[0] * 20.0, pointer[1] * 20.0]))?;
-    let code = vm.register(std::sync::Arc::new(Program::parse_at(
-        action.bytes.bytes(movie.bytes())?,
-        action.bytes.offset,
-    )?))?;
-    let result = vm.execute(code, target, &mut display)?;
-    let nodes = display.snapshot_nodes();
+    use marvel_heroes_forever::frontend::pointer::{Limits, PointerController};
+    let mut controller = PointerController::from_scene(scene, Limits::default())?;
+    controller.pointer_stage_twips(Some([pointer[0] * 20.0, pointer[1] * 20.0]))?;
+    let nodes = controller.nodes();
     if nodes.len() != prepared.nodes.len() {
         return Err(invalid("display snapshot node count changed"));
     }
@@ -516,21 +490,23 @@ fn apply_pointer_probe(
         {
             return Err(invalid("display snapshot changed source identity"));
         }
-        prepared_node.instance = current;
+        prepared_node.instance = current.clone();
     }
+    let action = controller.binding();
+    let stats = controller.stats();
     println!(
         "OBSERVED one saved MouseMove invocation: node {}, source {}+{}, pointer {:?} stage pixels, {} instructions, {} host calls.",
         action.owner,
         action.bytes.offset,
         action.bytes.len,
         pointer,
-        result.instructions,
-        result.host_calls
+        stats.completed_instructions,
+        stats.completed_host_calls
     );
     println!(
         "OBSERVED geometry host: {:?}; resulting local transform {:?}.",
-        display.stats(),
-        display.node(action.owner)?.local_matrix
+        controller.display().stats(),
+        controller.display().node(action.owner)?.local_matrix
     );
     println!(
         "The probe supplied one instance binding and pointer. Initializers, constructors, event ordering and normal startup were not run; renderer script counts describe retained source bindings."
@@ -597,6 +573,111 @@ fn window_frontend(
 }
 #[cfg(not(feature = "window"))]
 fn window_frontend(_: &OsString, _: &str, _: &[OsString], _: Option<u64>) -> Result<()> {
+    Err(invalid(
+        "this build lacks native window support; build with --features window",
+    ))
+}
+
+#[cfg(feature = "window")]
+fn window_pointer(
+    package: &OsString,
+    selector: &str,
+    extra: &[OsString],
+    frames: Option<u64>,
+) -> Result<()> {
+    use marvel_heroes_forever::{
+        frontend::{
+            pointer::{Limits as PointerLimits, PointerController},
+            preview::{Background, BitmapMapping, Effects, PreviewPolicy},
+            scene_content,
+        },
+        gfx::scene::{Limits, MovieRef, Scene, SceneNode},
+        render::{
+            ImageEncoding,
+            mesh::{GradientAlpha, LinearRgbTransfer, TransformSpace},
+        },
+        window::{SceneController, ScenePreviewOptions, run_scene_preview},
+    };
+    struct Controller(PointerController);
+    impl SceneController for Controller {
+        fn nodes(&self) -> &[SceneNode] {
+            self.0.nodes()
+        }
+        fn pointer_stage_twips(&mut self, point: Option<[f64; 2]>) -> io::Result<()> {
+            self.0.pointer_stage_twips(point).map(|_| ())
+        }
+    }
+    let (assets, library) = load_library(package, extra)?;
+    let export = select(assets.archive(0)?.package(), selector)?;
+    let id = library
+        .id_for_location(AssetLocation { package: 0, export })
+        .ok_or_else(|| invalid("selected export is not a loaded movie"))?;
+    let entry = library
+        .entry(id)
+        .ok_or_else(|| invalid("movie library index missing"))?;
+    let scene = Scene::first_frame(
+        MovieRef::new(id, &entry.asset.movie),
+        &library,
+        Limits::default(),
+    )?;
+    let prepared =
+        scene_content::prepare(&assets, &library, &scene, scene_content::Limits::default())?;
+    let mut controller = Controller(PointerController::from_scene(
+        &scene,
+        PointerLimits::default(),
+    )?);
+    println!(
+        "OBSERVED persistent pointer binding: {:?}.",
+        controller.0.binding()
+    );
+    println!(
+        "This diagnostic runs one saved MouseMove handler on native pointer movement. Initializers, constructors, normal startup and other events have not run."
+    );
+    let policy = PreviewPolicy {
+        background: Background::SavedRootTagOrTransparent,
+        colors: ImageEncoding::Linear,
+        color_transform_space: TransformSpace::Shader,
+        linear_rgb_transfer: LinearRgbTransfer::Srgb,
+        gradient_alpha: GradientAlpha::Straight,
+        bitmap_mapping: BitmapMapping::WholeImageReplacement,
+        unknown_texture_encoding: None,
+        effects: Effects::BaseGeometry,
+    };
+    let mut options = ScenePreviewOptions::new(ImageEncoding::Linear);
+    options.title = format!("Marvel Heroes Forever — {selector} (pointer diagnostic)");
+    options.frame_limit = frames;
+    if frames.is_some() {
+        options.close_after = Some(std::time::Duration::from_secs(15));
+    }
+    let result = run_scene_preview(
+        prepared,
+        entry.asset.movie.header.stage,
+        policy,
+        &mut controller,
+        options,
+    );
+    println!(
+        "OBSERVED saved pointer execution: {:?}; halted: {}; display: {:?}; cursor transform: {:?}.",
+        controller.0.stats(),
+        controller.0.halted(),
+        controller.0.display().stats(),
+        controller
+            .0
+            .display()
+            .node(controller.0.binding().owner)?
+            .local_matrix
+    );
+    let report = result?;
+    println!("OBSERVED native persistent-scene presentation: {report:?}");
+    if frames.is_some_and(|expected| report.window.frames_presented != expected) {
+        return Err(invalid(
+            "scene preview closed before the requested frame count",
+        ));
+    }
+    Ok(())
+}
+#[cfg(not(feature = "window"))]
+fn window_pointer(_: &OsString, _: &str, _: &[OsString], _: Option<u64>) -> Result<()> {
     Err(invalid(
         "this build lacks native window support; build with --features window",
     ))

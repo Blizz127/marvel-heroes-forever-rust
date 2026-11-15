@@ -64,6 +64,9 @@ fn usage() {
     println!(
         "  mhf frontend window-static <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N]"
     );
+    println!(
+        "  mhf frontend window-pointer <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N]"
+    );
     println!("  mhf texture inspect <package.upk> <texture-name|1-based-index>");
     println!(
         "  mhf texture render <package.upk> <texture-name|1-based-index> <private-output.pam>"
