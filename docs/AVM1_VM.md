@@ -2324,3 +2324,32 @@ Private `avm1-attached-manager-frame-action-increment12/receipt.json` SHA-256:
 One build/run used 29 frozen entries and preserved the prior fixtures/receipts.
 A proposed independent helper audit could not start because of the thread
 limit; no independent audit is claimed. No native/window execution occurred.
+
+### Grounded numeric global extension conversion
+
+The bound native-global setter now admits the proved numeric payload profile,
+including the original Integer1 at13554. Native Push subtype7 produces tag4
+with its exact 32-bit payload; its Boolean conversion tests zero/nonzero. The
+represented Rust Number preserves every signed32 input exactly. For admitted
+IEEE64 payloads, bit classification makes both zero signs and all NaN encodings
+false, and nonzero finite normal values/infinities true. Nonzero f64 subnormals
+reject before effects because native MXCSR denormal handling remains unknown.
+Earlier float32 promotion and arbitrary prior arithmetic are separate limits;
+this is not whole-VM floating-point parity. String/Object/display and other
+conversion categories remain unsupported. The existing context, opcode, budget
+and ordered version/marker effects are unchanged.
+
+OBSERVED: nineteen focused checks pass on the combined frozen source, including
+a synthetic raw subtype7 Integer Push followed by normal SetMember. No literal
+was replaced with Bool to obtain that result. Checks also retain unknown-state,
+protected-descriptor, budget and default-rejecting Mouse behavior. Production
+metadata compilation passes without warnings. The helper's separate thirteen
+module checks are recorded under `avm1-global-extensions-numeric/receipt.json`
+SHA-256 `c4640ac8835b810183aa9d96614620ef9a43084ae0429143d95a01f5aeeadf57`.
+The combined private receipt is
+`avm1-runtime/global-extensions-numeric-checks/receipt.json`, SHA-256
+`7fc7597b97cdcdee0173fea61eba09b75f515eb6034443de53e6d68c5b2322fd`. Native authority is the numeric appendix of
+[REA_GLOBAL_EXTENSIONS.md](REA_GLOBAL_EXTENSIONS.md), verification SHA-256
+`5b351c20fc1d488ea740098fbe540ebc35c7f30689e1e50371ce40de8776f188`.
+Manager12 remains an unchanged failed first-frontier record; these checks do
+not assert a corrected original replay or cursor effect.

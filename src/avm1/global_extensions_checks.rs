@@ -34,6 +34,52 @@ fn execute(vm: &mut Vm, bytes: &[u8]) -> (CodeId, Result<Execution>) {
 }
 
 #[test]
+fn global_extensions_original_integer_literal_category_reaches_native_assignment() {
+    // Synthetic opcode sequence uses raw Push subtype7, as the unchanged
+    // original13554 does. It does not replace an Integer literal with Bool.
+    for integer in [1i32, 0, -1, i32::MIN] {
+        let mut vm = setup(None);
+        let mut bytes = tests::push(&[Value::string("_global")]);
+        bytes.push(0x1c);
+        let mut payload = vec![0];
+        payload.extend(b"gfxExtensions\0");
+        payload.push(7);
+        payload.extend(integer.to_le_bytes());
+        bytes.push(0x96);
+        bytes.extend((payload.len() as u16).to_le_bytes());
+        bytes.extend(payload);
+        let assignment_offset = bytes.len();
+        bytes.extend([0x4f, 0]);
+        let (code, result) = execute(&mut vm, &bytes);
+        assert!(result.unwrap().stack.is_empty());
+        let enabled = integer != 0;
+        let info = vm.global_extensions_info().unwrap();
+        assert_eq!(info.current_byte, Some(if enabled { 1 } else { 2 }));
+        assert_eq!(info.marker_written, Some(true));
+        assert_eq!(
+            info.last_write,
+            Some(CodeOrigin {
+                code,
+                source_offset: assignment_offset
+            })
+        );
+        assert_eq!(
+            vm.get(vm.global(), "gfxExtensions").unwrap(),
+            Value::Bool(enabled)
+        );
+        assert_eq!(
+            vm.get(vm.global(), "gfxVersion").unwrap(),
+            if enabled {
+                Value::string("4.2.23")
+            } else {
+                Value::Undefined
+            }
+        );
+        assert_eq!(vm.host_calls, 0);
+    }
+}
+
+#[test]
 fn global_extensions_opcode_preserves_effects_and_deferred_mouse_host_error() {
     let mut vm = setup(None);
     vm.register_deferred_builtin(vm.global(), "Mouse", BuiltinFactory::Mouse, 1)
