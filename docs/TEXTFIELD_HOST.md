@@ -154,3 +154,47 @@ false-uppercase branch. It establishes neither native startup/final binding
 selection nor rendered text, full initializer/event execution or retail parity.
 The true-uppercase failure belongs to this immutable snapshot and must remain
 visible when a later String implementation is tested.
+
+## Frozen native String follow-up
+
+**VERIFIED controlled Rust execution:** a separate immutable snapshot of
+`e9ee07cb0be4f07b9b9e8ad166ceaf9567021fe1` completes both original label cases.
+The private fixture registers exact global `String` as a deferred native factory
+with flags 1 and explicitly binds the captured attached-root target to this
+VM's builtin context. It does not prebuild a String graph, call an uppercase
+substitute or modify the original selected instructions or locale backend.
+The bounded method contract is recorded in
+[STRING_NATIVE_METHODS.md](STRING_NATIVE_METHODS.md).
+
+With `forceAllCaps=false`, the global String token remains unmaterialized and
+the field receives `Log In`. With the saved true flag supplied, the original
+primitive named call at 94251 materializes the canonical partial String graph,
+boxes the current primitive and invokes its actual `toUpperCase` method identity.
+The fixture records distinct constructor/prototype/method IDs after that call;
+`htmlText` at 94252 receives `LOG IN`. Both backend responses and the controller's
+localized cache remain `Log In`, demonstrating that the change occurs in the
+original method path. Both calls return normally after 142 VM instructions and
+three host calls, including the unchanged false-vertical-center recenter branch.
+
+The two cases perform two actual locale callbacks and four typed field writes.
+Source 11, parent selected MovieDef 11, root/captured Environment 15, neighbor
+136, its unallocated storage, and nonempty Selection/class state remain intact.
+All prior supplied binding, native-state, prototype/default and side-path
+conditions still apply. This is a bounded ASCII String call profile; it does
+not establish arbitrary String methods, Unicode behavior, native startup or
+rendered text parity. The preceding 22-case host fixture was not redundantly
+rerun for this String-only increment, and its earlier true-flag failure remains
+available in the separate `d458713` evidence.
+
+The offline locked build and original-script executable both exit zero. The
+private `runs/e9ee07c/receipt.json` under the same evidence directory has SHA-256
+`97d35dc48d414474f87f6912c18c130fc18a7506af7c2a621d6689de4a3c5ee7`;
+its `MANIFEST.json` indexes 85 artifacts and has SHA-256
+`9263d0d42b1db4e8b3957183b5ee61cb24ea222c98d927656a262e96aff19eef`.
+All 187 frozen source files, 28 finalized harness files and 32 input paths are
+unchanged, with byte-identical locked metadata for twelve packages. Initial
+locked commands correctly rejected the private fixture's prior dev.11 lock;
+offline regeneration changed only the root package version to dev.12 before
+the successful build. Both lock versions and failed-command receipts remain
+private. No product-source changes or broad test suite were needed for this
+composition check.
