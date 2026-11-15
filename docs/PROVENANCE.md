@@ -894,3 +894,14 @@ readers with the retained AssetSet namespace and original package bytes. Its
 focused production harness reuses the sealed independent fixture expectations;
 no new outside implementation or native execution is involved. The private
 source-replacement audit records the core API's lifetime-only change.
+
+The [Object/Function correction](AVM1_VM.md) uses the recorded fresh-bootstrap
+producer evidence and exact owned normal/raw getter bindings. It preserves
+effective identities and flags in original Rust while retaining explicit
+unsupported callback and metadata-mutation boundaries. The private receipt
+preserves the focused harness corrections and failed assertions.
+
+[Selected default PostLoad](FRESH_MOVIE_DEFAULT_POSTLOAD.md) reuses the owned
+factory, class and serialized link evidence to bound the action CDO's direct
+mutation paths. It adds no outside implementation, observed default value,
+runtime invocation or hold clearance.

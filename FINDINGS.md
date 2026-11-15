@@ -7,6 +7,16 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev23 work in progress
 
+**VERIFIED Object/Function bootstrap correction:** the VM now keeps a stable
+cached Function identity, the thirteen early methods' null parents, all four
+Function.prototype method identities and the native publication flags. Exact
+getter evidence excludes later Function.prototype substitution for those early
+methods. Eight focused checks pass, including budget rollback and explicit
+metadata gates; the corrected production source compiles without warnings.
+Receipt: `evidence/avm1-runtime/bootstrap-correction-checks/receipt.json`,
+SHA-256 `9f399588e17549413ed77f1bff13e830f4a1588e1a506f9d0fd61865757c5145`.
+This subset does not establish the whole native global or a Mouse handler.
+
 **VERIFIED asset-bound Model indices:** the checked Level/Model/component binding
 now supplies the explicit integer builder without losing its AssetSet identity
 or original export backing. Three actual-package fixture cases match all 147
