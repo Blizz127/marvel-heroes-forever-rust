@@ -8,6 +8,10 @@ use super::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+#[path = "attached_visibility.rs"]
+mod visibility;
+pub use visibility::{AttachedVisibilityBaseProfile, AttachedVisibilityInfo, AttachedVisibilityPolicy};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AttachedClipId(pub usize);
 /// Host identity independent of a Scene node index or VM object identity.
@@ -93,6 +97,12 @@ pub struct AttachedNameSnapshot {
     pub target: DisplayTargetId,
     pub name: Text,
 }
+/// Caller-established presence of this target's coherent existing public handle.
+/// Its name/path contents need not be known. No native pointer is exposed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachedHandleSnapshot {
+    pub target: DisplayTargetId,
+}
 #[derive(Debug, Clone)]
 pub struct AttachedInfo {
     pub target: DisplayTargetId,
@@ -136,6 +146,9 @@ pub(super) struct AttachedClip {
     focus_rect: Option<AttachedFocusRectInfo>,
     tab_enabled_last_write: Option<CodeOrigin>,
     name_snapshot: Option<Text>,
+    handle_snapshot: bool,
+    visibility_profile: Option<AttachedVisibilityBaseProfile>,
+    visibility_last_write: Option<CodeOrigin>,
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
@@ -311,6 +324,9 @@ impl Vm {
             focus_rect: None,
             tab_enabled_last_write: None,
             name_snapshot: None,
+            handle_snapshot: false,
+            visibility_profile: None,
+            visibility_last_write: None,
             owner,
             storage: None,
             prototype: Some(prototype),
@@ -377,6 +393,31 @@ impl Vm {
         self.check_attached(id)?;
         Ok(self.attached[id.0].spec.event_state)
     }
+    pub fn bind_attached_handle_snapshot(
+        &mut self,
+        id: AttachedClipId,
+        snapshot: AttachedHandleSnapshot,
+    ) -> Result<()> {
+        self.check_attached(id)?;
+        if snapshot.target != self.attached[id.0].spec.target {
+            return self.fail(ErrorKind::Unsupported("attached handle snapshot target mismatch"));
+        }
+        if self.attached[id.0].handle_snapshot {
+            return self.fail(ErrorKind::Unsupported("attached handle snapshot already bound"));
+        }
+        self.attached[id.0].handle_snapshot = true;
+        Ok(())
+    }
+    pub fn attached_handle_snapshot(&self, id: AttachedClipId) -> Result<Option<AttachedHandleSnapshot>> {
+        self.check_attached(id)?;
+        Ok(self.attached[id.0].handle_snapshot.then_some(AttachedHandleSnapshot {
+            target: self.attached[id.0].spec.target,
+        }))
+    }
+    /// Discard both presence and contents after handle/name identity changes.
+    pub fn invalidate_attached_handle_snapshot(&mut self, id: AttachedClipId) -> Result<()> {
+        self.invalidate_attached_name_snapshot(id)
+    }
     /// Bind a known current name for this exact live target and its existing
     /// public handle. The caller must establish that association independently.
     /// Authentic empty names are valid. An unknown/missing handle is not empty.
@@ -402,6 +443,7 @@ impl Vm {
         }
         self.string_units += snapshot.name.len();
         self.attached[id.0].name_snapshot = Some(snapshot.name);
+        self.attached[id.0].handle_snapshot = true;
         Ok(())
     }
     pub fn attached_name_snapshot(&self, id: AttachedClipId) -> Result<Option<AttachedNameSnapshot>> {
@@ -417,6 +459,7 @@ impl Vm {
     pub fn invalidate_attached_name_snapshot(&mut self, id: AttachedClipId) -> Result<()> {
         self.check_attached(id)?;
         self.attached[id.0].name_snapshot = None;
+        self.attached[id.0].handle_snapshot = false;
         Ok(())
     }
     /// Bind an independently supplied raw target+b8 snapshot once. No native
@@ -503,6 +546,13 @@ impl Vm {
     ) -> Result<()> {
         self.check_attached(id)?;
         let old = self.attached[id.0].spec.event_state;
+        if self.attached_visibility_policy.is_some()
+            && (state.target_flags ^ old.target_flags) & 0x4000 != 0
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bound attached visibility requires a staged host write",
+            ));
+        }
         if state.target_flags >> 24 != 0x52 {
             return self.fail(ErrorKind::Unsupported("attached case3 owner-offset field"));
         }
@@ -843,6 +893,26 @@ impl Vm {
     }
     pub(super) fn attached_lookup(&self, id: AttachedClipId, key: &Text) -> Result<AttachedMember> {
         self.check_attached(id)?;
+        if key.as_ref() == text("_parent").as_ref() {
+            if self.attached_name_profile.as_ref().is_some_and(|profile| {
+                profile.classify_attached_name(key) != AttachedNameClass::Standard(22)
+            }) {
+                return self.fail(ErrorKind::Unsupported("attached parent native ID profile"));
+            }
+            let Some(parent) = self.attached[id.0].spec.parent else {
+                // Native target+38 null publishes tag0 (Undefined), not Null.
+                return Ok(AttachedMember::Present(Value::Undefined));
+            };
+            self.check_attached(parent)?;
+            // Presence is independent of name contents. Without this witness,
+            // native conversion may allocate/name a handle; that route is gated.
+            if !self.attached[parent.0].handle_snapshot {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached parent existing public handle is unbound",
+                ));
+            }
+            return Ok(AttachedMember::Present(Value::DisplayClip(parent)));
+        }
         if key.as_ref() == text("_name").as_ref() {
             if self.attached_name_profile.as_ref().is_some_and(|profile| {
                 profile.classify_attached_name(key) != AttachedNameClass::Standard(13)
@@ -1075,6 +1145,9 @@ mod tests {
     use std::sync::Arc;
 
     fn synthetic_profile() -> Arc<NativeNameProfile> {
+        synthetic_profile_with_visibility(false)
+    }
+    fn synthetic_profile_with_visibility(visible: bool) -> Arc<NativeNameProfile> {
         // Synthetic inventory only; real owner-private names never enter tests.
         let mut data = format!(
             "MHF-ATTACHED-NAMES\t1\nbuild\t1.52.0.1700\nsource-sha256\t{}\ncounts\t117\t44\t9\n",
@@ -1083,6 +1156,7 @@ mod tests {
         for id in 0..117 {
             let alias = id <= 21 || (110..=115).contains(&id);
             let name = match id {
+                7 if visible => "_visible".to_owned(),
                 48 => "autoSize".to_owned(),
                 49 => "wordWrap".to_owned(),
                 65 => "maxChars".to_owned(),
@@ -1215,6 +1289,109 @@ mod tests {
         vm.delete_member(object_prototype, &text("__resolve"))
             .unwrap();
         assert!(vm.read_attached_member(root, "ordinaryMissing").is_err());
+    }
+
+    #[test]
+    fn visibility_named_opcode_commits_typed_state_and_indexed_bypass_rejects() {
+        use super::super::{AttachedVisibilityRequest, Host, HostCall, HostCommand, MovieProperty, PropertyRequest};
+        use super::super::tests::push;
+        #[derive(Default)]
+        struct StagedHost {
+            requests: Vec<AttachedVisibilityRequest>, commits: usize, indexed: usize, fail: bool,
+        }
+        impl Host for StagedHost {
+            fn call(&mut self, _: HostCall<'_>) -> std::result::Result<Value, String> { Err("unbound".into()) }
+            fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> { Err("unbound".into()) }
+            fn prepare_attached_visibility(&mut self, request: AttachedVisibilityRequest)
+                -> std::result::Result<Box<dyn FnOnce() + '_>, String> {
+                if self.fail { return Err("deliberate prepare rejection".into()); }
+                self.requests.push(request);
+                Ok(Box::new(move || { self.commits += 1; }))
+            }
+            fn set_property(&mut self, request: PropertyRequest, _: Value) -> std::result::Result<(), String> {
+                assert_eq!(request.property, MovieProperty::Visible);
+                self.indexed += 1; Ok(())
+            }
+        }
+        let mut vm = vm();
+        vm.install_attached_name_profile(synthetic_profile_with_visibility(true)).unwrap();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.adopt_attached_root(root).unwrap();
+        vm.bind_attached_target_status(root, 0x180).unwrap();
+        vm.bind_attached_visibility_policy(root, false).unwrap();
+        vm.bind_attached_visibility_profile(root, AttachedVisibilityBaseProfile::OrdinarySuccessfulAllocationProjection).unwrap();
+        let owner = vm.attached_owner(root).unwrap();
+        let mut bytes = push(&[Value::string("this")]); bytes.push(0x1c);
+        bytes.extend(push(&[Value::string("_visible"), Value::Bool(true)]));
+        let write_offset = bytes.len(); bytes.push(0x4f);
+        let code = vm.register(Arc::new(Program::parse(&bytes).unwrap())).unwrap();
+        let mut host = StagedHost::default();
+        let before = vm.attached_event_state(root).unwrap();
+        let result = vm.execute(code, owner, &mut host).unwrap();
+        assert_eq!(result.host_calls, 1);
+        assert_eq!(host.commits, 1);
+        assert_eq!(host.requests[0].receiver, root);
+        assert_eq!(host.requests[0].context, owner);
+        assert_eq!(host.requests[0].origin, Some(CodeOrigin {code, source_offset: write_offset}));
+        assert!(!host.requests[0].expected_local && host.requests[0].visible);
+        assert_eq!(vm.attached_event_state(root).unwrap().target_flags, before.target_flags | 0x4000);
+        assert_eq!(vm.attached_target_status(root).unwrap(), Some(0x180));
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        host.fail = true;
+        assert!(vm.write_member(owner, text("_visible"), Value::Bool(false), &mut host).is_err());
+        assert_eq!(vm.attached_event_state(root).unwrap().target_flags, before.target_flags | 0x4000);
+        assert_eq!(host.commits, 1);
+        host.fail = false;
+        vm.write_member(owner, text("_visible"), Value::Bool(false), &mut host).unwrap();
+        assert_eq!(vm.attached_event_state(root).unwrap(), before);
+        assert_eq!(host.commits, 2);
+        let mut indexed = push(&[Value::string(""), Value::Number(7.0), Value::Bool(true)]);
+        indexed.push(0x23);
+        let code = vm.register(Arc::new(Program::parse(&indexed).unwrap())).unwrap();
+        assert!(vm.execute(code, owner, &mut host).is_err());
+        assert_eq!(host.indexed, 0);
+        assert_eq!(vm.attached_event_state(root).unwrap(), before);
+        let plain = vm.object().unwrap();
+        vm.execute(code, plain, &mut host).unwrap();
+        assert_eq!(host.indexed, 1); // Existing independent Plain diagnostic route.
+    }
+
+    #[test]
+    fn parent_native_read_distinguishes_no_parent_from_missing_handle() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let child = vm.create_attached_movie_clip(spec(2, Some(root))).unwrap();
+        let grandchild = vm.create_attached_movie_clip(spec(3, Some(child))).unwrap();
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        assert_eq!(vm.read_attached_member(root, "_parent").unwrap(),
+            AttachedMember::Present(Value::Undefined));
+        assert!(vm.read_attached_member(child, "_parent").is_err());
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        vm.bind_attached_name_snapshot(root, AttachedNameSnapshot {
+            target: DisplayTargetId(1), name: text(""),
+        }).unwrap();
+        assert_eq!(vm.read_attached_member(child, "_parent").unwrap(),
+            AttachedMember::Present(Value::DisplayClip(root)));
+        assert!(vm.read_attached_member(grandchild, "_parent").is_err());
+        assert!(vm.write_attached_member(child, "_parent", Value::Null).is_err());
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        vm.invalidate_attached_name_snapshot(root).unwrap();
+        assert!(vm.read_attached_member(child, "_parent").is_err());
+        assert_eq!(vm.read_attached_member(root, "_parent").unwrap(),
+            AttachedMember::Present(Value::Undefined));
+        vm.bind_attached_handle_snapshot(root, AttachedHandleSnapshot {
+            target: DisplayTargetId(1),
+        }).unwrap();
+        assert!(vm.read_attached_member(root, "_name").is_err());
+        assert_eq!(vm.read_attached_member(child, "_parent").unwrap(),
+            AttachedMember::Present(Value::DisplayClip(root)));
+        assert!(vm.bind_attached_handle_snapshot(root, AttachedHandleSnapshot {
+            target: DisplayTargetId(1),
+        }).is_err());
+        vm.invalidate_attached_handle_snapshot(root).unwrap();
+        assert!(vm.read_attached_member(child, "_parent").is_err());
+        vm.install_attached_name_profile(synthetic_profile()).unwrap();
+        assert!(vm.read_attached_member(root, "_parent").is_err());
     }
 
     #[test]

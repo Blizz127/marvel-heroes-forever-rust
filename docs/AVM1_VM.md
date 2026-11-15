@@ -1629,7 +1629,7 @@ String. The native evidence is in `REA_ATTACHED_NAME.md`.
 
 `attached_name_snapshot` exposes this witness and
 `invalidate_attached_name_snapshot` discards it after externally reported name or
-handle mutation. Invalidation performs no rename, child-map change or lifecycle
+handle mutation. It conservatively invalidates handle presence too. Invalidation performs no rename, child-map change or lifecycle
 transition and does not refund cumulative allocation accounting. A later binding
 requires a newly established witness. The setter and lazy native name generator
 remain unsupported. No filename, Scene debugging label, default or generated
@@ -1643,6 +1643,63 @@ run remains stopped at GetMember108644 after167 frame instructions on frozen
 `5a16ae4`; its real current root name is unknown. An explicitly supplied synthetic
 name can advance a separate controlled probe, not change that historical result
 into a native name observation.
+
+An independent `AttachedHandleSnapshot { target }`, bound with
+`bind_attached_handle_snapshot`, records only caller-established existing public
+handle presence. It need not reveal the name. A known-name binding also establishes
+this presence witness. Both are queried separately; either explicit invalidation
+API discards both witnesses without changing the target. The `_parent` getter
+uses the immutable supplied parent relationship: known no-parent returns present
+Undefined, and a nonnull parent with an existing-handle witness returns that same
+typed `DisplayClip`. Unknown handle presence rejects rather than allocating a
+handle or inventing its name. Parent-name contents may remain unbound. The native
+return and allocation boundaries are in `REA_ATTACHED_PARENT.md`.
+
+The original manager's separate synthetic-name probe on `72cd244` reaches
+GetMember108657 after171 frame instructions, then stops on `_parent`. Its explicit
+name assumption is `diagnostic_manager_root`; the previous unknown-name frontier
+is preserved. The sealed increment6 receipt SHA256 is
+`bddc8d1f1a2593478db2f89e9008e61f21c67ac3403d92c5ca27bb32904e8d2f`.
+No native root-parent/default or complete GetFullPath behavior is inferred.
+
+## Conditional staged attached visibility
+
+`bind_attached_visibility_policy(root, no_invisible_advance)` supplies the current
+root-instance MovieImpl policy bit once before execution. Each receiver needs a
+separately supplied `AttachedVisibilityBaseProfile`, its current shared target+b8
+word, a live typed same-root association and the authenticated native name map.
+The profiles distinguish two finite existing-node cases from the explicitly
+conditional `OrdinarySuccessfulAllocationProjection`; none has a default or is
+inferred from Scene visibility. See `ATTACHED_VISIBILITY_BINDING.md` for their
+native evidence and limits.
+
+Only exact named `_visible`/ID7 with Boolean input reaches this path. The VM checks
+the current status bit equals `!visible && no_invisible_advance`, then calls
+`Host::prepare_attached_visibility` with root, active context, typed receiver,
+owner, target, expected local value, requested value and CodeOrigin. Preparation
+may fail before visibility mutation. On success the VM updates only raw6a bit14
+and visibility provenance, then invokes the borrowed one-use host commit closure.
+The host must have staged every fallible operation, preserve its VM-domain and
+source/parent binding, and publish coherent display state/invalidation without
+callbacks, reentry or further fallible work. Default Host rejects.
+
+The native changed-status branch remains unsupported; shared+b8 focus/tab bits,
+their provenance, descendant local bits and script storage stay unchanged.
+Hostless writes still reject. While a policy is bound, public raw event-state
+updates cannot change bit14, indexed Visible writes through admitted attached
+targets cannot bypass the bridge, and ordinary global `noInvisibleAdvance`
+access/mutation is rejected. Load bit5 updates and independent Plain-object
+diagnostics remain available. Native policy updates and runtime reconfiguration
+require a later coherent contract.
+
+Twelve focused checks pass: eight visibility module cases, one actual synthetic
+SetMember/owner-hook and indexed-bypass integration case, one parent-reference
+case and two name-snapshot regressions. They cover failure-before-commit,
+provenance, same-root/type/state gates, repeated assignments, profile distinctions,
+unknown versus empty names and independent handle presence. Private receipt
+`avm1-runtime/visibility-parent-checks.json` records exact sources and outputs.
+These are controlled Rust checks, not native execution, original constructor
+completion, GPU output or native allocation/dirty-queue parity.
 
 ## Dedicated saved-action execution
 

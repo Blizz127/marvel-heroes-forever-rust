@@ -33,8 +33,9 @@ mod string;
 use applied_super::AttachedSuperCall;
 use attached::AttachedTarget;
 pub use attached::{
-    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
+    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo, AttachedHandleSnapshot,
     AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedNameSnapshot, AttachedStorageId, AttachedTabEnabledInfo,
+    AttachedVisibilityBaseProfile, AttachedVisibilityInfo, AttachedVisibilityPolicy,
     AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
@@ -530,6 +531,7 @@ pub struct Vm {
     class_bases: BTreeMap<ObjectId, ClassBase>,
     attached: Vec<attached::AttachedClip>,
     attached_name_profile: Option<Arc<NativeNameProfile>>,
+    attached_visibility_policy: Option<AttachedVisibilityPolicy>,
     attached_targets: BTreeMap<DisplayTargetId, AttachedTarget>,
     text_fields: Vec<attached_textfield::AttachedTextField>,
     attached_child_entries: usize,
@@ -575,6 +577,7 @@ impl Vm {
             class_bases: BTreeMap::new(),
             attached: Vec::new(),
             attached_name_profile: None,
+            attached_visibility_policy: None,
             attached_targets: BTreeMap::new(),
             text_fields: Vec::new(),
             attached_child_entries: 0,
@@ -904,6 +907,14 @@ impl Vm {
         Ok(constructor)
     }
     fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if self.attached_visibility_policy.is_some()
+            && id == self.global
+            && key.as_ref() == text("noInvisibleAdvance").as_ref()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bound native movie visibility policy cannot use ordinary globals",
+            ));
+        }
         if matches!(
             self.objects[id.0].kind,
             Kind::AttachedOwner(_)
@@ -1438,6 +1449,7 @@ impl Vm {
     }
     fn delete_member(&mut self, id: ObjectId, key: &Text) -> Result<bool> {
         self.check_object(id)?;
+        self.check_member_target(id, key)?;
         self.reject_string_mutation_chain(id)?;
         if !matches!(self.objects[id.0].kind, Kind::Plain) {
             return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
@@ -1737,7 +1749,11 @@ impl Vm {
                 "ExternalInterface member mutation profile",
             ));
         }
-        if matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
+        if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
+            if key.as_ref() == text("_visible").as_ref() {
+                self.attached_visibility_write(clip, &key, value, host)?;
+                return Ok(());
+            }
             return self.set_key(id, key, value);
         }
         self.check_value(&value)?;
@@ -3791,6 +3807,23 @@ impl Vm {
                         let value = self.pop(frame)?;
                         let property = self.movie_property(self.pop(frame)?)?;
                         let target = self.pop(frame)?;
+                        if self.attached_visibility_policy.is_some()
+                            && property == MovieProperty::Visible
+                            && match &target {
+                                Value::DisplayClip(_) => true,
+                                Value::Object(id) => self.objects.get(id.0).is_some_and(|object| {
+                                    matches!(object.kind, Kind::AttachedOwner(_))
+                                }),
+                                Value::String(path) if path.is_empty() => matches!(
+                                    self.objects[frame.target.0].kind, Kind::AttachedOwner(_)
+                                ),
+                                _ => false,
+                            }
+                        {
+                            return self.fail(ErrorKind::Unsupported(
+                                "indexed visibility bypass of bound attached state",
+                            ));
+                        }
                         self.host_budget()?;
                         host.set_property(
                             PropertyRequest {
@@ -4203,7 +4236,7 @@ mod tests {
         out.extend(payload);
         out
     }
-    fn push(values: &[Value]) -> Vec<u8> {
+    pub(super) fn push(values: &[Value]) -> Vec<u8> {
         let mut payload = Vec::new();
         for value in values {
             match value {
