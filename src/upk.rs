@@ -20,6 +20,8 @@ pub mod level;
 pub mod model;
 #[path = "upk/model_component.rs"]
 pub mod model_component;
+#[path = "upk/model_node_geometry.rs"]
+pub mod model_node_geometry;
 #[path = "upk/polys.rs"]
 pub mod polys;
 #[path = "upk/class.rs"]

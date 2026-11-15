@@ -48,6 +48,7 @@ fn usage() {
         "  mhf upk world|model|model-component|polys|class <package.upk> <export-name|1-based-index>"
     );
     println!("  mhf upk class-defaults <package.upk> <logical-package-name> <1-based-class-index>");
+    println!("  mhf upk model-geometry <package.upk> <1-based-model> [0-based-node ...]");
     println!(
         "  mhf upk model-binding <package.upk> <1-based-level> <1-based-model> [1-based-component ...]"
     );
@@ -164,6 +165,59 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     ));
                 }
             }
+        }
+        "upk" if args.len() >= 4 && args[1] == "model-geometry" => {
+            use marvel_heroes_forever::upk::model_node_geometry::{Limits, ModelNodeGeometry};
+            let limits = Limits::default();
+            if args.len() - 4 > limits.selected_nodes {
+                return Err(invalid("too many explicit Model node selections"));
+            }
+            let export = text(&args[3])?
+                .parse::<usize>()
+                .ok()
+                .and_then(|number| number.checked_sub(1))
+                .ok_or_else(|| invalid("Model export index must be a positive integer"))?;
+            let selected = args[4..]
+                .iter()
+                .map(|value| {
+                    text(value)?
+                        .parse::<usize>()
+                        .map_err(|_| invalid("Model node indices must be nonnegative integers"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let archive = PackageArchive::open(Path::new(&args[2]))?;
+            let bytes = archive.read_export(export)?;
+            let geometry = ModelNodeGeometry::parse_export(
+                archive.package(),
+                export,
+                &bytes,
+                &selected,
+                limits,
+            )?;
+            println!(
+                "VERIFIED saved Model geometry: {} selected node occurrences, {} ordered corners",
+                geometry.usage.selected_nodes, geometry.usage.corners,
+            );
+            for node in &geometry.nodes {
+                println!(
+                    "Node {}: pool start {}, surface {}, component {}, {} corners",
+                    node.index,
+                    node.vertex_pool_start,
+                    node.surface_index,
+                    node.component_index,
+                    node.corner_count,
+                );
+                for corner in &node.corners {
+                    let [x, y, z] = corner.position.bits;
+                    println!(
+                        "  Pool {} -> position {}: bits [{x:08x}, {y:08x}, {z:08x}]",
+                        corner.pool_index, corner.position.index,
+                    );
+                }
+            }
+            println!(
+                "Explicit selections preserve order and duplicates. No triangles, materials or runtime rendering evaluated."
+            );
         }
         "upk" if args.len() >= 5 && args[1] == "model-binding" => {
             use marvel_heroes_forever::frontend::{
