@@ -10,8 +10,8 @@
 //! state even when its source CodeId is equal. Environment state belongs to the
 //! owner, not to each handler. Neither state implements Default or Clone.
 
+use super::super::Span;
 use super::{AttachedClipId, CodeId, CodeOrigin, ObjectId, Text, Value};
-use crate::avm1::Span;
 use std::{fmt, sync::Arc};
 
 /// VM arena handle, allocated once per installed source wrapper.
@@ -224,6 +224,28 @@ impl SavedEnvironmentState {
     pub fn registers(&self) -> &[Value; 4] {
         &self.registers
     }
+    /// Internal execution ceiling; adoption must also check the VM ceiling.
+    pub(super) fn max_stack_values(&self) -> usize {
+        self.max_stack_values
+    }
+    /// Lend the existing values to one saved Frame. The VM removes this state
+    /// from its public arena before lending, so the empty placeholders are never
+    /// observable Environment initialization and are never used for execution.
+    pub(super) fn take_execution(&mut self) -> (Vec<Value>, [Value; 4], usize) {
+        let stack = std::mem::take(&mut self.stack);
+        let registers = std::mem::replace(
+            &mut self.registers,
+            std::array::from_fn(|_| Value::Undefined),
+        );
+        (stack, registers, self.max_stack_values)
+    }
+    /// Restore the values after either a normal return or a returned VM error.
+    /// Owner, target and the supplied ceiling remain unchanged. The central
+    /// saved Frame keeps a fixed four-register bank and enforces stack pushes.
+    pub(super) fn restore_execution(&mut self, stack: Vec<Value>, registers: [Value; 4]) {
+        self.stack = stack;
+        self.registers = registers;
+    }
     pub fn push(&mut self, value: Value) -> Result<(), StateError> {
         if self.stack.len() >= self.max_stack_values {
             return Err(StateError::StackBudget);
@@ -255,8 +277,8 @@ impl SavedEnvironmentState {
 
 #[cfg(test)]
 mod tests {
+    use super::super::text;
     use super::*;
-    use crate::avm1::vm::text;
     use std::{cell::Cell, convert::Infallible};
 
     fn source() -> SavedActionSource {
