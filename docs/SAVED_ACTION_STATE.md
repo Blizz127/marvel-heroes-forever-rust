@@ -139,3 +139,30 @@ profile fixture; they do not assert any native initial state. Private
 records the compile/run success and frozen hashes. The earlier `890e681` test
 assertion compilation failure is preserved separately; no tests ran in that
 attempt. The clone-compatible assertion fix changed no VM runtime behavior.
+
+## Original selected Construct diagnostic
+
+**OBSERVED owned-byte execution, frozen `7f233ca`:** one unchanged original
+Construct record from login movie 13/header15, tag1345, source39236+449, native
+mask0x40000, was installed for Scene86's typed button owner. The actual imported
+definition and owner Environment remain UISource movie19/header11. The reduced
+controlled chain includes Scene0/49/86 and TextField89, with all direct named
+children retained (13/17/2 entries); unsupported siblings remain shadowing
+entries. Source/import validation establishes the selected recipe, not native
+attachment timing or a captured live display.
+
+The current stack `[17]` and four registers `[Null,true,27,Undefined]` are
+explicit diagnostic sentinels. After three instructions the first stop is
+ActionSetVariable at39513, assigning `autoSize = "none"`, at the then-current
+saved assignment gate. No native or host callback runs and storage stays absent.
+The retained wrapper pool records relative offset0. The halted Environment
+preserves the prior sentinel plus the two pushed assignment operands; all four
+registers remain unchanged. This is a single attempted handler body, not an
+event-dispatch, fresh-state or lifecycle-parity result.
+
+Private `evidence/avm1-original-construct-saved-increment1/receipt.json`, SHA256
+`ccee48198d73654daa7354514d5b433caed4cce97f9c6e26400549fe5e63f165`,
+retains exact inputs, final build/run exit0 and that explicit VM stop. An initial
+private harness compilation failure from an incorrect Result alias is preserved;
+only the harness was corrected before the single runtime attempt. The failed
+source and diagnostics are not represented as a successful build.
