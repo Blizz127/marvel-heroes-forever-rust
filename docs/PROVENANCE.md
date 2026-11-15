@@ -67,3 +67,30 @@ independent validation harness and is neither linked nor distributed. Its
 copyright notice was read to verify the licence. The five proprietary sample
 packages remain private. [SIP variant findings](SIP_VARIANTS.md) record the two
 owner-provided package variants and attributed read-only backup hash observation.
+
+## Prototype bodies and native import evidence
+
+[Prototype body ledger](PROTOTYPE_FORMAT.md) adds the exact MHServerEmu
+Calligraphy serializer/blueprint source locations studied (AGPL-3.0). The original
+schema-checked decoder retains typed serialized values and does not copy runtime
+class implementations. The independent scanner used system liblz4 1.10.0
+(BSD-2-Clause library, private validation only); its copyright notice was checked.
+The catalogue facade in `src/prototype_catalog.rs` is original project code over
+those existing original parsers and has no additional runtime dependency.
+
+Installed [REA](https://github.com/morluto/rea), package `rea-agents` 6.9.0 at
+`/home/blizz/.local/lib/node_modules/rea-agents`, has an MIT licence verified from
+`LICENSE` and `package.json`. Read-only source searches under `dist/ghidra/` and
+`dist/process/` plus selected reads of `GhidraInstallation.js`,
+`GhidraJavaProbe.js` and `OwnedCommand.js` diagnosed the Java probe's fixed default
+5,000 ms deadline and inclusion of process ownership preparation. These files
+were not edited or incorporated into the client. REA tool schemas and portable
+PE import inspection were used on the private Win64 executable; exported Evidence
+is private. This diagnosis does not claim that the timeout has been resolved.
+
+[UPK object ledger](UPK_OBJECTS.md) adds exact pinned MIT UEViewer
+`UnObject.cpp`, `UnObject.h`, `UnCore.h`, `UnTexture3.cpp` and `UnMaterial3.h`
+references for property tags and the independent frontend object study. These
+were studied without copying implementation. Selected private exported objects
+and movie arrays were compared across original Rust and independent readers;
+none is included in source or builds.

@@ -6,5 +6,6 @@ pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod calligraphy;
 pub mod options;
+pub mod prototype_catalog;
 pub mod sip;
 pub mod upk;

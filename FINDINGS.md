@@ -146,3 +146,44 @@ Exact commands, exit codes and outputs are retained in
 completion of the 16,489-file distribution transfer. JDK25 itself reports
 25.0.5 in a direct shell probe; REA's separate ownership-preparation timeout
 remains the native-analysis limitation.
+
+## Increment 0.1.0-dev.2 — prototype bodies and UPK properties
+
+**VERIFIED:** Schema-checked prototype decoding passes all 85,186 bodies in each
+pinned Calligraphy variant. A new integrated lazy catalogue checks IDs/member
+paths and supports lookups by ID, exact name and directory index. The integrated
+release catalogue verified all 85,186 Alienware bodies, with 709,824 nested nodes,
+731,294 groups and 1,947,742 values. Maximum embedded depth is 18. Nine focused
+prototype parser tests passed. Parent-value merging and runtime property/class
+binding remain unimplemented.
+
+**OBSERVED:** The Carnival variant differs in exactly three decoded asset fields
+(DesignState, DesignStateXboxOne, DesignStatePS4). Their literal asset labels are
+`NotInGame` in server/backup data and `Live` in the Alienware installation. This
+is a static data difference; no running-client or server effect was tested.
+
+**VERIFIED:** The original PackageArchive reader provides checked logical/export
+reads across LZO chunks. The new asset property parser reads 725 supported export
+streams containing 6,442 properties across the five pinned samples; 38 exports
+with unestablished preambles are explicitly skipped. Nineteen focused tests pass.
+Seven extracted exports/movie arrays match the independent private probe exactly.
+See `docs/UPK_OBJECTS.md` and private `evidence/upk-validation/object-checks.json`.
+
+**OBSERVED:** Frontend data includes 582 inline Texture2D exports and 20 GFX movie
+arrays, including the actual login dialog. Independent texture/GFX parsing and
+renderer work continue. No reconstructed login screen is yet rendered or playable.
+
+**OBSERVED (REA):** Static PE import inspection examined 40 DLL descriptors;
+complete Evidence `ev_7136989a0b4ae1b35612e44bddcbe16bc3fbf8ad0f1245aaed529cbdb780c919`
+is exported privately to `evidence/retail-pe-imports.bundle.json`. See
+`docs/REA_NATIVE.md` for dependency observations and the unresolved native Java
+probe deadline. A normal-priority probe reproduced the failure, without config
+changes. Static import tables do not establish which APIs run.
+
+**VERIFIED (integrated dev.2 checks):** ID/member lookups select the same Carnival
+prototype; a missing ID returns an error. Four catalogue checks include the full
+85,186-file structural traversal. Seven final release checks cover named/numeric
+UPK export selection, malformed/missing selection, all 606 frontend asset streams,
+version and Original preset. Exact outputs and binary identities are private in
+`build-0.1.0-dev.2-prototype-smoke.json` and
+`build-0.1.0-dev.2-object-smoke.json` under `evidence/`.

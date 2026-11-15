@@ -635,3 +635,5 @@ mod tests {
         assert!(PrototypeDataHeader::parse(&[8]).is_err());
     }
 }
+
+pub mod prototype;

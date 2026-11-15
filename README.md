@@ -46,3 +46,17 @@ mhf upk exports /private/path/MarvelFrontEnd_SF.upk
 
 This reads object tables through bounded LZO decoding. Object payloads, textures,
 meshes, Scaleform UI and rendering remain unimplemented.
+
+Prototype bodies and supported asset properties now have separate commands:
+
+```sh
+mhf prototype verify /private/path/Calligraphy.sip
+mhf prototype inspect /private/path/Calligraphy.sip 0xf8ffa9c3a5912250
+mhf upk properties /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog
+mhf upk verify-objects /private/path/MarvelFrontEnd_SF.upk
+```
+
+The prototype catalogue offers lazy lookup by data ID or exact member name and
+preserves typed serialized fields. Parent-value merging and runtime classes are
+not implemented. UPK property parsing reports unsupported class preambles and
+retains unknown array/structure payloads as spans.

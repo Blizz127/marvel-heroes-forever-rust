@@ -3,7 +3,7 @@
 //! Unknown property values retain their type and byte span. Arrays and native
 //! class payloads require a class/schema-specific reader and are not guessed.
 
-use super::{invalid, unsupported, Cursor, NameRef, Package, MAX_EXPORT_BYTES};
+use super::{Cursor, MAX_EXPORT_BYTES, NameRef, Package, invalid, unsupported};
 use std::io;
 
 pub const MAX_PROPERTIES: usize = 16_384;
@@ -277,7 +277,7 @@ fn parse_value(
             _ => {
                 return Err(unsupported(
                     "ByteProperty must contain one byte or an enum FName",
-                ))
+                ));
             }
         },
         "arrayproperty" => {
@@ -492,17 +492,21 @@ mod tests {
             .unwrap(),
             Value::FloatBits(bits)
         );
-        assert!(Span {
-            offset: usize::MAX,
-            length: 1
-        }
-        .bytes(&[])
-        .is_err());
-        assert!(Span {
-            offset: 1,
-            length: 0
-        }
-        .logical_offset(usize::MAX)
-        .is_err());
+        assert!(
+            Span {
+                offset: usize::MAX,
+                length: 1
+            }
+            .bytes(&[])
+            .is_err()
+        );
+        assert!(
+            Span {
+                offset: 1,
+                length: 0
+            }
+            .logical_offset(usize::MAX)
+            .is_err()
+        );
     }
 }

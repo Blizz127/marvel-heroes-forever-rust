@@ -2,8 +2,12 @@ use marvel_heroes_forever::{
     BUILD_VERSION, TARGET_BUILD,
     calligraphy::{AssetType, Blueprint, Curve, Directory, FileKind, Header},
     options::{ClientOptions, Preset},
+    prototype_catalog::{PrototypeCatalog, PrototypeStatistics},
     sip::SipArchive,
-    upk::{Package, Summary},
+    upk::{
+        Package, PackageArchive, Summary,
+        objects::{ObjectProperties, supports_asset_class},
+    },
 };
 use std::{error::Error, ffi::OsString, io, path::Path, process::ExitCode};
 
@@ -33,7 +37,11 @@ fn usage() {
     println!("  mhf sip list <archive.sip> [name-filter]");
     println!("  mhf calligraphy inspect <archive.sip> <member-name>");
     println!("  mhf calligraphy verify <archive.sip>");
+    println!("  mhf prototype inspect <archive.sip> <member-name|0xID>");
+    println!("  mhf prototype verify <archive.sip>");
     println!("  mhf upk summary|inspect|exports <package.upk>");
+    println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
+    println!("  mhf upk verify-objects <package.upk>");
     println!("  mhf --version");
     println!("No assets are embedded. No server connection is made.");
 }
@@ -117,10 +125,85 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             }
         }
+        "upk" if args.len() == 4 && args[1] == "properties" => {
+            let archive = PackageArchive::open(Path::new(&args[2]))?;
+            let package = archive.package();
+            let selector = text(&args[3])?;
+            let index = if let Ok(number) = selector.parse::<usize>() {
+                number
+                    .checked_sub(1)
+                    .ok_or_else(|| invalid("export indices begin at 1"))?
+            } else {
+                let matches: Vec<_> = package
+                    .exports
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, export)| {
+                        package
+                            .resolve_name(export.object_name)
+                            .is_some_and(|name| name.eq_ignore_ascii_case(selector))
+                    })
+                    .map(|(index, _)| index)
+                    .collect();
+                match matches.as_slice() {
+                    [index] => *index,
+                    [] => return Err(invalid("export name not found")),
+                    _ => {
+                        return Err(invalid(
+                            "export name is ambiguous; select its numeric index",
+                        ));
+                    }
+                }
+            };
+            let bytes = archive.read_export(index)?;
+            let object = ObjectProperties::parse_export(package, index, &bytes)?;
+            println!(
+                "VERIFIED {} property stream: {} tags, {} native payload bytes",
+                object.class_name,
+                object.properties.entries.len(),
+                object.native_payload.length
+            );
+            for property in object.properties.entries.iter().take(100) {
+                let name = package
+                    .resolve_name(property.name)
+                    .ok_or_else(|| invalid("invalid property name"))?;
+                let kind = package
+                    .resolve_name(property.property_type)
+                    .ok_or_else(|| invalid("invalid property type"))?;
+                println!(
+                    "{name}[{}] {kind}: {:?}",
+                    property.array_index, property.value
+                );
+            }
+            println!(
+                "Unknown arrays/structures and native payloads remain opaque; no object execution performed."
+            );
+        }
         "upk" if args.len() == 3 => {
             let action = text(&args[1])?;
             let path = Path::new(&args[2]);
-            if action == "summary" {
+            if action == "verify-objects" {
+                let archive = PackageArchive::open(path)?;
+                let package = archive.package();
+                let (mut parsed, mut skipped, mut properties) = (0_u64, 0_u64, 0_u64);
+                for index in 0..package.exports.len() {
+                    let class = package
+                        .export_class_name(index)
+                        .ok_or_else(|| invalid("unresolved export class"))?;
+                    if !supports_asset_class(&class) {
+                        skipped += 1;
+                        continue;
+                    }
+                    let bytes = archive.read_export(index)?;
+                    let object = ObjectProperties::parse_export(package, index, &bytes)?;
+                    parsed += 1;
+                    properties += object.properties.entries.len() as u64;
+                }
+                println!(
+                    "VERIFIED {parsed} supported asset property streams, {properties} property tags; skipped {skipped} unsupported class preambles"
+                );
+                println!("Native payloads and object behavior are not validated by this command.");
+            } else if action == "summary" {
                 let summary = Summary::open(path)?;
                 println!(
                     "OBSERVED UE3 {}/{}: {} names, {} imports, {} exports; compression {}, {} chunks",
@@ -160,12 +243,50 @@ fn run(args: Vec<OsString>) -> Result<()> {
                         package.exports.len()
                     );
                 }
-                println!("Object payloads and rendering are not implemented.");
+                println!(
+                    "Metadata only; use properties or verify-objects for supported asset property streams."
+                );
             } else {
                 return Err(invalid(
                     "usage: mhf upk summary|inspect|exports <package.upk>",
                 ));
             }
+        }
+        "prototype" if args.len() >= 3 => {
+            let mut catalog = PrototypeCatalog::open(Path::new(&args[2]))?;
+            println!(
+                "OBSERVED prototype catalogue: {} records, {} blueprints",
+                catalog.prototype_count(),
+                catalog.blueprint_count()
+            );
+            let mut reader = catalog.reader()?;
+            let statistics = match text(&args[1])? {
+                "verify" if args.len() == 3 => reader.verify_all()?,
+                "inspect" if args.len() == 4 => {
+                    let name = text(&args[3])?;
+                    let prototype = if let Some(hex) = name.strip_prefix("0x") {
+                        reader.read_id(u64::from_str_radix(hex, 16)?)?
+                    } else {
+                        reader.read_member(name)?
+                    };
+                    println!("OBSERVED encoded header: {:?}", prototype.header);
+                    let mut statistics = PrototypeStatistics {
+                        files: 1,
+                        ..Default::default()
+                    };
+                    statistics.include(&prototype);
+                    statistics
+                }
+                _ => {
+                    return Err(invalid(
+                        "usage: mhf prototype inspect <archive.sip> <member|0xID> | verify <archive.sip>",
+                    ));
+                }
+            };
+            println!("VERIFIED structural decoding: {statistics:?}");
+            println!(
+                "Parent-value merging, runtime class/property binding and gameplay behavior are not implemented."
+            );
         }
         "calligraphy" if args.len() >= 3 => {
             let mut archive = SipArchive::open(Path::new(&args[2]))?;
@@ -204,7 +325,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
                         indices.len()
                     );
                     println!(
-                        "Skipped {} other members; prototype bodies/inheritance remain unimplemented",
+                        "Skipped {} other members; use prototype verify for body decoding",
                         archive.entries().len() - indices.len()
                     );
                 }
@@ -228,7 +349,9 @@ fn status(preset: Preset) {
         options.preset(),
         options.enabled_upgrades().len()
     );
-    println!("Implemented: SIP/LZ4, Calligraphy metadata, UE3/LZO object-table readers.");
+    println!(
+        "Implemented: SIP/LZ4, Calligraphy prototype bodies, UE3/LZO tables and asset property streams."
+    );
     println!("Not implemented: playable frontend, login, world or combat.");
     println!("Retail behavior parity is not verified.");
 }
