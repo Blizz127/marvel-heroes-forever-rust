@@ -20,7 +20,8 @@ mod external_interface;
 use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
-    AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
+    AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedWrite, DisplayTargetId,
+    LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
 pub use attached_name_profile::{
@@ -527,9 +528,23 @@ impl Vm {
     }
     /// Integration must establish that this target belongs to a successfully
     /// loaded movie. Failed/empty definitions and arbitrary objects do not qualify.
-    /// Every registered program executed in this context must share this profile.
+    /// Controlled Plain targets share the VM profile. Attached targets already
+    /// have an immutable MovieDef/version established by their adoption route.
     pub fn bind_loaded_movie_target(&mut self, target: ObjectId, header_version: u8) -> Result<()> {
         self.check_object(target)?;
+        if let Kind::AttachedOwner(id) = self.objects[target.0].kind {
+            if header_version != self.attached_info(id)?.environment_header_version {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached MovieDef version reassignment",
+                ));
+            }
+            return Ok(());
+        }
+        if !matches!(self.objects[target.0].kind, Kind::Plain) {
+            return self.fail(ErrorKind::Unsupported(
+                "loaded movie target identity profile",
+            ));
+        }
         if header_version != self.movie_version {
             return self.fail(ErrorKind::Unsupported(
                 "loaded movie target version mismatch",
@@ -2580,6 +2595,14 @@ impl Vm {
             }
             _ => return self.fail(ErrorKind::UnboundCall),
         };
+        if let Kind::AttachedOwner(clip) = self.objects[function.target.0].kind {
+            let flags = self.attached_event_state(clip)?.target_flags;
+            if flags & 0x80 == 0 || flags & 0x10 != 0 {
+                return self.fail(ErrorKind::Unsupported(
+                    "captured attached Environment requires live eligible target and bit4 clear",
+                ));
+            }
+        }
         let program = self.code[function.code.0].clone();
         let Some(instruction) = program.instruction_at(function.offset) else {
             return self.fail(ErrorKind::InvalidCode(function.code));
@@ -4415,6 +4438,84 @@ mod tests {
             .register(Arc::new(Program::parse(&bytes).unwrap()))
             .unwrap();
         assert!(vm.execute(code, caller_owner, &mut RejectHost).is_err());
+    }
+
+    #[test]
+    fn imported_receiver_does_not_replace_captured_script_environment() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        let make = |target, movie, version, parent| AttachedClipSpec {
+            target: DisplayTargetId(target),
+            source: AttachedClipSource {
+                movie: LoadedMovieSourceId(movie),
+                sprite_id: 1,
+                header_version: version,
+            },
+            parent,
+            event_state: AttachedEventState {
+                target_flags: 0x5200_0180,
+                load_flags: 0,
+                source_flags: 0,
+            },
+        };
+        let root = vm
+            .create_attached_movie_clip(make(1, 15, 15, None))
+            .unwrap();
+        vm.adopt_attached_root(root).unwrap();
+        let imported = vm
+            .create_attached_movie_clip_with_binding(
+                make(2, 11, 11, Some(root)),
+                AttachedMovieBinding::LocalSourceOrImportedLocalExport,
+            )
+            .unwrap();
+        vm.set_attached_children(
+            root,
+            vec![AttachedChild::Clip {
+                name: text("button"),
+                clip: imported,
+            }],
+        )
+        .unwrap();
+        vm.set_attached_children(imported, vec![]).unwrap();
+        let observe = vm.native(97).unwrap();
+        vm.set(vm.global(), "observe", Value::Object(observe))
+            .unwrap();
+        let mut body = method_call("_global", "observe");
+        body.push(0x3e);
+        let bytes = function("", &body);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let root_owner = vm.attached_owner(root).unwrap();
+        let callable = vm
+            .execute(code, root_owner, &mut RejectHost)
+            .unwrap()
+            .stack
+            .pop()
+            .unwrap();
+        let receiver = vm.attached_value(imported).unwrap();
+        let mut host = ContextHost::default();
+        vm.call(callable.clone(), receiver.clone(), &[], &mut host)
+            .unwrap();
+        assert_eq!(host.calls.len(), 1);
+        assert_eq!(host.calls[0].1, Some(root_owner));
+        assert_eq!(
+            vm.attached_info(imported)
+                .unwrap()
+                .environment_header_version,
+            11
+        );
+        assert_eq!(
+            vm.attached_info(root).unwrap().environment_header_version,
+            15
+        );
+        let mut state = vm.attached_event_state(root).unwrap();
+        state.target_flags |= 0x10;
+        vm.update_attached_event_state(root, state).unwrap();
+        assert!(vm.call(callable, receiver, &[], &mut host).is_err());
+        assert_eq!(host.calls.len(), 1);
+        assert!(vm.current_target.is_none());
     }
     #[test]
     fn deferred_scalars_and_token_equality_do_not_materialize() {

@@ -25,6 +25,13 @@ pub struct AttachedClipSource {
     pub sprite_id: u16,
     pub header_version: u8,
 }
+/// Host-established native resource binding route. The host must validate the
+/// actual local resource or ordinary imported-local-export pair; source filename,
+/// bytecode origin and the placing parent's version are not this witness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachedMovieBinding {
+    LocalSourceOrImportedLocalExport,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttachedClipSpec {
     pub target: DisplayTargetId,
@@ -66,6 +73,11 @@ pub enum AttachedWrite {
 pub struct AttachedInfo {
     pub target: DisplayTargetId,
     pub source: AttachedClipSource,
+    /// MovieDef selected by native CreateInfo binding, separate from the
+    /// definition's source role even when the admitted witness makes them equal.
+    pub environment_movie: LoadedMovieSourceId,
+    pub environment_header_version: u8,
+    pub binding: Option<AttachedMovieBinding>,
     pub parent: Option<AttachedClipId>,
     pub owner: ObjectId,
     pub storage: Option<AttachedStorageId>,
@@ -94,6 +106,9 @@ enum PrototypeMember {
 #[derive(Debug, Clone)]
 pub(super) struct AttachedClip {
     spec: AttachedClipSpec,
+    environment_movie: LoadedMovieSourceId,
+    environment_header_version: u8,
+    binding: Option<AttachedMovieBinding>,
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
@@ -127,15 +142,46 @@ impl Vm {
     /// The host must establish the live source case-3 construction route and
     /// loaded movie identity. This never upgrades a preexisting VM object.
     pub fn create_attached_movie_clip(&mut self, spec: AttachedClipSpec) -> Result<AttachedClipId> {
+        if spec.source.header_version != self.movie_version
+            || spec
+                .parent
+                .map(|id| self.attached_info(id))
+                .transpose()?
+                .is_some_and(|parent| parent.environment_header_version != self.movie_version)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached loaded movie version profile",
+            ));
+        }
+        self.create_attached_in_binding(spec, None)
+    }
+    /// Explicit bounded local/imported-export adoption. The FINAL selected
+    /// resource pair must remain the eligible, successfully resolved direct
+    /// local/exported pair: later native resource-list substitutions are outside
+    /// this witness. Every native target
+    /// keeps the MovieDef/version of its selected binding, not the placing
+    /// parent or script-function origin. Alias/substitution bindings are absent.
+    pub fn create_attached_movie_clip_with_binding(
+        &mut self,
+        spec: AttachedClipSpec,
+        binding: AttachedMovieBinding,
+    ) -> Result<AttachedClipId> {
+        if !(7..=19).contains(&spec.source.header_version) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached binding execution version outside 7..19",
+            ));
+        }
+        self.create_attached_in_binding(spec, Some(binding))
+    }
+    fn create_attached_in_binding(
+        &mut self,
+        spec: AttachedClipSpec,
+        binding: Option<AttachedMovieBinding>,
+    ) -> Result<AttachedClipId> {
         // DWORD+6a overlaps byte+6d: this concrete case-3 owner lives at+148,
         // so its encoded quarter-byte owner offset is52, not an event default.
         if spec.event_state.target_flags >> 24 != 0x52 {
             return self.fail(ErrorKind::Unsupported("attached case3 owner-offset field"));
-        }
-        if spec.source.header_version != self.movie_version {
-            return self.fail(ErrorKind::Unsupported(
-                "attached loaded movie version profile",
-            ));
         }
         if self.attached_targets.contains_key(&spec.target) {
             return self.fail(ErrorKind::Unsupported("duplicate attached target identity"));
@@ -181,6 +227,9 @@ impl Vm {
         let owner = self.alloc(Kind::AttachedOwner(id), None)?;
         self.attached.push(AttachedClip {
             spec,
+            environment_movie: spec.source.movie,
+            environment_header_version: spec.source.header_version,
+            binding,
             owner,
             storage: None,
             prototype: Some(prototype),
@@ -231,6 +280,9 @@ impl Vm {
         Ok(AttachedInfo {
             target: clip.spec.target,
             source: clip.spec.source,
+            environment_movie: clip.environment_movie,
+            environment_header_version: clip.environment_header_version,
+            binding: clip.binding,
             parent: clip.spec.parent,
             owner: clip.owner,
             storage: clip.storage.map(|id| AttachedStorageId(id.0)),
@@ -852,6 +904,45 @@ mod tests {
                 .is_err()
         );
         assert!(vm.attached_name_profile.is_none());
+    }
+
+    #[test]
+    fn explicit_local_import_binding_keeps_target_version_and_old_gate() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let mut imported = spec(2, Some(root));
+        imported.source.movie = LoadedMovieSourceId(11);
+        imported.source.header_version = 11;
+        assert!(vm.create_attached_movie_clip(imported).is_err());
+        let witness = AttachedMovieBinding::LocalSourceOrImportedLocalExport;
+        let child = vm
+            .create_attached_movie_clip_with_binding(imported, witness)
+            .unwrap();
+        let info = vm.attached_info(child).unwrap();
+        assert_eq!(info.source, imported.source);
+        assert_eq!(info.environment_movie, LoadedMovieSourceId(11));
+        assert_eq!(info.environment_header_version, 11);
+        assert_eq!(info.binding, Some(witness));
+        assert_eq!(
+            vm.attached_info(root).unwrap().environment_header_version,
+            15
+        );
+        assert_eq!(vm.loaded_movie_targets.get(&info.owner), Some(&11));
+        assert!(vm.create_attached_movie_clip(spec(3, Some(child))).is_err());
+        assert!(vm.bind_loaded_movie_target(info.owner, 15).is_err());
+        vm.bind_loaded_movie_target(info.owner, 11).unwrap();
+        assert_eq!(vm.loaded_movie_targets.get(&info.owner), Some(&11));
+        for version in [5, 6, 20] {
+            imported.target = DisplayTargetId(100 + u64::from(version));
+            imported.source.header_version = version;
+            assert!(
+                vm.create_attached_movie_clip_with_binding(imported, witness)
+                    .is_err()
+            );
+        }
+        let ordinary = vm.object().unwrap();
+        assert!(vm.bind_loaded_movie_target(ordinary, 11).is_err());
+        vm.bind_loaded_movie_target(ordinary, 15).unwrap();
     }
 
     fn vm() -> Vm {

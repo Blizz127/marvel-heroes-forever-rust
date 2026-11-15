@@ -109,11 +109,45 @@ impl Vm {
         &mut self,
         spec: AttachedTextFieldSpec,
     ) -> Result<AttachedTextFieldId> {
-        if spec.source.header_version != self.movie_version {
+        if spec.source.header_version != self.movie_version
+            || self.attached_info(spec.parent)?.environment_header_version != self.movie_version
+            || self
+                .attached_info(spec.environment_owner)?
+                .environment_header_version
+                != self.movie_version
+        {
             return self.fail(ErrorKind::Unsupported(
                 "TextField loaded movie version profile",
             ));
         }
+        self.adopt_text_field_snapshot(spec)
+    }
+
+    /// Explicit local EditText definition of the parent's bound MovieDef. The
+    /// host validates that resource association; this method verifies its source
+    /// identity/version against the established parent binding. The field's
+    /// first marked Environment ancestor may independently belong to another
+    /// admitted 7+ movie. No script-origin version is substituted for either.
+    pub fn adopt_attached_text_field_from_parent_movie(
+        &mut self,
+        spec: AttachedTextFieldSpec,
+    ) -> Result<AttachedTextFieldId> {
+        let parent = self.attached_info(spec.parent)?;
+        if !(7..=19).contains(&spec.source.header_version)
+            || spec.source.movie != parent.environment_movie
+            || spec.source.header_version != parent.environment_header_version
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "TextField local parent MovieDef binding",
+            ));
+        }
+        self.adopt_text_field_snapshot(spec)
+    }
+
+    fn adopt_text_field_snapshot(
+        &mut self,
+        spec: AttachedTextFieldSpec,
+    ) -> Result<AttachedTextFieldId> {
         if spec.target_flags_6a >> 24 != 0x52 {
             return self.fail(ErrorKind::Unsupported("TextField case4 owner-offset field"));
         }
@@ -506,6 +540,123 @@ mod tests {
             parent
         );
         assert_ne!(parent, root);
+    }
+
+    #[test]
+    fn local_definition_version_stays_separate_from_marked_environment() {
+        use super::super::AttachedMovieBinding;
+        let mut vm = Vm::new(15, Limits::default()).unwrap();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        let root = clip(&mut vm, 100, None, true);
+        let parent = vm
+            .create_attached_movie_clip_with_binding(
+                AttachedClipSpec {
+                    target: DisplayTargetId(101),
+                    source: AttachedClipSource {
+                        movie: LoadedMovieSourceId(11),
+                        sprite_id: 1039,
+                        header_version: 11,
+                    },
+                    parent: Some(root),
+                    event_state: AttachedEventState {
+                        target_flags: 0x5200_0180,
+                        load_flags: 0,
+                        source_flags: 0,
+                    },
+                },
+                AttachedMovieBinding::LocalSourceOrImportedLocalExport,
+            )
+            .unwrap();
+        let spec = AttachedTextFieldSpec {
+            target: DisplayTargetId(200),
+            source: AttachedTextFieldSource {
+                movie: LoadedMovieSourceId(11),
+                edit_text_id: 1034,
+                header_version: 11,
+            },
+            parent,
+            environment_owner: root,
+            target_flags_6a: 0x5200_0180,
+            prototype: TextFieldPrototypeId(1),
+            watch_state: TextFieldWatchState::Absent,
+        };
+        assert!(vm.adopt_attached_text_field(spec).is_err());
+        assert!(
+            vm.adopt_attached_text_field(AttachedTextFieldSpec {
+                source: AttachedTextFieldSource {
+                    header_version: 15,
+                    ..spec.source
+                },
+                ..spec
+            })
+            .is_err()
+        );
+        for source in [
+            AttachedTextFieldSource {
+                header_version: 15,
+                ..spec.source
+            },
+            AttachedTextFieldSource {
+                movie: LoadedMovieSourceId(12),
+                ..spec.source
+            },
+        ] {
+            assert!(
+                vm.adopt_attached_text_field_from_parent_movie(AttachedTextFieldSpec {
+                    source,
+                    ..spec
+                })
+                .is_err()
+            );
+        }
+        let field = vm
+            .adopt_attached_text_field_from_parent_movie(spec)
+            .unwrap();
+        let owner = vm.attached_text_field_owner(field).unwrap();
+        assert!(vm.bind_loaded_movie_target(owner, 15).is_err());
+        vm.current_target = Some(vm.attached_owner(parent).unwrap());
+        let mut host = Backend::default();
+        vm.attached_text_field_write(field, text("html"), Value::Bool(true), &mut host)
+            .unwrap();
+        let request = &host.sets[0].0;
+        assert_eq!(request.source.header_version, 11);
+        assert_eq!(request.source.movie, LoadedMovieSourceId(11));
+        assert_eq!(request.environment_owner, vm.attached_owner(root).unwrap());
+        assert_eq!(request.context, Some(vm.attached_owner(parent).unwrap()));
+        assert_eq!(
+            vm.attached_info(root).unwrap().environment_header_version,
+            15
+        );
+        assert_eq!(
+            vm.attached_info(parent).unwrap().environment_header_version,
+            11
+        );
+        let mut state = vm.attached_event_state(parent).unwrap();
+        state.target_flags |= 0x400;
+        vm.update_attached_event_state(parent, state).unwrap();
+        assert!(
+            vm.attached_text_field_write(field, text("html"), Value::Bool(false), &mut host)
+                .is_err()
+        );
+        let second = vm
+            .adopt_attached_text_field_from_parent_movie(AttachedTextFieldSpec {
+                target: DisplayTargetId(201),
+                environment_owner: parent,
+                ..spec
+            })
+            .unwrap();
+        vm.current_target = Some(vm.attached_owner(root).unwrap());
+        vm.attached_text_field_write(second, text("html"), Value::Bool(false), &mut host)
+            .unwrap();
+        assert_eq!(
+            host.sets[1].0.environment_owner,
+            vm.attached_owner(parent).unwrap()
+        );
+        assert_eq!(
+            host.sets[1].0.context,
+            Some(vm.attached_owner(root).unwrap())
+        );
     }
 
     #[test]

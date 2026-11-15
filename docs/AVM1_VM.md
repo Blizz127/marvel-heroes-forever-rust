@@ -1230,6 +1230,27 @@ The native theorem and full source/rights ledger are in
 `ATTACHED_NAME_CLASSIFICATION.md`, with private receipts under
 `rea-attached-name-classification/` and `rea-prototype-general-classification/`.
 
+**OBSERVED actual saved-script boundary with authenticated inventory:** the
+committed `0272965` attached-root probe completes the first manager initializer.
+The second (CodeId 1, tag 383/sprite 34) stops after 130 instructions in its
+FocusHandler constructor at SetMember 13632: original Push 13623 supplies
+preloaded register 2 (`_root`), `_focusrect`, and Boolean false. The verified
+inventory identifies this as standard native member 17, whose setter is not yet
+implemented. The original Selection.addListener executes once, retaining listener
+116. Class-registration and unknown-native counts remain zero, and root ordinary
+storage remains absent. This does not bypass the standard-member gate.
+
+The exact same controlled three-child/raw-state/minimal-global fixture is used;
+no TextField, imported-version or full native-global initialization is claimed.
+The full 48,544,080-byte owned executable and exact 4,226-byte private inventory
+match their independently expected digests; nine committed VM/decoder modules
+and both frozen original host snapshots match after compilation/run. Build and
+run exit zero with empty stderr, while the VM reports the explicit unsupported
+native member. `avm1-attached-manager-init-increment4/receipt.json`, SHA256
+`67926731aa7377f276e51001365dffa6fb6b1691ce098913847cb78c6c57fd61`,
+retains original source coordinates, operand proof and partial state. This is
+separate from the historical parentless Plain-root initializer count.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established
@@ -1292,13 +1313,54 @@ synthetic same-version snapshots and a controlled routing host; they do not clai
 native text parsing or actual login execution. Results and tested source hashes
 are retained in `avm1-runtime/textfield-bridge-evidence.json`.
 
-The current bounded adoption profile still requires definition source header
-version equal to the VM profile. This blocks the actual imported UISource version
-11 button/field under login/manager version 15. Those source versions are retained
-accurately; no fixture may relabel the imported movie. Source-definition ownership
-versus inherited execution Environment is under separate native investigation.
-The original label update, which also calls unsupported String.toUpperCase on its
-actual force-caps path, has not run through this mixed-source bridge.
+The original adoption entry points retain their same-version gates. The additive
+`create_attached_movie_clip_with_binding(spec,
+AttachedMovieBinding::LocalSourceOrImportedLocalExport)` accepts the separately
+proved bounded route for versions 7..19. The host must establish a successful,
+eligible local resource or ordinary imported local export whose **final** selected
+resource-binding pair is unchanged. A later native resource-list substitution,
+custom alias or failed definition is outside the witness. A source filename or
+function-definition origin is not proof of that binding.
+
+`AttachedInfo` exposes `environment_movie`, `environment_header_version` and
+optional `binding` separately from `source`. These identity roles are equal only
+under the admitted binding profile; the native constructor itself stores them
+independently. The selected target's loaded-version map retains its actual value,
+and `bind_loaded_movie_target` rejects reassignment to a different header version.
+No code-origin or placing-parent version is substituted for it. Controlled Plain
+targets retain the VM-version admission rule. Field owners and storage cannot be
+registered as independently owned execution Environments.
+
+`adopt_attached_text_field_from_parent_movie(spec)` is the additive local EditText
+snapshot route. It verifies the source movie/header against the actual immediate
+parent's selected MovieDef, while still independently checking the first 0x400
+ancestor against the supplied environment owner. The raw source, selected target
+MovieDef, inherited field Environment and captured script-call target are separate
+facts. It does not admit arbitrary imported field definitions, run constructor
+hooks or infer any state from the method's originating movie. The interpreter's
+implemented instruction profile is already restricted to versions 7..19; its
+existing version-sensitive ASSetPropFlags default reads the actual selected target
+version. No new legacy or per-version language semantics are invented.
+
+**OBSERVED controlled Rust checks:** two focused tests retain imported source11,
+target11 and parent/root15 identities, reject legacy API mismatches and unsupported
+version ranges, prohibit target-version reassignment, reject an incorrect field
+source/parent association, and exercise both distinct active/inherited Environment
+orders. Changing the first marked ancestor invalidates a previously supplied field
+association. These synthetic checks establish routing and admission behavior, not
+actual native import execution. The source/Environment evidence is documented in
+`TEXTFIELD_SOURCE_ENV_VERSION.md` and privately retained under `source-version-env/`.
+A captured attached script target additionally requires its live eligibility bit7
+and clear bit4; unsupported caller-Environment substitution or target resolution
+stops explicitly. A focused script-call check retains captured Environment15 with
+a receiver bound to movie11, then rejects a bit4 change before the callback.
+
+The 18 passing focused Clip, TextField, loaded-target flag and captured-context checks, together
+with tested source hashes, are retained in
+`avm1-runtime/source-env-bridge-evidence.json`.
+The actual original label update still needs its separately unsupported String
+uppercase path; this increment does not claim completed login or native lifecycle
+parity.
 
 Source licence/provenance for this increment: the two original project runtime
 and API studies above, the privately retained owned Gazillion/Marvel executable
