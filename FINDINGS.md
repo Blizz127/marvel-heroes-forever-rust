@@ -50,6 +50,16 @@ the diagnostic manager name has not been replaced. See
 Dev17 remains the latest staged package. No dev18 binary or startup check has
 run yet; the inherited service/access holds remain in place.
 
+**VERIFIED complete selected Model framing:** four final words and the counted
++0x110 records now consume the remaining 92 Entry and 56 FrontEnd bytes. Both
+selected original Models have zero undecoded bytes; other payloads may retain
+an opaque suffix. Five focused tests, 29 independent oracle checks and both
+original-export comparisons pass across 424 output rows. This verifies the
+selected serialized framing, not geometry semantics or runtime behavior.
+Receipt:
+`evidence/model-final-tail-native/independent/product-check/verification.json`,
+SHA-256 `dd2691908cd0ac6377afa58cbe980c270cda03fac96d4469bc3ac3784e8398bc`.
+
 ## 2026-11-15 dev17 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested code

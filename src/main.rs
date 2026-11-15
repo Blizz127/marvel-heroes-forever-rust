@@ -246,7 +246,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     .map(|array| array.count)
                     .collect();
                 println!(
-                    "VERIFIED Model prefix: 8 raw bulk arrays, counts {:?}, {} opaque trailing bytes",
+                    "VERIFIED Model payload: 8 raw bulk arrays, counts {:?}, {} opaque trailing bytes",
                     counts, model.unparsed_native_tail.length,
                 );
                 println!("Seven preserved words: {:08x?}", model.record_c5c.words);
@@ -272,7 +272,12 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     fields.polys_link.span.offset,
                 );
                 println!(
-                    "Records and later containers remain uninterpreted. No geometry preparation or object execution performed."
+                    "Final fields: four words {:08x?}; +0x110={} records",
+                    model.final_fields.words.map(|word| word.bits),
+                    model.final_fields.records_110.records.len(),
+                );
+                println!(
+                    "Raw record semantics remain unimplemented. No geometry preparation or object execution performed."
                 );
                 return Ok(());
             }

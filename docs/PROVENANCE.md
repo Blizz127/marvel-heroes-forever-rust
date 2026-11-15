@@ -657,3 +657,10 @@ interning, name-field assignment and conditional fresh MovieDef/AS2 association.
 The ledger identifies retained evidence, newly verified native bytes and assumed
 ordinary imported CRT contracts. No CRT DLL or native client ran for this study;
 current adopted-instance names remain separate inputs.
+
+[Loaded Scale9 texture layout](SCALE9_LOADED_LAYOUT.md) extends the existing
+owned declarations/native-property evidence with the conditional Object header
+extent, class Link dispatch and Texture2D serializer's version-gated writes.
+Its source ledger preserves remaining archive-state, field-reorder and PostLoad
+conditions. No renderer input or runtime-state default is inferred from those
+static paths.
