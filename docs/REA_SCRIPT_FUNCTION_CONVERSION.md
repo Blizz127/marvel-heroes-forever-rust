@@ -2,8 +2,8 @@
 
 Investigation: 2026-11-15 UTC, task `a3d58c579542`.
 
-**VERIFIED, static native control flow:** An ordinary direct function value
-created by `DefineFunction2` uses interface `0x142513090`. Its callable-reference
+**VERIFIED, static native control flow:** Ordinary direct function values
+created by `DefineFunction` and `DefineFunction2` use interface `0x142513090`. Their callable-reference
 slot `+0x60` points to `0x14018c580`. A normal one-argument
 `Function(script_function)` call preserves the underlying ScriptFunction object
 and returns a reference with a null auxiliary frame pointer and zero reference
@@ -41,6 +41,15 @@ Function.prototype through this interface's `+0x68` parent setter. Its optional
 `0x14018ed40` call assigns the public `constructor` member through the existing
 raw setter. These paths update prototype/member metadata without replacing
 the ScriptFunction interface.
+
+The old `DefineFunction` producer is independently bound. Raw opcode `0x9b`'s
+entry at `0x14020d588` targets `0x14020cf8c`, whose complete case calls
+`0x1401f9d60` at `0x14020cf93`. That complete creator sets function type `1`
+at `0x1401f9daf` and calls the same constructor `0x1401e14c0` at
+`0x1401f9dc7`. Its later parent-link call at `0x1401fa139` and prototype
+assignment preserve the same interface. This covers the observed old-format
+MarvelUtils constructor at movie offset 855764 as well as the Function2
+producer; neither binding relies on the other opcode's name.
 
 ## Exact conversion result
 
@@ -91,6 +100,11 @@ in the array at `+0x180`, it retains that pointer in its FunctionRef. At
 tag-`8` Value's auxiliary field. Otherwise the field remains null. Named and
 anonymous definitions use this constructed value.
 
+The complete old `DefineFunction` creator likewise reads the frame count at
+`0x1401f9f67` and the frame array at `0x1401f9f73`, capturing a non-null top
+entry into its function reference/value. The captured-frame restriction applies
+to both producer types.
+
 The ScriptFunction invoke method is primary slot `+0x50`,
 `0x14020e190`. It stores its incoming auxiliary argument `r8` into invocation
 state `+0x18` at `0x14020e1a9`. The type-`1`/type-`2` frame-preparation path
@@ -134,6 +148,7 @@ All paths below are relative to the private `evidence/` directory.
 | Same bundle, `ev_1f2416d2d53ec618a07f4c183f537d13fa665208f3b250d610a66044174a66a2` and `ev_a56a7f16a34bd88c06e2ea71c4b1726ff5627c45404b3117e8171bda728617a9` | Creator's final parent/constructor metadata helpers. |
 | `rea-movieclip-binding/final.bundle.json`, `ev_47aa0a8e7aec2220f324111df61dc655864d6ce2f2ad40188b6dbf5fe88b2643` and `ev_2e1f1b1cf76e2c7855dc69e56a9495b02cd851504e8d20bd6ec2e524d4994646` | Complete DefineFunction2 handler and creator, including frame capture. |
 | Same bundle, `ev_a3814671d1847f983bb6650b2354ab75b992592ad2a3b5a0827e323542a725cb` | Actual ScriptFunction constructor and tables. |
+| `rea-script-function-conversion/definefunction-type1.bundle.json`, `ev_8694e98b11749290b3fdbc4541137ee0a8edaf24d030d0da11e21fd090a5d779` | Old DefineFunction dispatch, complete type-1 creator, capture and post-construction binding. |
 | Same bundle, `ev_34ee943aaf37af1a7e8a34152742f96ac3ca4e83a880f46578bbd98a338ec26d` and `ev_704babdfcb3aea3b289230706c1b4bcae3a26072f95048b7bb3e96e8ad34ee37` | Invoke and frame preparation consuming the auxiliary pointer. |
 | `rea-script-function-conversion/prior-function-path.json` | Exact reused global callback, input unwrap, output setter, fresh result and prior classification correction. |
 | `rea-script-function-conversion/finding-summary.json` and `validation.json` | Field contract, scope, hashes and selected byte checks. |
@@ -146,6 +161,11 @@ getter/metadata-helper records and reused producer/invocation records, match the
 original PE bytes. The separate existing-path receipt verifies another 353
 selected records. Padding is not used for semantic claims. REA evidence was
 exported and the investigation reset; the client was never launched.
+
+The separate type-1 follow-up completed with unchanged digest and no truncated
+output. Its table read and complete case/creator instructions were byte-checked
+in `definefunction-type1-validation.json`; the evidence and receipt remain
+private beside the primary bundle.
 
 ## Provenance
 
