@@ -535,7 +535,11 @@ fn decode_keys<const N: usize>(
             *component = input.float()?;
         }
         if N == 4 && components == 3 {
-            let remaining = 1.0 - (key[0] * key[0] + key[1] * key[1] + key[2] * key[2]);
+            // Retail Float96NoW uses three scalar SUBSS instructions. Grouping
+            // the squared components changes the reconstructed W's float bits.
+            let after_x = 1.0 - key[0] * key[0];
+            let after_y = after_x - key[1] * key[1];
+            let remaining = after_y - key[2] * key[2];
             key[3] = if remaining > 0.0 {
                 remaining.sqrt()
             } else {
@@ -887,6 +891,43 @@ mod tests {
             .iter()
             .flat_map(|value| value.to_le_bytes())
             .collect()
+    }
+
+    #[test]
+    fn float96_w_matches_native_sequential_subtractions() {
+        // Synthetic decimal inputs, not extracted asset keys. These two W
+        // values differ from grouped-sum reconstruction by one float32 ULP.
+        let bytes = floats(&[0.1, 0.1, 0.7, 0.1, 0.3, 0.4, 0.8, 0.8, 0.8]);
+        let keys = decode_keys::<4>(
+            &bytes,
+            0,
+            0,
+            3,
+            3,
+            Compression::Float96NoW,
+            KeyEncoding::ConstantKeyLerp,
+            &mut { MAX_KEYS },
+        )
+        .unwrap();
+        assert_eq!(
+            keys.values
+                .iter()
+                .map(|key| key[3].to_bits())
+                .collect::<Vec<_>>(),
+            [0x3f33_3334, 0x3f5c_3832, 0]
+        );
+        let single = decode_keys::<4>(
+            &bytes[..12],
+            0,
+            0,
+            1,
+            3,
+            Compression::None,
+            KeyEncoding::VariableKeyLerp,
+            &mut { MAX_KEYS },
+        )
+        .unwrap();
+        assert_eq!(single.values[0][3].to_bits(), 0x3f33_3334);
     }
 
     #[test]

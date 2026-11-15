@@ -66,10 +66,12 @@ the compressed byte stream. Translation keys contain three little-endian
 binary32 values. Observed rotation keys also contain three binary32 values.
 
 The original decoder preserves X/Y/Z and reconstructs the nonnegative quaternion
-W from `1 - (X*X + Y*Y + Z*Z)`, clamping a nonpositive remainder to zero before
-the square root. The operation order follows the studied reference format. It
+W from `((1 - X*X) - Y*Y) - Z*Z`, clamping a nonpositive remainder to zero before
+the square root. Each operation rounds to binary32. This order follows the owned
+native decoder, superseding the reference viewer's initially studied grouped
+sum (see the native correction below). It
 does not conjugate, normalize, convert axes, compose parents or apply a bind
-transform. Retail-native instruction-level floating-point parity is unverified.
+transform. Retail execution and its floating-point environment remain unverified.
 
 **OBSERVED:** four sequences explicitly save `AKF_VariableKeyLerp`; the other 68
 omit KeyEncodingFormat. All 72 omit TranslationCompressionFormat.
@@ -149,7 +151,7 @@ sequences. Exact XYZ bit patterns, decoded frame arrays, source spans and bone
 name correspondences are compared with the Rust reader. Reconstructed W is
 checked with separately rounded binary32 operations; W is not stored evidence.
 
-**VERIFIED:** the independent comparison matches 9,094 keys (2,092 translation,
+**VERIFIED, initial grouped-W version:** the independent comparison matches 9,094 keys (2,092 translation,
 7,002 rotation), all 27,282 saved XYZ bit fields, all 7,002 reconstructed W bit
 fields, 1,008 channel spans / 6,048 span fields, 159 explicit frame arrays /
 2,176 frame values, all 72 metadata profiles and all 73 mesh-name bindings.
@@ -175,15 +177,65 @@ remain private under `~/.local/share/marvel-heroes-forever-rust/evidence/animati
   original-reader results, kept outside git.
 - `source-ledger.json`: exact external reference paths, hashes and scope.
 
-The final `validation.json` SHA-256 is
+The initial `validation.json` SHA-256 is
 `fc34f9912dc601ba9d32222c465211dd5f6600d45856e6af0d9f5727a737788b`.
 
 REA's prior read-only session status is preserved at private
 `evidence/skeletal-mesh-study/rea-session-status.json`. That process reported no
-open target and unavailable Ghidra Java configuration. No native animation
-serializer/codec entry point was identified in this increment; no shared target
+open target and unavailable Ghidra Java configuration. The initial reader increment
+identified no native animation serializer/codec entry point; no shared target
 or configuration was changed. Package parsing and source study are labeled as
 such, not as REA decompilation evidence.
+
+## Native Float96 W correction
+
+**OBSERVED with REA:** the owned `MarvelHeroesOmega.exe`, SHA-256
+`8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`,
+uses three sequential binary32 subtractions, then a positive-remainder check and
+`SQRTSS`. The Float96 rotation function begins at `0x1407e27e0`; the single-key
+subtractions are at `0x1407e281f`, `0x1407e2835`, `0x1407e283f`. Both endpoints
+in its multi-key branch use the same order. The variable-key Float96 function
+at `0x1407e5070` independently has the
+same subtraction order in its single-key and both multi-key reconstructions.
+This is a read-only compatibility
+study of the owner's proprietary Gazillion client; no client code was copied
+or executed. No shared REA target or configuration was changed.
+
+The Rust change only replaces grouped-sum W reconstruction with the observed
+ordered subtractions. It adds a synthetic rounding regression and leaves saved
+formats, explicit caller defaults, time metadata and binding behavior intact.
+No interpolation or class-default inference is added.
+
+**VERIFIED:** sequential and grouped arithmetic differ for 1,468 of 7,002 checked
+rotation keys: 91 of 344 single-key-channel keys and 1,377 of 6,658 multi-key-channel
+keys. Maximum absolute difference is approximately `1.9548519e-5`; no key changes
+between zero and nonzero W. All 7,002 corrected Rust values match independent
+Python and an original scalar SSE instruction harness bit-for-bit. The harness
+uses MXCSR `0x1f80`; it does not execute the retail client. All 27,282 XYZ bit
+fields, 1,008 spans, 159 frame arrays / 2,176 frame indices remain unchanged;
+profile, span and bone-binding TSVs are byte-identical. All 72 sequences still
+decode, and all five focused decoder tests pass.
+
+Private evidence is under `evidence/animation-runtime/`:
+
+- `native/rea-constant-float-keys.json` and
+  `native/rea-quaternion-tail-and-default-copy.json`: retained REA instructions;
+  only the Float96 instruction ranges support this arithmetic correction.
+- `native/rea-variable-float96.json`: the corresponding variable-key native
+  instruction ranges, confirming the same W arithmetic for all observed profiles.
+- `native/w-rounding-comparison.json`: before/after arithmetic counts, SHA-256
+  `9ce8d4f3824d0c93cecdc57c1028932166ff68a26e4f95dc3f1e42b845e25a21`.
+- `native/w-rounding-sse/comparison.json`: independent instruction-contract check,
+  SHA-256 `fc89acf0251e15b3df4c63cb5d567fa941955b1fa8fe2f04cb5e5954f2ede148`.
+- `w-fix/rust-comparison.json`: corrected Rust comparison, SHA-256
+  `938d06458d5d7e754121f0526c6bcbc80ee8c354318ef7811d8fbd78a27b7129`.
+- `w-fix/validation.json`: code/source hashes, focused test result and combined
+  evidence ledger, SHA-256
+  `17c8e38adc8cbf900f2274ca0beb652c54bf5c27f3431a295c2ae8e1c92fed61`.
+
+Earlier grouped-W receipts remain unchanged as historical evidence. Broader
+native timing, default initialization, skinning and runtime binding research is
+separate from this correction.
 
 ## Outside source ledger
 
