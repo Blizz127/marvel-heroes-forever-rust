@@ -2439,3 +2439,31 @@ SHA-256 `9f399588e17549413ed77f1bff13e830f4a1588e1a506f9d0fd61865757c5145`. No o
 This does not install the complete native global/cache/Key graph, choose native
 GlobalExtensions state, reset adopted instances, advance lifecycle events or
 supply a Mouse handler. Current state4 absence remains a separate open proof.
+
+### Original replay after Object/Function constructor correction
+
+OBSERVED controlled increment14 on frozen `769f87b`: all 452 original
+initializers complete in 49,244 instructions, with every completion count
+identical to increment13. The original frame5967+518 then stops after290
+instructions at CodeId452/CallMethod6391 with the unchanged
+`Host("Mouse.hide user-event host is unbound")`. Neither Pop6392 nor the
+later cursor operations ran.
+
+Heap identities are newly derived from this run's public associations, not
+substituted from the earlier graph: the root owner is21, Selection listener120,
+root storage15892/prototype15258, and Mouse callable15930/prototype15938.
+Its own hide15936 and prototype hide15942 remain distinct. The adopted global
+byte starts unknown; original writes establish byte1 at CodeId1/13566 and
+then record CodeId452/6370. Supported getters still return true and
+`"4.2.23"`. These observations accompany the changed constructor graph without
+adding a state-bag profile, logger bridge, globals, host override or lifecycle
+defaults. The native-global and incomplete-bootstrap limitations remain.
+
+Private `avm1-attached-manager-frame-action-increment14/receipt.json` SHA-256:
+`5098f7306247134ffbe20a3163784199b7181fc890b974f3039e1271cc81197c`.
+One build and one run both exited0, with no diagnostics or retries; completion
+codes were retained before sealing. The30 frozen source/input entries preserve
+the original parser and owned inputs. Committed root Selection/ClassRegistry
+from4fe0a806 are byte-identical to increment13's dependencies. All prior replay
+receipts remain unchanged. No native client/window operation or cursor effect
+is claimed.
