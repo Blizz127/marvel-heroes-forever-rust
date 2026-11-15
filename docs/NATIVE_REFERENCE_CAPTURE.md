@@ -1,17 +1,117 @@
 # Isolated native reference capture: readiness
 
-Investigation: 2026-11-15 UTC, task `a3d58c579542`.
+Investigation: 2026-11-15 UTC, task `a3d58c579542`. Initial read-only readiness
+inspection was followed by the separately authorized runtime preparation below.
 
-**OBSERVED:** Wine, Xvfb, image-capture tooling and unprivileged namespace
-isolation are available. A short, read-only Python process successfully ran in
-a separate network namespace containing only loopback and no routes. **A retail
-capture is not yet verified:** no Wine prefix was created, no Wineboot or retail
-process was launched, no game window was captured, and no GLX/rendering check
-was performed. The integrator owns the subsequent launch sequence.
+**OBSERVED:** Authenticated Xvfb and a new private Wine prefix now initialize
+inside an allowlisted filesystem and an offline network namespace. The successful
+Wineboot process exited zero, core prefix files are present, and owned processes
+were cleaned up. **A retail capture remains unverified:** no game was mounted or
+launched, no native input or approval was sent, and no GL rendering context or
+game graphics check was performed. The integrator owns the retail sequence.
 
-This study used the REA runtime-observation guide to define a bounded capture
-plan. It did not start a REA runtime scenario or change REA/client configuration.
+This study used the REA runtime-observation guide, then REA process capture for
+the authorized prefix-only preparation. REA/client configuration was unchanged.
 The earlier REA PE-import evidence was cross-checked against the pinned file.
+
+## Authorized isolated preparation result
+
+The initialized run directory is
+`~/.local/share/marvel-heroes-forever-rust/evidence/native-runtime-prep/run-20261115T091948Z/`.
+Its `prefix/` is the new Wine prefix. The original private supervisor and exact
+argument/environment manifest are retained in `control/supervisor.py` and
+`control/profile.json`; they are observation artifacts, not application code.
+`evidence/native-runtime-prep/initialized-prefix.json` identifies this run.
+
+**VERIFIED, observed execution:** The successful phase ran at 09:20:06–09:20:26
+UTC. Wineboot exited zero at 09:20:22, followed by three seconds of display
+observation before cleanup. The prefix contains regular `system.reg`,
+`user.reg`, `userdef.reg`, `services.exe`, `wineboot.exe` and `kernel32.dll`
+files, with hashes recorded in `receipts/prefix-files.json`. A non-following
+walk recorded 1,755 regular files, 1,269,542,562 bytes and two symlinks. These
+are initialization and file-presence observations, not API-completeness tests.
+
+The executed sandbox uses new user/network/PID/IPC/UTS namespaces, drops all
+capabilities and creates fresh `/proc`, `/dev`, `/tmp`, `/run` and `/home`.
+Its only writable host bind is that new run directory at `/capture`. Read-only
+inputs are `/usr`, `/etc/fonts`, `/etc/ld.so.cache`, four generated minimal
+identity/host-resolution files and the selected FFmpeg executable. Standard
+merged-`/usr` loader aliases are reproduced. The game, owner home, source pin,
+existing prefixes and host display/session sockets are not mounted. Runtime
+assertions check distinct PID/network namespace identities, loopback only, no
+routes, hidden owner home and absent `/game` before Wine starts.
+
+The environment is cleared and supplied explicitly. `HOME` and XDG paths
+resolve beneath `/capture/home`, `WINEPREFIX` is `/capture/prefix`, and the
+observed Wine loader/server paths are explicit. This prefix was initialized
+with that namespace pathname; any later authorized use must retain the
+recorded isolated mount arrangement. No bare host Wine invocation was used.
+
+**VERIFIED, display authentication:** Xvfb ran as a new owned process on
+`:97`, screen 1920×1080×24, with `-nolisten tcp` and a new private xauth
+cookie. The supervisor connected using the cookie; a separate connection
+without it failed. GLX is advertised by the server, but no GL context was
+created or rendered. X11 window inspection sends no keyboard/button events.
+All native process stdin was disconnected. The cookie is retained privately
+and is not included in this document or printed command arguments.
+
+The first exploratory phase in `run-20261115T091544Z` intentionally stopped
+at the first mapped window. The retained frame showed only Wine's buttonless
+configuration-update status message. That interruption left an incomplete
+prefix. A bounded continuation exited zero but logged missing `services.exe`;
+file inspection confirmed the incomplete state. That first run is preserved
+as a failed initialization observation and is not the initialized-prefix
+candidate. Exit code alone was insufficient to establish preparation success.
+
+The second, fresh run permitted only the exact framebuffer hash of the already
+inspected buttonless status image. Any different nontrivial mapped top-level
+window would have stopped the phase and captured its frame without input.
+The known status appeared and disappeared automatically; the final frame was
+the empty Xvfb screen with cursor. No installer, trust, login or approval
+dialog was observed in the bounded capture. This is not proof that a future
+program cannot present a later prompt. No game files, `ClientConfig.xml`,
+Steam settings or source defaults were copied or changed.
+
+Wine's retained diagnostics include unavailable logical-CPU information,
+early COM marshaling errors, experimental WoW64 subprocess notices, setup
+copy-style messages, failure to start `winebth`, and failed hostname resolution.
+They were not suppressed or repaired by installing packages or widening the
+sandbox. These observations limit claims about runtime compatibility. The
+namespace had no external network route; individual Wine network attempts
+were not traced and REA itself does not observe network traffic here.
+
+**VERIFIED, owned cleanup:** The supervisor terminated only processes visible
+inside its verified private PID namespace, then stopped its own Xvfb. It
+reported no remaining live children, and each REA scenario reported its owned
+process group cleaned up. REA also retained EACCES ownership unknowns for
+other host PIDs. A separate read-only recheck found those PIDs either gone or
+identifiable as kernel workers with parent PID 2; none was signaled. REA's
+sampling limitations remain in the exported evidence. No host service,
+existing Wine server, launcher, source installation or other session was
+stopped. The REA evidence was exported and its investigation reset afterward.
+
+Private artifacts under `evidence/native-runtime-prep/`:
+
+| Artifact | Purpose |
+| --- | --- |
+| `preparation-receipt.json` | Successful and failed phase results, file hashes, bounded claims, and external-PID recheck; SHA-256 `c992a83a7cdf605c234547d2a198b05334a30358b6c2ded4c54707b2f752ff1f`. |
+| `rea-preparation-final.bundle.json` | Three actual REA process captures and their explicit unknowns; SHA-256 `66bef9e84beb1d94e9db5a35afd32f3ea1f9d154898579497fcf1e6caab29b88`. |
+| `run-20261115T091948Z/receipts/result-wineboot-fresh.json` | Successful process exits, no native input, no retail launch and owned cleanup. |
+| `run-20261115T091948Z/logs/wineboot-fresh.stderr` | Unsuppressed Wine diagnostics. |
+| `run-20261115T091544Z/captures/screen-wineboot-first-visible-window.{xwd,png}` | Inspected, buttonless status window from the stopped first phase. |
+| `run-20261115T091948Z/captures/screen-wineboot-fresh-settled.{xwd,png}` | Final empty-display observation; no game frame. |
+
+Successful REA capture:
+`ev_981ae56fbde2fc4c5fe809086ab8beb83a0cdc14c1a082188c8073d1b608c8c8`.
+The interrupted first capture and unsuccessful continuation are
+`ev_ed2e436984015e2dbd2342d7f26cbcd5931cb5fbdcf2ce06be56ac5f8d771bc2`
+and `ev_eec73e2a9e49647f61c949a26482d6622603d9c7d0769f0165ba4a9f50738420`.
+
+The remaining sections preserve the initial readiness observations and proposed
+game-capture sequence. References there to unrun prefix/display checks describe
+that earlier inspection; only the explicit preparation results above supersede
+them. Retail startup, asset completeness, Steam behavior and game rendering
+remain unresolved.
 
 ## Runtime and isolation observations
 
@@ -215,6 +315,7 @@ Outside material read for this increment:
 | `/usr/bin/Xvfb`, `/usr/bin/xvfb-run`, `/usr/bin/xauth`, `/usr/share/man/man1/Xvfb.1.gz`, `/usr/share/doc/{xvfb,xauth}/copyright` | X.Org MIT/X11-style and component notices | Version, isolated display/auth plan and documented framebuffer format. |
 | `/home/blizz/.local/bin/bwrap`, `/usr/bin/bwrap`, `/usr/share/man/man1/bwrap.1.gz`, `/usr/share/doc/bubblewrap/copyright` | Bubblewrap upstream/package LGPL-2.0-or-later; local binary's package identity remains unverified | Namespace help/manual contract, hashes and read-only capability probe. |
 | `/home/blizz/.local/bin/ffmpeg` version, licence, decoder/device output | Installed johnvansickle.com FFmpeg build reports GPL-3.0-or-later | Capture/conversion capability only; no binary redistribution. |
+| Installed `/usr/lib/x86_64-linux-gnu/libX11.so.6`, Python 3.14, and `/usr/share/doc/{libx11-6,python3.14}/copyright` | X11 permissive component notices; Python PSF and bundled component notices | Original supervisor calls installed X11 APIs to observe windows/authentication and uses the Python standard library for process bounds and evidence. No external implementation copied. |
 | `/usr/share/doc/{libgl1-mesa-dri,libvulkan1}/copyright` | Mesa has MIT and other component notices; Vulkan loader has Apache-2.0/MIT notices | Installed runtime licence metadata only; no renderer implementation study. |
 | Installed package metadata, Linux `/proc` capability values, device metadata, trusted-host loader dependency reports | Host operational metadata; no external implementation reused | Record runtime availability and unresolved rendering requirements. |
 
