@@ -16,6 +16,8 @@ use std::{
     io,
 };
 
+#[path = "frontend/action_queue.rs"]
+pub mod action_queue;
 #[path = "frontend/bootstrap.rs"]
 pub mod bootstrap;
 #[path = "frontend/class_registry.rs"]

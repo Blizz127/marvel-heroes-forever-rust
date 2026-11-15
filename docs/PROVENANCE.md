@@ -225,8 +225,10 @@ native allocation, and the lifecycle findings do not establish complete startup.
 source files, owner asset hashes and independent raw-field checks used for the
 original bounded skeletal reader. Animation and skinning are separate work.
 [Localization runtime trace](FRONTEND_LOCALIZATION_RUNTIME.md) records exact
-owned script/native callback, export linkage and prototype-ID formatting evidence.
-It does not replace the unresolved native callback aggregate or startup path.
+owned script/native callback, export linkage, reflected aggregate and prototype-ID
+formatting evidence. [Explicit-reference localization](FRONTEND_LOCALIZED_DATA.md)
+applies its bounded successful plain-text profile; effective inherited references,
+fallbacks and live callback startup remain separate unresolved contracts.
 [Persistent pointer controller](FRONTEND_POINTER.md) composes the existing
 original VM and display bridge, with the same Adobe/private-script provenance.
 [Native scene host](NATIVE_WINDOW.md) registers the pinned winit/wgpu contracts
@@ -240,3 +242,8 @@ recovered retail defaults. Animation evaluation and runtime binding are separate
 original glyph/kerning geometry comparisons, and bounded REA evidence for FONT
 color, spacing and kerning attributes. Its unsupported wrapping and alpha cases
 remain explicit rather than rendered through a substitute plain-text path.
+[Action scheduling](FRONTEND_ACTION_QUEUE.md) applies the owned-binary REA
+cursor, token and nested-drain evidence in an original bounded queue, without
+claiming a runtime executor. [Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
+records read-only local Wine/capture-tool inspection and an isolated Python-only
+namespace check; retail execution and reference capture have not run.
