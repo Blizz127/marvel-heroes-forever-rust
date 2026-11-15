@@ -664,3 +664,10 @@ extent, class Link dispatch and Texture2D serializer's version-gated writes.
 Its source ledger preserves remaining archive-state, field-reorder and PostLoad
 conditions. No renderer input or runtime-state default is inferred from those
 static paths.
+
+[Current-scene script rendering](CURRENT_SCENE_SCRIPT.md) joins original project
+bootstrap, host, frame preparation and renderer code with the previously pinned
+manager assets and explicit diagnostic associations. The private ledger freezes
+source, three package inputs, harness and pixel reference; existing Mesa/wgpu
+tool provenance applies. No third-party implementation or native current-state
+default was added.

@@ -5,7 +5,23 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev18 integration in progress
+## 2026-11-15 dev18 diagnostic increment
+
+**VERIFIED combined build/startup:** clean tested source
+`e9388f34c5a7a5ed4e2fa324abc846a301ab175e` builds with the window feature in
+30.61 seconds without warnings. All 23 CLI/image checks pass, including four
+original UClass records, wrong-class rejection and complete selected Model
+framing. The isolated Rust window presents two frames with empty stderr;
+saved-login and cursor pixels retain their prior diagnostic identities.
+Binary SHA-256:
+`4e8e589a1ee9b8a957a58dd8e62055796127e0b6f603db63594929880f4f01cb`.
+Receipts: `evidence/dev18-build-result.json`,
+`evidence/build-0.1.0-dev.18-smoke.json` and
+`evidence/dev18-native-html/receipt.json`.
+
+This remains private diagnostic tooling, with zero finished Forever upgrades.
+Native retail frontend, Rust login, gameplay and publication remain unverified;
+all inherited service/access holds remain in place.
 
 **VERIFIED archive association:** each MovieLibrary retains the identity of the
 AssetSet it loaded from. Content preparation rejects a different set even when
@@ -47,9 +63,6 @@ the diagnostic manager name has not been replaced. See
 `docs/FRESH_ROOT_NAME.md` and `evidence/fresh-root-name/receipt.json`, SHA-256
 `1c32a184b4d31d0fcc1c55b533cd6a33a3366e16a09286d8692bb40e75ac2f2e`.
 
-Dev17 remains the latest staged package. No dev18 binary or startup check has
-run yet; the inherited service/access holds remain in place.
-
 **VERIFIED complete selected Model framing:** four final words and the counted
 +0x110 records now consume the remaining 92 Entry and 56 FrontEnd bytes. Both
 selected original Models have zero undecoded bytes; other payloads may retain
@@ -59,6 +72,17 @@ selected serialized framing, not geometry semantics or runtime behavior.
 Receipt:
 `evidence/model-final-tail-native/independent/product-check/verification.json`,
 SHA-256 `dd2691908cd0ac6377afa58cbe980c270cda03fac96d4469bc3ac3784e8398bc`.
+
+**VERIFIED separate current-scene/script render:** frozen source `33ab978`
+completes 452 manager initializers, then the original MouseMove action through
+that same FrontendHost (14 instructions/six calls). Current-scene preparation
+preserves metadata and prior snapshots while retaining the two changed node
+transforms. Headless rendering matches all 9,216,000 cursor-reference RGBA
+bytes. The historical reference did not run those initializers, so matching
+pixels do not imply matching lifecycle history. Explicit Plain root/cursor
+associations remain diagnostic. Receipt:
+`evidence/current-scene-script/receipt.json`, SHA-256
+`f59e68bf3aab4597c49005aeb2928adebe787521513fe5025efee8228bb8fa80`.
 
 ## 2026-11-15 dev17 diagnostic increment
 
