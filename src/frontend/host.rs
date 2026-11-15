@@ -6,10 +6,11 @@ use super::{
     display_state::DisplayState,
     external_host::{CALL_BINDING, ExternalHost},
     selection::{Limits as SelectionLimits, SelectionHost},
+    textfield_host::TextFieldHost,
 };
 use crate::avm1::vm::{
-    ClassRegistration, Host, HostCall, HostCommand, HostResult, ObjectId, PropertyRequest, Value,
-    Vm,
+    ClassRegistration, Host, HostCall, HostCommand, HostResult, ObjectId, PropertyRequest,
+    TextFieldMemberRequest, Value, Vm,
 };
 use std::{error::Error, io};
 
@@ -18,6 +19,7 @@ pub struct FrontendHost {
     classes: ClassRegistry,
     display: Option<DisplayState>,
     external: Option<ExternalHost>,
+    text_fields: Option<TextFieldHost>,
 }
 
 impl FrontendHost {
@@ -30,6 +32,7 @@ impl FrontendHost {
             classes,
             display: None,
             external: None,
+            text_fields: None,
         })
     }
     pub fn selection(&self) -> &SelectionHost {
@@ -74,6 +77,24 @@ impl FrontendHost {
     pub fn external_mut(&mut self) -> Option<&mut ExternalHost> {
         self.external.as_mut()
     }
+    /// Use the same VM/Scene domain supplied during field binding. This retains
+    /// admitted state without creating a native text target or its lifecycle.
+    pub fn attach_text_fields(&mut self, fields: TextFieldHost) -> Result<(), String> {
+        if self.text_fields.is_some() {
+            return Err("frontend TextField host is already attached".into());
+        }
+        if fields.root() != self.classes.context().root {
+            return Err("frontend TextField host must use the owning VM root".into());
+        }
+        self.text_fields = Some(fields);
+        Ok(())
+    }
+    pub fn text_fields(&self) -> Option<&TextFieldHost> {
+        self.text_fields.as_ref()
+    }
+    pub fn text_fields_mut(&mut self) -> Option<&mut TextFieldHost> {
+        self.text_fields.as_mut()
+    }
 }
 
 impl Host for FrontendHost {
@@ -111,5 +132,21 @@ impl Host for FrontendHost {
             .as_mut()
             .ok_or("frontend display is not attached")?
             .set_property(request, value)
+    }
+    fn get_text_field_member(&mut self, request: TextFieldMemberRequest) -> Result<Value, String> {
+        self.text_fields
+            .as_mut()
+            .ok_or("frontend TextField host is not attached")?
+            .get(request)
+    }
+    fn set_text_field_member(
+        &mut self,
+        request: TextFieldMemberRequest,
+        value: Value,
+    ) -> Result<(), String> {
+        self.text_fields
+            .as_mut()
+            .ok_or("frontend TextField host is not attached")?
+            .set(request, value)
     }
 }

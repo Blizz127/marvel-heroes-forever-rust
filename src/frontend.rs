@@ -53,6 +53,8 @@ pub mod selection;
 pub mod stage_state;
 #[path = "frontend/textfield_state.rs"]
 pub mod textfield_state;
+#[path = "frontend/textfield_host.rs"]
+pub mod textfield_host;
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())

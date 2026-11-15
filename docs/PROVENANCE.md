@@ -365,3 +365,8 @@ measurements. That measurement harness also read glibc (LGPL-2.1-or-later)
 `/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h` for the process-CPU
 timing ABI/constant only; exact private hashes and limits are in the linked ledger.
 No glibc implementation was copied into product sources.
+
+[Attached TextField host](TEXTFIELD_HOST.md) composes the owned-binary typed
+identity and conditional text-state contracts with exact scene bindings. Its
+synthetic cross-layer checks remain separate from original-script execution,
+native startup and renderer integration.
