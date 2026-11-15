@@ -1,18 +1,130 @@
-# Isolated native reference capture: readiness
+# Isolated native reference capture and startup observations
 
 Investigation: 2026-11-15 UTC, task `a3d58c579542`. Initial read-only readiness
 inspection was followed by the separately authorized runtime preparation below.
 
-**OBSERVED:** Authenticated Xvfb and a new private Wine prefix now initialize
-inside an allowlisted filesystem and an offline network namespace. The successful
-Wineboot process exited zero, core prefix files are present, and owned processes
-were cleaned up. **A retail capture remains unverified:** no game was mounted or
-launched, no native input or approval was sent, and no GL rendering context or
-game graphics check was performed. The integrator owns the retail sequence.
+**OBSERVED:** Two separately authorized offline retail observations reached a
+native game window, then a concrete settings-initialization verification failure.
+The longer observation retained a Wine Program Error dialog. No login/frontend
+reference frame was obtained. All 453 frozen game-file hashes remained unchanged,
+owned processes were cleaned up, and no UI or debugger input was sent.
 
-This study used the REA runtime-observation guide, then REA process capture for
-the authorized prefix-only preparation. REA/client configuration was unchanged.
+This study used the REA runtime-observation guide and REA process capture for
+the authorized preparation and retail observations. REA/client configuration was unchanged.
 The earlier REA PE-import evidence was cross-checked against the pinned file.
+
+## Bounded offline retail observations
+
+The owner-authorized integrator first requested one attempt, then explicitly
+authorized one additional observation allowing the known primary game window
+to remain while loading. Both used the same frozen inputs, separate private
+copies of the clean prepared prefix, no game arguments and no UI input. No
+third attempt was performed by this investigation.
+
+Before copying, available space measured 19,233,791,774,720 bytes. One-second
+disk-counter and pressure receipts were retained; I/O full-pressure avg10 was
+0.01%, while CPU pressure was substantial. A single `nice -n 19` copy/verification
+process ran from 09:24:16 to 09:26:35 UTC. It copied 453 candidate files totaling
+5,115,044,673 bytes, including all 90 Win64 distribution files. Source digest
+before copying, copied-source digest and destination digest after copying all
+matched the source manifest, and source identity/modification metadata stayed
+stable through each copy. Every copied file has an independent inode; no hard
+links were used. Each clean-prefix clone additionally verified all 1,755 regular
+files against the prepared prefix. Its original remains preserved.
+
+The immutable game snapshot is
+`evidence/native-retail-reference/run-20261115T092318Z/game/`, relative to the
+private project data root. It contains no `ClientConfig.xml`, excluded user
+configuration or replacement settings. Its explicit missing-candidate list has
+198 TFCs, 14 game-localization files, six startup movies and one splash file.
+For example, `UnrealEngine3/MarvelGame/Localization/INT/MarvelGame.int` is
+absent. The 672-file candidate list is not a complete retail distribution or
+a proved startup dependency closure; unselected packages may also matter.
+
+The runtime profile mounts that snapshot only at read-only `/game`. Individual
+new runtime subdirectories are writable at `/capture`; the whole run directory
+is not exposed as a writable bind, and `/capture/game` does not exist. Runtime
+checks confirm those mount properties, distinct PID/network namespaces,
+loopback only, no routes and hidden owner home. Each display uses a fresh
+authentication cookie, rejects an unauthenticated connection, and disables TCP
+listening. No host GPU/audio device or host display/session socket is exposed.
+
+The sole application command was the recorded Wine loader followed by
+`/game/UnrealEngine3/Binaries/Win64/MarvelHeroesOmega.exe`, with working
+directory `/game/UnrealEngine3/Binaries/Win64` and disconnected stdin. The
+independent REA outer bound was 55 seconds, with three seconds of owned-process
+finalization. A supervisor deadline is additional protection; it alone cannot
+bound a blocking Xlib call or frame write. Passive capture waits are recorded
+as scheduled delays, not exact wall-clock guarantees.
+
+**OBSERVED, first attempt:** At 09:27:29–09:27:38 UTC the application created
+a 954×508 window titled `Marvel Heroes Omega`. The conservative first-window
+guard then stopped the process. Its images are essentially black with a thin
+border, and no login or error text is visible. This establishes window creation,
+not frontend readiness or a demonstrated application failure. Generated
+`Launch.log` and `.dmp` files were zero bytes in this first observation.
+
+**OBSERVED, additional observation:** A fresh verified prefix clone in
+`evidence/native-retail-reference/run-20261115T093011Z/` reused the same
+read-only snapshot. The monitor allowed the known single primary window and
+captured frames approximately every two seconds, with live passive image
+inspection. The application started at 09:31:17.632 UTC. At 09:31:25.770 UTC,
+the monitor detected a new `Wine Debugger` window; a subsequent painted frame
+also shows `Program Error`. It captured the error and stopped without selecting
+either native dialog button or issuing debugger commands. Cleanup finished at
+09:31:26.669 UTC, well before the outer deadline.
+
+The second private `Launch.log` identifies the running client as Shipping
+**1.52.0.1700 CL:479899**, with an empty command line and the expected Win64
+base directory. It reports Steam Client API initialization result 0, generated
+configuration under the new prefix's Documents hierarchy, and RHI
+`PC-D3D-SM3`. Wine diagnostics identify `llvmpipe (LLVM 21.1.8, 256 bits)`;
+the game's reported GTX 470 adapter is Wine's emulated adapter identity, not
+an observed physical GPU. These facts do not establish graphical parity.
+
+**VERIFIED as retained runtime output:** At log-relative time 6.13 seconds,
+`Launch.log` reports a failed verification of
+`m_clientAppSettingsPostCoreInit`, attributed to `ClientApp.cpp` line 1488.
+Wine subsequently reports a write page fault at instruction `0x1405bf949` to
+address `0x3c`, followed by the error windows. The settings verification is the
+earlier concrete failure. The later page fault could be part of fatal-error
+handling; its root cause is not established. Missing/excluded inputs and Wine
+runtime differences remain unresolved factors. No missing configuration was
+invented, read from the excluded source, or substituted to bypass the failure.
+
+The second `Launch.log` is 4,147 bytes, SHA-256
+`54edcbb62b53cd5921286c837c27d144bf0fbce665a76177478876c42f990878`.
+Its 216,944-byte minidump is retained privately, SHA-256
+`526709a87c314968d01db727fedfb97ae9867a59814deae11d793dfb228dfa32`.
+Generated configuration confirms `Language=INT` and the directory
+`prefix/drive_c/users/blizz/Documents/My Games/Marvel Heroes/MarvelGame/`.
+Existing owner documents, accounts and prefixes were not available to either
+process. Steam/source defaults and server state were not changed.
+
+**VERIFIED, cleanup and input preservation:** Both supervisors report zero
+remaining live owned children and stopped their own Xvfb processes. REA reports
+the owned process groups cleaned up. Its external-PID EACCES unknowns were
+retained; rechecked survivors were kernel workers with parent PID 2 and were
+left untouched. All 453 game-file hashes matched the source manifest after
+each run. Both REA investigations were exported and reset. Supervisor exit
+zero means observation/cleanup completed; it does not mean the game succeeded.
+
+Private receipts and captures:
+
+| Artifact under `evidence/native-retail-reference/` | Identity or use |
+| --- | --- |
+| `retail-reference-receipt.json` | SHA-256 `a0808c25aca21211a2a065a33f0a1fc4a0b0d9b021b645134eb9963e867afa27`; both runs, hashes, missing inputs and limitations. |
+| `run-20261115T092318Z/receipts/frozen-inputs.json` | SHA-256 `8b96c753bb85b6010cf2bc9031f5fa152362f5bfe9eea7c285edc2a28ba6dcdd`; exact copied/missing files and before/after digests. |
+| `run-20261115T092318Z/receipts/post-run-snapshot.json` | All 453 hashes match after the first run. |
+| `run-20261115T093011Z/receipts/post-run-snapshot.json` | All 453 hashes match after the additional observation. |
+| `run-20261115T093011Z/captures/screen-retail-observe-new-window-painted.png` | Observed native error dialog; no button was selected. |
+| Each run's `receipts/rea-*.bundle.json` | Complete, untruncated REA capture and retained sampling/network/filesystem unknowns. |
+
+REA capture IDs are
+`ev_014163037bf8b55b04f68dce2f1930f5420b37a4aa5b5d0531448445b2a99c63`
+and `ev_3f08ef19632a4eb0cbb8344b7d080d2a8928e059665ee3e5243d76249d8a7eff`.
+All captured frames, game data, logs, minidumps, prefixes and original private
+supervisor scripts remain outside git and build packages.
 
 ## Authorized isolated preparation result
 
@@ -109,9 +221,9 @@ and `ev_eec73e2a9e49647f61c949a26482d6622603d9c7d0769f0165ba4a9f50738420`.
 
 The remaining sections preserve the initial readiness observations and proposed
 game-capture sequence. References there to unrun prefix/display checks describe
-that earlier inspection; only the explicit preparation results above supersede
-them. Retail startup, asset completeness, Steam behavior and game rendering
-remain unresolved.
+that earlier inspection; the explicit preparation and retail results above
+supersede them. Full frontend startup, asset completeness, Steam behavior and
+graphical parity remain unresolved.
 
 ## Runtime and isolation observations
 
@@ -310,6 +422,7 @@ Outside material read for this increment:
 | --- | --- | --- |
 | `~/.agents/skills/reverse-engineer-anything/SKILL.md` and `references/runtime-observation.md` | Installed REA workflow documentation; no licence assumed from availability | Bounded scenarios, owned-process cleanup and evidence limits. |
 | Private source inventory, pinned retail PE/default INI files and named assets listed individually with hashes in `assets/readiness.json` | Owner-supplied proprietary retail distribution, with bundled third-party components; individual component redistribution rights not audited | Paths, hashes, PE imports and distribution defaults; private compatibility study only. |
+| Frozen candidate files and generated INIs, `Launch.log`, minidump file identities and private screenshots listed in `evidence/native-retail-reference/retail-reference-receipt.json` | Owner-supplied proprietary game and private runtime output; no redistribution | Completed-copy verification, actual settings-failure stage, observed version and generated-file paths. No source-install personal configuration was read. |
 | `evidence/retail-pe-imports.bundle.json`, REA evidence `ev_7136989a0b4ae1b35612e44bddcbe16bc3fbf8ad0f1245aaed529cbdb780c919` | Original private evidence over the owned binary | Main executable import cross-check. |
 | `/usr/bin/wine-stable`, `/usr/bin/wine64-stable`, installed Wine executables/DLLs, `/usr/share/man/man1/{wine-stable,wineserver-stable}.1.gz`, `/usr/share/doc/{wine,wine64}/copyright` | Wine principally LGPL-2.1-or-later; bundled/packaging notices retained in installed copyright file | Wrapper selection, prefix/server variables, version and builtin availability. No Wine code copied. |
 | `/usr/bin/Xvfb`, `/usr/bin/xvfb-run`, `/usr/bin/xauth`, `/usr/share/man/man1/Xvfb.1.gz`, `/usr/share/doc/{xvfb,xauth}/copyright` | X.Org MIT/X11-style and component notices | Version, isolated display/auth plan and documented framebuffer format. |
