@@ -98,3 +98,32 @@ and `ev_9e3ed8adc570762e215d6367e267064d679e2daf46fa54c05993685ca2692c33`.
 The corresponding saved results are in `scale9-geometry/native/` and
 `scale9-output/`. No outside implementation, native allocation, render-state
 choice, shader behavior or pixel parity is supplied by this copy operation.
+
+**VERIFIED independent comparison:** an optimized original Rust harness matches
+the frozen instruction-derived expectations for fourteen sequences and 31 scan
+steps: all 275 copied vertices / 5,500 bytes, every initial/before/after
+descriptor snapshot and two separate Rust-admission rejections. Witnesses
+include page-boundary crossing, signaling/quiet NaN payloads, subnormals, signed
+zeros, full batch size and the 65,535-source boundary. The independently frozen
+oracle preceded any new Rust source read. Its exact hash remains
+`d488683f55c8ba161f1d1f39660a5ae29d714937e7f655b81cca1b9c5a1120f1`.
+Its ledger separately verifies 79 native instructions / 306 bytes and seven
+descriptor copy/index/alias witnesses; those are static witnesses, not a native
+run or a claim that overlapping buffers are admitted by the Rust API.
+
+The production library also passes `cargo check --lib --features window`
+offline with two jobs and no warnings in 15.62 seconds at clean source
+`1d1410952ad6d63d63c55e7c84dcb19042dc8158`. This is metadata compilation;
+it does not create a dev24 executable or present a window.
+
+The joined private `receipt.json` SHA-256 is
+`941f9a40f91e1ead3ed1d97b346bc60dacee117726e6be258e091567b653c464`;
+the 41-file `MANIFEST.json` is
+`76941c977461bf359bb681b1225453a310d1e5bfd373ec64ac8cb1152b60621f`.
+It binds `oracle/receipt.json`
+(`963a0e1d50358ef3fdd443856fcf72e1ed454ad4c67f430235f2ce77810e0090`),
+`witnesses/receipt.json`
+(`f78a7a2f7f5dcb81b09bc89d2653e0ab0ca33746bfed42c3d49378a810074aea`),
+the focused-test receipt and the production check. The earlier interim message
+count of 32 steps was a reporting typo; the unchanged frozen artifacts and
+comparison both contain 31.

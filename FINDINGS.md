@@ -5,6 +5,19 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev24 work in progress
+
+**VERIFIED primary vertex export:** original Rust now copies/resets the seven-word
+descriptor and scans generated vertices with the native cursor, full-width mesh
+comparison and exact record-bit preservation. Four focused tests and all fourteen
+independent sequences / 31 steps pass, comparing 275 vertices / 5,500 bytes plus
+descriptor snapshots and explicit admission failures. Production window-enabled
+library checking passes without warnings; no dev24 executable/startup ran yet.
+Joined receipt: `evidence/native-primary-export/receipt.json`, SHA-256
+`941f9a40f91e1ead3ed1d97b346bc60dacee117726e6be258e091567b653c464`.
+See [vertex export](docs/SCALE9_PRIMARY_VERTEX_EXPORT.md). No normalization,
+source selection, packed-color inference or renderer enablement is implied.
+
 ## 2026-11-15 dev23 diagnostic increment
 
 **VERIFIED private staging, 14:15 UTC:** all 441 packaged sizes/hashes and the

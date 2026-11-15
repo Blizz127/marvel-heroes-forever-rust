@@ -929,3 +929,15 @@ owned descriptor-copy and generated-record scan bodies. Original Rust preserves
 all record fields and cursor order, with explicit bounded admission. The focused
 private composite retains its unchanged-support warning and makes no runtime
 source, normalization or renderer-selection claim.
+
+The later vertex-export ledger joins independently frozen raw-record witnesses
+and exact owned instruction bytes to the optimized original Rust comparison.
+All source hashes, 41 private artifacts and production-library checking are
+retained; no copied game data or tool output enters the implementation.
+
+[Default input selection](FRESH_MOVIE_DEFAULT_INPUT_ROUTE.md) uses the same owned
+loader/provider and saved-class evidence to distinguish the compiled zero-return
+provider from the separate alternate archive. [Primary fill format](SCALE9_PRIMARY_SOURCE_FORMAT.md)
+records exact selector/cache construction and distinguishes fresh format storage
+from looser compatibility hits. Their remaining source/lifecycle identities stay
+explicit; no new external implementation or runtime defaults were introduced.
