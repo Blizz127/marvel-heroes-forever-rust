@@ -116,6 +116,12 @@ impl PrototypeReader<'_> {
         self.record(*self.by_id.get(&id)?)
     }
 
+    /// Exact archive member identity from the validated directory; no decoding,
+    /// case folding, basename matching or inferred hash is performed.
+    pub fn record_by_member(&self, member: &str) -> Option<&PrototypeRecord> {
+        self.record(*self.by_member.get(member)?)
+    }
+
     /// Blueprint identity uses its serialized default-prototype ID.
     pub fn blueprint(&self, id: u64) -> Option<&Blueprint> {
         self.schemas.blueprint(id)

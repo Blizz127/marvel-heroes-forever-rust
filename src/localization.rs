@@ -738,6 +738,9 @@ impl LocaleCatalog {
 pub struct UiKeyBinding {
     pub key: String,
     pub member: String,
+    /// The UILocalizedInfo prototype's own directory identity, not a text ID or
+    /// the parent reference stored in its body.
+    pub prototype_id: u64,
     pub serialized_parent_reference: Option<u64>,
     pub display_text_id: Option<u64>,
     pub tooltip_text_id: Option<u64>,
@@ -753,14 +756,15 @@ impl UiKeyBinding {
     ) -> std::io::Result<Option<Self>> {
         validate_ui_key(key)?;
         let member = format!("Calligraphy/UI/LocalizedInfo/{key}.prototype");
-        let prototype = match reader.read_member(&member) {
-            Ok(prototype) => prototype,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error),
+        let prototype_id = match reader.record_by_member(&member) {
+            Some(record) => record.id,
+            None => return Ok(None),
         };
+        let prototype = reader.read_id(prototype_id)?;
         let mut result = Self {
             key: key.to_owned(),
             member,
+            prototype_id,
             serialized_parent_reference: prototype.header.reference,
             display_text_id: None,
             tooltip_text_id: None,
@@ -795,6 +799,13 @@ impl UiKeyBinding {
             }
         }
         Ok(Some(result))
+    }
+
+    /// Native localization's successful prototype-reference spelling: 0x%llX.
+    /// This does not select locale variants, inherit missing fields, or create
+    /// the complete ExternalInterface return object.
+    pub fn prototype_reference_string(&self) -> String {
+        format!("0x{:X}", self.prototype_id)
     }
 }
 

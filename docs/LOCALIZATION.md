@@ -93,6 +93,15 @@ absent: parent-value inheritance is not implemented here. A present ID may still
 be missing from the selected locale, which the catalogue reports as `None`.
 Duplicate text fields and unsupported field ownership fail explicitly.
 
+Bindings also retain `prototype_id`, obtained from the validated directory's
+exact member record. It is distinct from both text IDs and the body's parent
+reference. `prototype_reference_string()` uses the native successful lookup's
+`0x%llX` spelling (lowercase prefix, uppercase unpadded hexadecimal), established
+in [the native localization trace](FRONTEND_LOCALIZATION_RUNTIME.md). This exact
+identity is needed by the authored `localizedPrototypeIdStr` consumer. It does
+not turn directly serialized fields into fully resolved native values or build
+an ExternalInterface result before its remaining contracts are implemented.
+
 Default table budgets are 64 MiB input, 65,535 entries, 255 locale flags, 256
 alternate forms per entry, 65,536 total alternates, 1 MiB per string and 64 MiB
 cumulative copied UTF-8 bytes. Partitions require bounded index/text offsets,
