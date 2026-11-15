@@ -120,6 +120,16 @@ was touched. Native runtime libraries copied for previous Ubuntu
 smokes stay under private `evidence/runtime-libs`; only test-child environment
 variables select them. They are not assumed portable to the owner's other OS.
 
+**VERIFIED (dev.7 saved HTML integration):** The original login snapshot prepares
+all 33 placed text fields, submitting 303 glyph fills. The actual CLI image is
+byte-identical to the independent scene adapter. A fresh isolated Xvfb/llvmpipe
+`window-static --frames 2 --seconds 20` run presents two frames and closes through
+the frame limit, with no stderr. Receipts are
+`evidence/dev7-integration/login-render.json` and
+`evidence/dev7-native-html/receipt.json`. This is the saved, uninitialized scene:
+placeholder text and authored visibility remain, and it is not a working login
+screen or a native-retail visual comparison.
+
 ## Source and licence register
 
 All application code is original. The existing project image-window host is

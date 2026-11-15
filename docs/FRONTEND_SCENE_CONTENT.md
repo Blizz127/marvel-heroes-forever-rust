@@ -373,7 +373,9 @@ the unchanged character frame has SHA-256
 `42355e4ebb230ebc5c3522380404efa7d0cd6e4aaec13e9f5cc44cf381239b35`.
 Captures and extracted source data remain private. No full suite, native window
 test, server connection, VM localization or retail pixel comparison was run for
-this bridge increment.
+this bridge increment. The subsequent root CLI/native-window integration is
+recorded in [native scene host validation](NATIVE_WINDOW.md), with the same
+saved-state and retail-parity limitations.
 
 ## Sources and provenance
 

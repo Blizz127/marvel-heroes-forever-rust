@@ -63,6 +63,14 @@ through a shared Function-prototype object to Object.prototype. These changes
 allow further original initializers to run; the probe still reports its exact
 first failure and does not continue past partial failure.
 
+**OBSERVED (integrated dev.7 CLI):** The typed MovieClip subclass path reaches
+118 complete manager initializers and 18,572 instructions, retaining one Selection
+listener. The next initializer begins at source757488; its call into UIObject
+stops on Enumerate2 at source750939 (CLI CodeId114), because native hash-order
+enumeration remains unsupported. Code IDs are session-local. Receipt:
+`evidence/dev7-integration/initialization.json`. The native scheduling queue is a
+separate bounded module and is not used by this isolated initializer driver.
+
 This driver is original code. Its only external format basis is the Adobe SWF
 specification already itemized in [AVM1 execution](AVM1_VM.md); original asset
 inputs and native compatibility evidence are recorded there and in
