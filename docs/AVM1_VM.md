@@ -1364,6 +1364,29 @@ provenance and zero host dispatch. Supplied test words are explicit synthetic
 state, not observed native defaults. The original manager frontier is exercised
 separately; no startup result is inferred from these tests.
 
+**OBSERVED original-script execution on a controlled attached root:** committed
+`171a67e` now completes all 452 selected manager root-frame initializers, in
+serialized order, with 49,244 instructions. This uses the same authenticated
+private name inventory, three saved immediate children, explicit event words and
+minimal globals as increment 4. The only added host admission is a supplied root
+focus word `0x5a5a0180`; it is synthetic state, not a native default or capture.
+After initializer 1, the word is `0x5a5a0100`, with last-write origin CodeId 1,
+source 13632. Root ordinary storage remains absent at every initializer checkpoint,
+and the separate event word stays `0x52000180`. Selection retains one listener
+after one add and no removals; the class registry records five calls/revisions.
+No unknown native callback is accepted.
+
+The first harness run completed that scope but exited 101 because its inherited
+final assertion still required an unsupported stop. Its source, output and failure
+receipt remain unchanged. A single reporting-only correction, plus separate
+private output paths, produced build/run exit 0 and identical VM/host observations.
+`avm1-attached-manager-init-increment5/attempt2/receipt.json`, SHA256
+`1b885efc1a439bee819e7b7c2fdc4c635742a7eff230eb372bf1f3d6d525d934`,
+retains both attempts and unchanged source/input hashes. This receipt ends before
+the containing-frame DoAction, clip handlers or display activation. The precreated
+saved-child snapshot and minimal globals do not establish native lifecycle order,
+complete global initialization or retail startup parity.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established
