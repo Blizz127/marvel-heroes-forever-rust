@@ -978,4 +978,3 @@ See [MODEL_INPUT_LAYOUT.md](MODEL_INPUT_LAYOUT.md). New outside sources were stu
 | [MicrosoftDocs/sdk-api](https://github.com/MicrosoftDocs/sdk-api/tree/656e9656bfaef34dd29cd7ee9e1146aec17e924c), CreateInputLayout, input-element and DXGI pages | Documentation CC BY 4.0, separate code licence MIT. API signature/validation contract. |
 | [Microsoft DirectX-Specs](https://github.com/microsoft/DirectX-Specs/tree/9c2586441fa2dd0d4953a5c4e9b9ff05717c19eb), `d3d/archive/D3D11_3_FunctionalSpec.htm` | Documentation CC BY 4.0, separate code licence MIT. Input conversion and precision; conceptual archived declarations excluded as ABI evidence. |
 | [MicrosoftDocs/cpp-docs](https://github.com/MicrosoftDocs/cpp-docs/tree/af4947c4bdf5993dcaee98e63d55a2d7a5744d7d), x64 software conventions | Documentation CC BY 4.0, separate code licence MIT. Pointer and aggregate layout. |
-
