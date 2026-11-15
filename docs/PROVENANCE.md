@@ -850,3 +850,21 @@ executable, state-map and adapter evidence. The private ledgers distinguish
 conditional constructor absence from the later live parent-bag chain and cache.
 These original static studies add no outside game implementation, host override
 or current-state assumption.
+
+[Fresh-root composition](FRESH_ROOT_NORMAL_RETURN.md) joins the previously
+registered owner-executable producer and publication records without new source
+material or native execution. Its remaining resource, policy and lifecycle
+conditions stay explicit.
+
+[Context diagnostics](REA_CONTEXT_DIAGNOSTIC.md) closes the selected fixed
+formatter with exact owned code/table/import evidence, an independent original
+instruction-span oracle and original Rust byte preparation. Its source ledger
+records the retained REA/objdump/Python/Rust tooling and proprietary-artifact
+scope. No external game/SDK implementation was copied; actual logger dispatch,
+variadic formatting and native encoding remain separate.
+
+[Selected default preload](FRESH_MOVIE_DEFAULT_LOAD_LIFECYCLE.md) uses the same
+owned executable/packages and retained schema/copy evidence to distinguish the
+CDO-specific class serializer from ordinary UObject dispatch. Its exact-source
+ledger preserves cold-reference, alternate-input and later lifecycle limits;
+no effective StartPaused value was assumed or external source code copied.

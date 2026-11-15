@@ -44,8 +44,10 @@ terminal newline if present, initializes a formatter with a 256-byte backing
 buffer, sets format `{0} : {1}\n`, and supplies the message view plus
 `D+0x18` to separate formatting helpers. Calls are `082b60`, `082dd0`,
 `184cd0`, `0ace40`, `081dc0` and `082820`, followed by the sink call.
-Those formatter internals, argument binding, capacity behavior and cleanup are
-not expanded here. This path must not be replaced with guessed concatenation.
+Those formatter internals were outside this receipt. The subsequent
+[fixed context diagnostic study](REA_CONTEXT_DIAGNOSTIC.md) now closes argument
+binding, selected capacity behavior and inline cleanup. It preserves byte
+ordering and truncation rather than inventing generic string formatting.
 
 The fresh Environment constructor's zero at `E+0x138`, documented in
 [FRESH_AVM1_ENVIRONMENT.md](FRESH_AVM1_ENVIRONMENT.md), remains a constructor
@@ -84,6 +86,17 @@ It retains a selected nonnull log, writes the output pointer and releases the
 state. This establishes the requested ID and field selection, not an actual
 loaded interface/table or a current singleton value. The state-bag identity
 and current cached state remain explicit profile inputs.
+
+The subsequent secondary-interface receipt
+`rea-mouse-state-preservation/movieimpl-secondary-receipt.json`, SHA-256
+`4544cd46fde7efd683a67b02c21a8d5129c2ed7c3bbc33f11c079340bef6c161`,
+binds the selected constructor's actual table. Store `0650c2` installs
+`1424feb48` at `M+0x10`; its `+0x18 = 0314e0` adapter calls slot0 getter
+`062be0`, which returns `[M+0x80]+0x10`, then forwards the unchanged ID to
+that backing interface's `+0x18 = 050840`. A local state2 hit is retained;
+a miss follows the parent lookup or returns null. This closes that forwarding
+identity under the constructor/preservation conditions. It does not supply a
+current state2 object, log pointer or singleton value.
 
 ## Concrete engine logging sink
 
@@ -143,8 +156,9 @@ binding; it cannot select this branch merely to advance the original frame.
 
 This study does not change the Rust Host implementation or rerun the frame.
 It closes the diagnostic dispatcher, target/log selection and concrete engine
-log entry while leaving exact current identities, prefixed formatting and final
-output-device effects explicit.
+log entry. Subsequent context-format and secondary-interface studies above
+extend those local contracts. Exact current identities and final output-device
+effects remain explicit.
 
 ## Evidence and provenance
 

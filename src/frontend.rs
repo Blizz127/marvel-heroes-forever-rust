@@ -29,6 +29,8 @@ pub mod class_defaults;
 pub mod current_scene;
 #[path = "frontend/cursor_coordinates.rs"]
 pub mod cursor_coordinates;
+#[path = "frontend/diagnostic_message.rs"]
+pub mod diagnostic_message;
 #[path = "frontend/display_state.rs"]
 pub mod display_state;
 #[path = "frontend/external_host.rs"]
