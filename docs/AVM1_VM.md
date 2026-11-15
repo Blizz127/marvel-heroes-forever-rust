@@ -2353,3 +2353,36 @@ The combined private receipt is
 `5b351c20fc1d488ea740098fbe540ebc35c7f30689e1e50371ce40de8776f188`.
 Manager12 remains an unchanged failed first-frontier record; these checks do
 not assert a corrected original replay or cursor effect.
+
+### Original native-global replay reaches the rejecting Mouse host
+
+OBSERVED controlled increment13 on frozen `00e4d92`: all 452 selected
+initializers complete in 49,244 instructions, using the native-global profile
+adopted with an unknown byte. Each initializer's instruction count matches
+increment11, but native state is now independently recorded. After the
+initializers, GlobalExtensionsInfo reports byte1, marker written, and last
+write **CodeId1 at13566**: the unchanged original Integer1 assignment executed.
+Its supported getters report true and `gfxVersion = "4.2.23"`. No byte zero
+or Boolean replacement was supplied to obtain this result.
+
+The same VM then runs original frame5967+518 for 290 instructions and stops
+at **CallMethod6391, CodeId452**, with
+`Host("Mouse.hide user-event host is unbound")`. By then, the original frame
+SetMember6370 has updated the last-write origin to CodeId452/6370; byte1 and
+the marker remain established. The Mouse graph publishes with global flags1,
+callable15928/prototype15936 and distinct C.hide15934/P.hide15940. Protected
+listener inspections reject separately. No host override, cursor effect,
+SavedEnvironment, additional global or raw-reflection bypass was introduced.
+Later cursor operations remain unexecuted. The controlled source/order/raw-state
+limitations and incomplete native global baseline remain in force.
+
+Private `avm1-attached-manager-frame-action-increment13/receipt.json` SHA-256:
+`bd873eb0540e90efefbc91fd4751700f43ce7099488d16a20aa44d4682cf379b`.
+The single build produced the runnable executable with empty compiler logs;
+its tool completion code was not retained across compaction and is honestly
+recorded as unknown. The single run exited0, without retries. The exact
+29-entry freeze retains the same parser and input sources; root Selection and
+ClassRegistry were refreshed from5e315bd and are byte-identical to the prior
+dependencies. All 452 completion records are private. Manager12's earlier
+numeric first-stop receipt remains unchanged. No native/window execution or
+retail startup/lifecycle completion is claimed.
