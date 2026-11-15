@@ -2386,3 +2386,56 @@ ClassRegistry were refreshed from5e315bd and are byte-identical to the prior
 dependencies. All 452 completion records are private. Manager12's earlier
 numeric first-stop receipt remains unchanged. No native/window execution or
 retail startup/lifecycle completion is claimed.
+
+### Source-grounded Object and Function bootstrap graph
+
+`install_object_constructor()` now constructs stable Object/Function callable
+and prototype identities together. The Function callable is reachable through
+Function.prototype.constructor immediately; `install_function_conversion()`
+separately publishes that same cached identity in GLOBAL without allocating a
+replacement. This opt-in is publication, not suppression of the native callable.
+Only the two original constructors link to Function.prototype. Thirteen early
+methods retain null internal parents and their own flags3 `__proto__` markers;
+the former blanket relinking of already-created functions has been removed.
+Later supported function allocations still use the warm Function parent.
+
+The concrete getter proof rules out a later-cache substitution: these early
+methods return Undefined for `__proto__` and missing `call`/`apply` under their
+original resolver-free profile. Resolver mutation/history is gated. The original
+Object.prototype has a null parent and no own `__proto__` entry, while its
+normal `__proto__` getter likewise returns Undefined. Function.prototype is
+noncallable and now contains four distinct methods: apply/call/toString/valueOf,
+all flags1. The latter two expose actual callable identities but explicitly
+reject invocation until their callbacks are implemented. Object.registerClass
+has flags7; constructor prototype links and prototype constructor entries have
+flags3. The two published global names use the logical final-bootstrap flags1.
+
+The existing Object/Function prototype constructor entries remain guarded
+effective-read projections of native metadata, not claims that native tag10
+markers physically contain function Values. Selected constructor assignment and
+flag changes that would invalidate those projections reject. Unpublished graph
+allocation failures roll back objects and cumulative allocation counters; they
+do not relink prior functions or publish a partial Object binding. This Rust
+budget admission is not native allocation-failure behavior.
+
+Static producers are documented in FRESH_GLOBAL_BOOTSTRAP.md and its private
+ledgers. Concrete normal/raw getter slots and null/miss branches were separately
+checked in `avm1-bootstrap-audit/receipt.json`, SHA-256
+`04a56a723f033ba11ae78dadd32eb296ff02418da084b81daf67c1ef32aa6668`.
+That audit checks 556 instruction spans and352 table bytes, with only16 new
+table bytes needed to bind the final Function prototype getter.
+
+OBSERVED: five focused new checks and three existing Object/Function checks
+pass, including downstream bounded String/Point/Rectangle/Mouse/ExternalInterface
+construction, deferred publication, cold/warm parents, metadata, callback gates
+and budget rollback. Production metadata compilation passes without warnings;
+its production sources remain unchanged. Two new harness assertions initially
+expected broader generic error/deletion behavior; those assertions were corrected
+to the existing explicit gates, with no runtime fix. The failed checks and a
+redundant compile after a failed scripted test edit are retained privately.
+Combined receipt: `avm1-runtime/bootstrap-correction-checks/receipt.json`,
+SHA-256 `9f399588e17549413ed77f1bff13e830f4a1588e1a506f9d0fd61865757c5145`. No original replay was run by these checks.
+
+This does not install the complete native global/cache/Key graph, choose native
+GlobalExtensions state, reset adopted instances, advance lifecycle events or
+supply a Mouse handler. Current state4 absence remains a separate open proof.

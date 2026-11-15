@@ -17,6 +17,9 @@ mod attached_events;
 pub mod attached_name_profile;
 #[path = "attached_textfield.rs"]
 mod attached_textfield;
+#[cfg(test)]
+#[path = "bootstrap_checks.rs"]
+mod bootstrap_checks;
 #[path = "deferred.rs"]
 mod deferred;
 #[path = "execution_store.rs"]
@@ -523,6 +526,7 @@ enum NativeMarker {
     ExternalAvailable,
     StringLength,
     GlobalExtensions,
+    BootstrapFunctionParent,
 }
 #[derive(Debug, Clone, Copy)]
 struct ClassBase {
@@ -606,6 +610,7 @@ pub struct Vm {
     object_constructor: Option<ObjectId>,
     object_prototype: Option<ObjectId>,
     function_prototype: Option<ObjectId>,
+    function_constructor: Option<ObjectId>,
     function_conversion: Option<ObjectId>,
     movie_clip_constructor: Option<ObjectId>,
     movie_clip_prototype: Option<ObjectId>,
@@ -657,6 +662,7 @@ impl Vm {
             object_constructor: None,
             object_prototype: None,
             function_prototype: None,
+            function_constructor: None,
             function_conversion: None,
             movie_clip_constructor: None,
             movie_clip_prototype: None,
@@ -762,6 +768,11 @@ impl Vm {
                 .then_some(self.function_prototype)
                 .flatten()
         });
+        self.alloc_exact_parent(kind, prototype)
+    }
+    /// Allocate with an exact parent, including an intentional null parent.
+    /// Native bootstrap cold-cache functions must not inherit the later cache.
+    fn alloc_exact_parent(&mut self, kind: Kind, prototype: Option<ObjectId>) -> Result<ObjectId> {
         if self.objects.len() >= self.limits.objects {
             return self.fail(ErrorKind::Budget("objects"));
         }
@@ -799,14 +810,35 @@ impl Vm {
         self.alloc(Kind::FunctionMethod(method), None)
     }
 
-    /// Install only the documented Object constructor/prototype. Optional native
-    /// methods and unrelated namespace objects are not fabricated.
+    fn bootstrap_function(&mut self, kind: Kind) -> Result<ObjectId> {
+        debug_assert!(kind.function_value());
+        let id = self.alloc_exact_parent(kind, None)?;
+        self.raw_member(
+            id,
+            text("__proto__"),
+            Property::NativeMarker(NativeMarker::BootstrapFunctionParent),
+            3,
+        )?;
+        Ok(id)
+    }
+    /// Build the bounded Object/Function graph using the proved fresh native
+    /// cache order. GLOBAL.Function publication remains a separate opt-in step.
+    /// This does not install the entire native GLOBAL or adopt display state.
     pub fn install_object_constructor(&mut self) -> Result<ObjectId> {
         if let Some(id) = self.object_constructor {
             return Ok(id);
         }
         if self.has_key(self.global, &text("Object"))? {
             return self.fail(ErrorKind::Unsupported("Object binding already exists"));
+        }
+        if self.function_prototype.is_some()
+            || self.function_constructor.is_some()
+            || self.object_prototype.is_some()
+            || self.function_conversion.is_some()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "partial Object/Function bootstrap caches",
+            ));
         }
         if self
             .objects
@@ -817,90 +849,131 @@ impl Vm {
                 "install Object before defining script functions",
             ));
         }
-        let constructor = self.alloc(Kind::ObjectConstructor, None)?;
-        let prototype = self.object()?;
-        let function_prototype = self.alloc(Kind::FunctionPrototype, Some(prototype))?;
-        self.function_prototype = Some(function_prototype);
-        let prior_functions: Vec<_> = self
-            .objects
-            .iter()
-            .enumerate()
-            .filter(|(_, object)| {
-                object.kind.function_value()
-                    && object.prototype.is_none()
-                    && !object.properties.contains_key(&text("__proto__"))
-            })
-            .map(|(index, _)| ObjectId(index))
-            .collect();
-        for id in prior_functions {
+        let before = (self.objects.len(), self.properties, self.string_units);
+        let result = (|| {
+            let constructor = self.bootstrap_function(Kind::ObjectConstructor)?;
+            let function = self.bootstrap_function(Kind::FunctionConversion)?;
+            let prototype = self.object()?;
+            let function_prototype =
+                self.alloc_exact_parent(Kind::FunctionPrototype, Some(prototype))?;
+            let register_class = self.bootstrap_function(Kind::RegisterClass)?;
             self.raw_member(
-                id,
-                text("__proto__"),
+                constructor,
+                text("registerClass"),
+                Property::Data(Value::Object(register_class)),
+                7,
+            )?;
+            self.raw_member(
+                constructor,
+                text("prototype"),
+                Property::Data(Value::Object(prototype)),
+                3,
+            )?;
+            self.raw_member(
+                function,
+                text("prototype"),
                 Property::Data(Value::Object(function_prototype)),
                 3,
             )?;
-            self.objects[id.0].prototype = Some(function_prototype);
-        }
-        let call = self.function_method(FunctionMethod::Call)?;
-        let apply = self.function_method(FunctionMethod::Apply)?;
-        self.set(function_prototype, "call", Value::Object(call))?;
-        self.set(function_prototype, "apply", Value::Object(apply))?;
-        self.raw_member(
-            constructor,
-            text("prototype"),
-            Property::Data(Value::Object(prototype)),
-            3,
-        )?;
-        self.raw_member(
-            prototype,
-            text("constructor"),
-            Property::Data(Value::Object(constructor)),
-            3,
-        )?;
-        let add_property = self.alloc(Kind::AddProperty, None)?;
-        self.raw_member(
-            prototype,
-            text("addProperty"),
-            Property::Data(Value::Object(add_property)),
-            1,
-        )?;
-        // Complete native Object.prototype inventory: preserve function identity and
-        // flags without pretending these callbacks are implemented.
-        for (key, name) in [
-            ("hasOwnProperty", "Object.prototype.hasOwnProperty"),
-            ("watch", "Object.prototype.watch"),
-            ("unwatch", "Object.prototype.unwatch"),
-            (
-                "isPropertyEnumerable",
-                "Object.prototype.isPropertyEnumerable",
-            ),
-            ("isPrototypeOf", "Object.prototype.isPrototypeOf"),
-            ("toString", "Object.prototype.toString"),
-            ("valueOf", "Object.prototype.valueOf"),
-        ] {
-            let method = self.alloc(Kind::UnsupportedNative(name), None)?;
+            // These constructor entries project the resolved native marker value.
+            // Exact physical tag10 metadata and its mutation remain separate.
             self.raw_member(
                 prototype,
-                text(key),
-                Property::Data(Value::Object(method)),
+                text("constructor"),
+                Property::Data(Value::Object(constructor)),
+                3,
+            )?;
+            self.raw_member(
+                function_prototype,
+                text("constructor"),
+                Property::Data(Value::Object(function)),
+                3,
+            )?;
+            let add_property = self.bootstrap_function(Kind::AddProperty)?;
+            self.raw_member(
+                prototype,
+                text("addProperty"),
+                Property::Data(Value::Object(add_property)),
                 1,
             )?;
+            for (key, name) in [
+                ("hasOwnProperty", "Object.prototype.hasOwnProperty"),
+                ("watch", "Object.prototype.watch"),
+                ("unwatch", "Object.prototype.unwatch"),
+                (
+                    "isPropertyEnumerable",
+                    "Object.prototype.isPropertyEnumerable",
+                ),
+                ("isPrototypeOf", "Object.prototype.isPrototypeOf"),
+                ("toString", "Object.prototype.toString"),
+                ("valueOf", "Object.prototype.valueOf"),
+            ] {
+                let method = self.bootstrap_function(Kind::UnsupportedNative(name))?;
+                self.raw_member(
+                    prototype,
+                    text(key),
+                    Property::Data(Value::Object(method)),
+                    1,
+                )?;
+            }
+            for (key, kind) in [
+                ("apply", Kind::FunctionMethod(FunctionMethod::Apply)),
+                ("call", Kind::FunctionMethod(FunctionMethod::Call)),
+                (
+                    "toString",
+                    Kind::UnsupportedNative("Function.prototype.toString"),
+                ),
+                (
+                    "valueOf",
+                    Kind::UnsupportedNative("Function.prototype.valueOf"),
+                ),
+            ] {
+                let method = self.bootstrap_function(kind)?;
+                self.raw_member(
+                    function_prototype,
+                    text(key),
+                    Property::Data(Value::Object(method)),
+                    1,
+                )?;
+            }
+            // Only these two original constructors are relinked when key7 is
+            // published. The thirteen early methods retain their cold parents.
+            for id in [constructor, function] {
+                self.objects[id.0].prototype = Some(function_prototype);
+            }
+            // Logical post-bootstrap publication flags, not transient native
+            // table-registration order or a full forty-eight-member GLOBAL.
+            self.raw_member(
+                self.global,
+                text("Object"),
+                Property::Data(Value::Object(constructor)),
+                1,
+            )?;
+            self.object_constructor = Some(constructor);
+            self.object_prototype = Some(prototype);
+            self.function_prototype = Some(function_prototype);
+            self.function_constructor = Some(function);
+            self.objects[prototype.0].native_hash_profile = true;
+            Ok(constructor)
+        })();
+        if result.is_err() {
+            // No existing function or public binding is modified before the
+            // final successful publication. Budget failure leaves no graph.
+            self.objects.truncate(before.0);
+            self.properties = before.1;
+            self.string_units = before.2;
         }
-        let register_class = self.alloc(Kind::RegisterClass, None)?;
-        self.set(constructor, "registerClass", Value::Object(register_class))?;
-        self.set(self.global, "Object", Value::Object(constructor))?;
-        self.object_constructor = Some(constructor);
-        self.object_prototype = Some(prototype);
-        self.objects[prototype.0].native_hash_profile = true;
-        Ok(constructor)
+        result
     }
-    /// Install the native-backed single-argument Function conversion, separately
-    /// from dynamic construction or arbitrary source compilation.
+    /// Publish the already constructed native Function identity. This does not
+    /// enable dynamic source compilation or pretend FP itself is callable.
     pub fn install_function_conversion(&mut self) -> Result<ObjectId> {
         if let Some(id) = self.function_conversion {
             return Ok(id);
         }
-        let Some(prototype) = self.function_prototype else {
+        let (Some(prototype), Some(function)) =
+            (self.function_prototype, self.function_constructor)
+        else {
             return self.fail(ErrorKind::Unsupported(
                 "install Object before Function conversion",
             ));
@@ -908,9 +981,25 @@ impl Vm {
         if self.has_key(self.global, &text("Function"))? {
             return self.fail(ErrorKind::Unsupported("Function binding already exists"));
         }
-        let function = self.alloc(Kind::FunctionConversion, None)?;
-        self.set(function, "prototype", Value::Object(prototype))?;
-        self.set(self.global, "Function", Value::Object(function))?;
+        if !matches!(self.objects[function.0].kind, Kind::FunctionConversion)
+            || self.objects[function.0].prototype != Some(prototype)
+            || !matches!(self.objects[function.0].properties.get(&text("prototype")),
+                Some(Property::Data(Value::Object(id))) if *id == prototype)
+            || !matches!(self.objects[prototype.0].properties.get(&text("constructor")),
+                Some(Property::Data(Value::Object(id))) if *id == function)
+            || self.own_flags(function, &text("prototype")) != 3
+            || self.own_flags(prototype, &text("constructor")) != 3
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "modified cached Function bootstrap graph",
+            ));
+        }
+        self.raw_member(
+            self.global,
+            text("Function"),
+            Property::Data(Value::Object(function)),
+            1,
+        )?;
         self.function_conversion = Some(function);
         Ok(function)
     }
@@ -997,6 +1086,22 @@ impl Vm {
         Ok(constructor)
     }
     fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if key.as_ref() != text("__proto__").as_ref()
+            && matches!(
+                self.objects[id.0].properties.get(&text("__proto__")),
+                Some(Property::NativeMarker(
+                    NativeMarker::BootstrapFunctionParent
+                ))
+            )
+            && self.objects[id.0]
+                .insertion_keys
+                .iter()
+                .any(|key| key.as_ref() == text("__resolve").as_ref())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bootstrap native function resolver history",
+            ));
+        }
         if self.attached_visibility_policy.is_some()
             && id == self.global
             && key.as_ref() == text("noInvisibleAdvance").as_ref()
@@ -1029,13 +1134,6 @@ impl Vm {
                     "unbound MovieClip native/display member",
                 ));
             }
-        }
-        if matches!(self.objects[id.0].kind, Kind::FunctionPrototype)
-            && key.as_ref() == text("constructor").as_ref()
-        {
-            return self.fail(ErrorKind::Unsupported(
-                "Function prototype constructor descriptor",
-            ));
         }
         if matches!(
             self.objects[id.0].kind,
@@ -1399,6 +1497,28 @@ impl Vm {
             .cloned()
             .collect())
     }
+    fn guard_bootstrap_metadata_write(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if key.as_ref() == text("__resolve").as_ref()
+            && matches!(
+                self.objects[id.0].properties.get(&text("__proto__")),
+                Some(Property::NativeMarker(
+                    NativeMarker::BootstrapFunctionParent
+                ))
+            )
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bootstrap native function resolver mutation",
+            ));
+        }
+        if (self.object_prototype == Some(id) || self.function_prototype == Some(id))
+            && key.as_ref() == text("constructor").as_ref()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "bootstrap constructor marker assignment profile",
+            ));
+        }
+        Ok(())
+    }
     fn guard_global_extensions_inventory(&self, id: ObjectId) -> Result<()> {
         if self.global_extensions.is_some() && id == self.global {
             return self.fail(ErrorKind::Unsupported(
@@ -1553,6 +1673,17 @@ impl Vm {
                 let old = self.own_flags(target, key);
                 if (old | set) != ((old & !7) | set) {
                     return self.fail(ErrorKind::AmbiguousPropertyFlags { old, set });
+                }
+            }
+        }
+        if self.object_prototype == Some(target) {
+            let constructor = text("constructor");
+            if keys.contains(&constructor) {
+                let old = self.own_flags(target, &constructor);
+                if (old & !clear.unwrap_or(0)) | set != old {
+                    return self.fail(ErrorKind::Unsupported(
+                        "bootstrap constructor marker flags profile",
+                    ));
                 }
             }
         }
@@ -1778,7 +1909,21 @@ impl Vm {
             self.check_member_target(id, key)?;
             native_member_context |= matches!(object.kind, Kind::MovieClip(_));
             if key.as_ref() == text("__proto__").as_ref() {
-                return Ok(object.prototype.map_or(Value::Null, Value::Object));
+                let native_parent = self.object_prototype == Some(id)
+                    || matches!(
+                        object.properties.get(key),
+                        Some(Property::NativeMarker(
+                            NativeMarker::BootstrapFunctionParent
+                        ))
+                    );
+                return Ok(object.prototype.map_or(
+                    if native_parent {
+                        Value::Undefined
+                    } else {
+                        Value::Null
+                    },
+                    Value::Object,
+                ));
             }
             if let Kind::Array(len) = object.kind {
                 if key.as_ref() == text("length").as_ref() {
@@ -1799,6 +1944,9 @@ impl Vm {
                             "global extension marker requires bound native receiver",
                         ))
                     }
+                    Property::NativeMarker(NativeMarker::BootstrapFunctionParent) => self.fail(
+                        ErrorKind::Unsupported("bootstrap parent marker requires exact property"),
+                    ),
                     Property::Accessor { .. } => self.fail(ErrorKind::Unsupported(
                         "accessor requires executable property access",
                     )),
@@ -1986,6 +2134,7 @@ impl Vm {
         host: &mut impl Host,
     ) -> Result<()> {
         self.check_object(id)?;
+        self.guard_bootstrap_metadata_write(id, &key)?;
         if self.global_extensions_write(id, &key, &value)? {
             return Ok(());
         }
@@ -2081,6 +2230,7 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        self.guard_bootstrap_metadata_write(id, &key)?;
         if self.global_extensions_write(id, &key, &value)? {
             return Ok(());
         }
@@ -3054,6 +3204,7 @@ impl Vm {
                 let (Value::Object(receiver), Value::String(name)) = (&this, &args[0]) else {
                     return Ok(Value::Bool(false));
                 };
+                self.guard_bootstrap_metadata_write(*receiver, name)?;
                 self.guard_global_extensions_mutation(*receiver, name)?;
                 self.reject_string_mutation_chain(*receiver)?;
                 self.reject_geometry_mutation_chain(*receiver)?;
@@ -4637,7 +4788,7 @@ mod tests {
             panic!()
         };
         assert_eq!(vm.objects[prototype.0].properties.len(), 9);
-        assert_eq!(vm.get(prototype, "__proto__").unwrap(), Value::Null);
+        assert_eq!(vm.get(prototype, "__proto__").unwrap(), Value::Undefined);
         assert_eq!(vm.own_property_flags(prototype, "__proto__").unwrap(), None);
         assert_eq!(
             vm.own_property_flags(prototype, "constructor").unwrap(),
