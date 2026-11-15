@@ -502,3 +502,12 @@ The run stops without input; all 453 frozen game files remain unchanged. No
 missing-ClientConfig path was observed, so configuration retrieval was not
 triggered. The capture route is held at that prerequisite while normal launch
 requirements are studied read-only. See `docs/NATIVE_HOSTNAME_PROBE.md`.
+
+**VERIFIED (private dev.9 staging, 2026-11-15 09:55 UTC):** All 303 packaged file
+hashes and the packaged version/Original checks pass. Clean package source is
+`78e023238b3e2d8846677882bc99404f15dab6c7`; only findings/provenance prose differs
+from the tested source, with identical binary bytes. Artifact:
+`builds/0.1.0-dev.9` under the private project root. Receipt:
+`evidence/build-0.1.0-dev.9-package-validation.json`. The coordinator's queued
+intake supersedes dev.8's Rust diagnostic only. Publication and owner-device
+validation remain unconfirmed.
