@@ -196,8 +196,21 @@ pub struct ClassRegistration {
     /// Definition may belong to an earlier-loaded movie. None for native/builtin functions.
     pub constructor_origin: Option<CodeOrigin>,
 }
+#[derive(Debug, Clone)]
+pub enum HostResult {
+    Value(Value),
+    /// A fresh native Object construction, followed by ordinary writes in order.
+    /// Current profile: unique ASCII identifiers and valid NUL-free String/Bool
+    /// values. The host owns reflected-field selection and its input limits.
+    ObjectFields(Vec<(Text, Value)>),
+}
 pub trait Host {
     fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String>;
+    /// Existing hosts retain their direct-value behavior. The VM materializes
+    /// ObjectFields only after this callback returns, permitting setter reentry.
+    fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
+        self.call(call).map(HostResult::Value)
+    }
     fn command(
         &mut self,
         target: ObjectId,
@@ -898,10 +911,15 @@ impl Vm {
                 "InitObject requires installed native Object",
             ));
         };
-        if self.get(self.global, "Object")? != Value::Object(constructor)
-            || self.get(constructor, "prototype")? != Value::Object(prototype)
-            || self.get(prototype, "constructor")? != Value::Object(constructor)
-            || self.objects[prototype.0].prototype.is_some()
+        let bindings = [
+            (self.global, "Object", constructor),
+            (constructor, "prototype", prototype),
+            (prototype, "constructor", constructor),
+        ];
+        if bindings.iter().any(|(owner, name, expected)| {
+            !matches!(self.objects[owner.0].properties.get(&text(name)),
+                Some(Property::Data(Value::Object(actual))) if actual == expected)
+        }) || self.objects[prototype.0].prototype.is_some()
         {
             return self.fail(ErrorKind::Unsupported(
                 "InitObject modified Object binding/prototype",
@@ -1871,6 +1889,80 @@ impl Vm {
         self.host_calls += 1;
         Ok(())
     }
+    fn materialize_host_result(
+        &mut self,
+        result: HostResult,
+        host: &mut impl Host,
+    ) -> Result<Value> {
+        let fields = match result {
+            HostResult::Value(value) => {
+                self.check_value(&value)?;
+                return Ok(value);
+            }
+            HostResult::ObjectFields(fields) => fields,
+        };
+        // Charge a conservative complete input/storage bound before adopting
+        // host-owned strings or allocating the fresh object. Setter effects have
+        // their own ordinary budgets; a later failure is not transactional.
+        if fields.len().saturating_add(3) > self.limits.properties.saturating_sub(self.properties) {
+            return self.fail(ErrorKind::Budget("host result object fields"));
+        }
+        self.visit_members(fields.len())?;
+        let remaining_units = self.limits.string_units.saturating_sub(self.string_units);
+        let metadata_units = ["__proto__", "__constructor__", "constructor"]
+            .iter()
+            .map(|name| name.len())
+            .sum::<usize>();
+        let mut input_units = 0usize;
+        let mut stored_name_units = 0usize;
+        for (key, value) in &fields {
+            let value_units = match value {
+                Value::String(value) => value.len(),
+                Value::Bool(_) => 0,
+                _ => return self.fail(ErrorKind::Unsupported("host result object scalar profile")),
+            };
+            input_units = input_units
+                .saturating_add(key.len())
+                .saturating_add(value_units);
+            stored_name_units = stored_name_units.saturating_add(key.len());
+            if input_units
+                .saturating_add(stored_name_units)
+                .saturating_add(metadata_units)
+                > remaining_units
+            {
+                return self.fail(ErrorKind::Budget("host result object string units"));
+            }
+        }
+        let mut names = std::collections::BTreeSet::new();
+        for (key, value) in &fields {
+            if !key
+                .first()
+                .is_some_and(|v| matches!(*v, 65..=90 | 97..=122))
+                || key
+                    .iter()
+                    .any(|v| !matches!(*v, 48..=57 | 65..=90 | 95 | 97..=122))
+                || key.as_ref() == text("constructor").as_ref()
+                || !names.insert(key.clone())
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "host result object field name profile",
+                ));
+            }
+            if let Value::String(value) = value {
+                if value.contains(&0)
+                    || char::decode_utf16(value.iter().copied()).any(|unit| unit.is_err())
+                {
+                    return self.fail(ErrorKind::Unsupported("host result object UTF-16 profile"));
+                }
+            }
+        }
+        let object = self.object_literal()?;
+        self.string_units += input_units;
+        for (key, value) in fields {
+            self.write_member(object, key, value, host)?;
+        }
+        Ok(Value::Object(object))
+    }
     fn command(
         &mut self,
         target: ObjectId,
@@ -1950,7 +2042,7 @@ impl Vm {
             Kind::Native(binding) => {
                 self.host_budget()?;
                 let value = host
-                    .call(HostCall {
+                    .call_result(HostCall {
                         origin: self.origin(),
                         binding,
                         this,
@@ -1958,8 +2050,7 @@ impl Vm {
                         source_offset: self.current.map(|v| v.0),
                     })
                     .map_err(|s| self.error(ErrorKind::Host(s)))?;
-                self.check_value(&value)?;
-                return Ok(value);
+                return self.materialize_host_result(value, host);
             }
             Kind::UnsupportedNative(name) => {
                 return self.fail(ErrorKind::UnsupportedNativeFunction(name));
@@ -3668,6 +3759,245 @@ mod tests {
         assert_eq!(result.stack, vec![Value::Number(42.0)]);
         assert_eq!(host.calls, 1);
         assert_eq!(result.host_calls, 1);
+    }
+    struct ObjectResultHost {
+        fields: Vec<(Text, Value)>,
+        calls: Vec<(u32, Value, Vec<Value>)>,
+    }
+    impl Host for ObjectResultHost {
+        fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String> {
+            self.calls
+                .push((call.binding, call.this, call.args.to_vec()));
+            if matches!(call.binding, 20 | 21) {
+                Ok(Value::Bool(false))
+            } else {
+                Err("unsupported test binding".into())
+            }
+        }
+        fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
+            if call.binding == 10 {
+                self.calls
+                    .push((call.binding, call.this, call.args.to_vec()));
+                Ok(HostResult::ObjectFields(self.fields.clone()))
+            } else {
+                self.call(call).map(HostResult::Value)
+            }
+        }
+        fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+            Err("unsupported test command".into())
+        }
+    }
+    #[test]
+    fn host_object_fields_are_fresh_ordered_and_keep_native_metadata() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let native = vm.native(10).unwrap();
+        let fields = vec![
+            (text("localizedPrototypeIdStr"), Value::string("123")),
+            (text("localizedText"), Value::string("Hello 🦀")),
+            (text("localizedTooltipText"), Value::string("")),
+            (text("hasTooltip"), Value::Bool(false)),
+        ];
+        let mut host = ObjectResultHost {
+            fields: fields.clone(),
+            calls: vec![],
+        };
+        let mut ids = vec![];
+        for _ in 0..2 {
+            let result = vm
+                .call(
+                    Value::Object(native),
+                    Value::Object(vm.root()),
+                    &[],
+                    &mut host,
+                )
+                .unwrap();
+            assert_eq!(result.host_calls, 1);
+            let Value::Object(id) = result.value else {
+                panic!()
+            };
+            ids.push(id);
+            for name in ["__proto__", "__constructor__", "constructor"] {
+                assert_eq!(vm.own_property_flags(id, name).unwrap(), Some(3));
+            }
+            assert_eq!(
+                vm.get(id, "__proto__").unwrap(),
+                vm.get(object, "prototype").unwrap()
+            );
+            assert_eq!(
+                vm.get(id, "__constructor__").unwrap(),
+                Value::Object(object)
+            );
+            assert_eq!(vm.get(id, "constructor").unwrap(), Value::Object(object));
+            assert_eq!(
+                &vm.objects[id.0].insertion_keys[3..],
+                fields
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect::<Vec<_>>()
+            );
+            for (name, value) in &fields {
+                assert_eq!(vm.get_key(id, name).unwrap(), *value);
+                assert_eq!(vm.own_flags(id, name), 0);
+            }
+        }
+        assert_ne!(ids[0], ids[1]);
+        vm.set(ids[0], "localizedText", Value::string("Changed"))
+            .unwrap();
+        assert_eq!(
+            vm.get(ids[1], "localizedText").unwrap(),
+            Value::string("Hello 🦀")
+        );
+    }
+    #[test]
+    fn host_object_fields_use_ordered_setters_with_host_reentry() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let Value::Object(prototype) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        for (name, binding) in [("first", 20), ("second", 21)] {
+            let setter = vm.native(binding).unwrap();
+            vm.raw_member(
+                prototype,
+                text(name),
+                Property::Accessor {
+                    getter: Value::Object(setter),
+                    setter: Some(Value::Object(setter)),
+                },
+                0,
+            )
+            .unwrap();
+        }
+        let native = vm.native(10).unwrap();
+        let mut host = ObjectResultHost {
+            fields: vec![
+                (text("first"), Value::string("A")),
+                (text("second"), Value::Bool(true)),
+            ],
+            calls: vec![],
+        };
+        let result = vm
+            .call(
+                Value::Object(native),
+                Value::Object(vm.root()),
+                &[],
+                &mut host,
+            )
+            .unwrap();
+        let Value::Object(id) = result.value else {
+            panic!()
+        };
+        assert_eq!(result.host_calls, 3);
+        assert_eq!(
+            host.calls[1],
+            (20, Value::Object(id), vec![Value::string("A")])
+        );
+        assert_eq!(
+            host.calls[2],
+            (21, Value::Object(id), vec![Value::Bool(true)])
+        );
+        assert_eq!(vm.own_property_flags(id, "first").unwrap(), None);
+        assert_eq!(vm.own_property_flags(id, "second").unwrap(), None);
+        // False native setter returns do not discard the fresh result object.
+        assert_eq!(vm.get(id, "constructor").unwrap(), Value::Object(object));
+        vm.limits.host_calls = 1;
+        host.calls.clear();
+        let error = vm
+            .call(
+                Value::Object(native),
+                Value::Object(vm.root()),
+                &[],
+                &mut host,
+            )
+            .unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Budget("host calls"));
+        assert_eq!(host.calls.len(), 1);
+    }
+    #[test]
+    fn host_object_fields_reject_invalid_payloads_and_modified_bindings() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let native = vm.native(10).unwrap();
+        let mut host = ObjectResultHost {
+            fields: vec![],
+            calls: vec![],
+        };
+        for fields in [
+            vec![(text("x"), Value::Number(1.0))],
+            vec![(text("x"), Value::String(Arc::from([0xd800])))],
+            vec![(text("x"), Value::string("embedded\0nul"))],
+            vec![(text("constructor"), Value::Bool(true))],
+            vec![(text("a.b"), Value::Bool(true))],
+            vec![
+                (text("x"), Value::Bool(true)),
+                (text("x"), Value::Bool(false)),
+            ],
+        ] {
+            host.fields = fields;
+            let before = vm.object_count();
+            assert!(matches!(
+                vm.call(
+                    Value::Object(native),
+                    Value::Object(vm.root()),
+                    &[],
+                    &mut host
+                )
+                .unwrap_err()
+                .kind,
+                ErrorKind::Unsupported(_)
+            ));
+            assert_eq!(vm.object_count(), before);
+        }
+        host.fields = vec![(text("value"), Value::string("payload"))];
+        let before = vm.object_count();
+        vm.limits.string_units = vm.string_units + 2;
+        assert_eq!(
+            vm.call(
+                Value::Object(native),
+                Value::Object(vm.root()),
+                &[],
+                &mut host
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Budget("host result object string units")
+        );
+        assert_eq!(vm.object_count(), before);
+        vm.limits.string_units = Limits::default().string_units;
+        vm.limits.properties = vm.properties + 3;
+        assert_eq!(
+            vm.call(
+                Value::Object(native),
+                Value::Object(vm.root()),
+                &[],
+                &mut host
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Budget("host result object fields")
+        );
+        assert_eq!(vm.object_count(), before);
+        vm.limits.properties = Limits::default().properties;
+        let original = vm.get(vm.global(), "Object").unwrap();
+        let inherited = vm.object().unwrap();
+        vm.set(inherited, "Object", original).unwrap();
+        vm.set(vm.global(), "__proto__", Value::Object(inherited))
+            .unwrap();
+        vm.objects[vm.global.0].properties.remove(&text("Object"));
+        let before = vm.object_count();
+        assert_eq!(
+            vm.call(
+                Value::Object(native),
+                Value::Object(vm.root()),
+                &[],
+                &mut host
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Unsupported("InitObject modified Object binding/prototype")
+        );
+        assert_eq!(vm.object_count(), before);
     }
     #[test]
     fn array_constructor_creation_forms_and_prototype_limits_are_explicit() {

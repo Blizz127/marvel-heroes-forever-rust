@@ -771,6 +771,52 @@ captured-frame rejection. These are selected-script observations, with plain
 controlled receivers; no full containing initializer or native wrapper execution
 is claimed.
 
+## Fresh Object results from native hosts
+
+`Host::call_result` is backward compatible: its default calls the existing `call`
+and wraps the result in `HostResult::Value`. A host can instead return
+`HostResult::ObjectFields(Vec<(Text, Value)>)`. After the callback returns, the VM
+constructs one fresh Object through the proved unchanged native Object profile
+and performs ordinary `write_member` operations in the supplied order. The host
+does not hold a mutable VM reference, so inherited setters can call the host again
+without nested mutable ownership. No result-object identity is cached.
+
+**VERIFIED static native boundary:** Public GFxValue CreateObject with no class
+name and zero arguments joins current global Object construction. Its result has
+own `__proto__`, `__constructor__` and `constructor` metadata with flags 3. The public
+SetMember conversion reaches the ordinary internal setter with flags 0; the outer
+struct converter ignores its Boolean result. The saved unpatched LocalizedObjectData
+fields are, in order, `localizedPrototypeIdStr`, `localizedText`,
+`localizedTooltipText` (strings), and `hasTooltip` (Boolean). The native receipt is
+`localized-result-object/finding-summary.json`, with byte validation in
+`verification.json`; the research lane records the bridge and exact limits in
+`docs/LOCALIZED_RESULT_OBJECT.md`.
+
+The current materializer accepts unique ASCII identifier keys and well-formed,
+NUL-free UTF-16 String or Boolean values. It checks and charges conservative input,
+stored-name, field, member-work, object and host-call budgets. The original global
+Object and prototype/constructor links must still be own data bindings; inherited
+fallback or accessor replacement cannot substitute for them. Fresh native watch
+state is zero, and native watch installation remains unsupported. Existing ordinary
+accessor writes use the VM's established setter path; flagged accessor and inherited
+readonly ordering still reject explicitly. Failures after construction or a setter
+can retain prior writes, as with other VM execution; there is no rollback claim.
+
+**OBSERVED focused checks:** Two calls produce distinct objects with ordered own
+fields and exact metadata flags. Mutating one leaves the other unchanged. Native
+setters receive that fresh object as `this`, execute in field order, reenter the
+host, and can return false without replacing the result object. Invalid payloads,
+modified constructor binding, exhausted string/property budgets and exhausted
+nested host-call budgets reject. The legacy direct-value Host implementation still
+passes its existing check. Four checks are retained in
+`avm1-runtime/vm-tests-host-object-fields.txt` and
+`host-object-fields-evidence.json`.
+
+This seam does not install a localization binding, select reflected fields, parse
+locale data or claim that a live native struct has no patched fields. The integrating
+host owns those data and patch-profile decisions. The result-object checks alone
+are not an original localized callback execution or retail runtime parity claim.
+
 ## Indexed movie-property host seam
 
 GetProperty/SetProperty now use `Host::get_property` / `set_property`. Both have
