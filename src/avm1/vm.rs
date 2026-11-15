@@ -2132,10 +2132,15 @@ impl Vm {
                             "Function conversion of super reference",
                         ));
                     }
-                    if matches!(self.objects[argument.0].kind, Kind::Script(_)) {
-                        return self.fail(ErrorKind::Unsupported(
-                            "Function conversion ScriptFunction reference profile",
-                        ));
+                    if let Kind::Script(function) = &self.objects[argument.0].kind {
+                        // Actual type1/type2 native getters preserve the function
+                        // object but clear the reference's captured activation.
+                        // Our object identity is safe only without that wrapper state.
+                        if function.scopes.as_slice() != [function.target, self.global] {
+                            return self.fail(ErrorKind::Unsupported(
+                                "Function conversion captured activation/With profile",
+                            ));
+                        }
                     }
                 }
                 return Ok(if self.callable(&args[0]) {
@@ -4386,7 +4391,7 @@ mod tests {
         assert_eq!(error.kind, ErrorKind::Budget("function call depth"));
     }
     #[test]
-    fn function_conversion_gates_unproved_script_reference_and_preserves_empty_apply_lists() {
+    fn function_conversion_preserves_top_level_identity_and_gates_captured_frames() {
         let mut vm = setup();
         assert!(vm.install_function_conversion().is_err());
         vm.install_object_constructor().unwrap();
@@ -4398,17 +4403,17 @@ mod tests {
         body.extend([0x1c, 0x3e]);
         execute(&mut vm, &function("f", &body)).unwrap();
         let f = vm.get(root, "f").unwrap();
-        assert!(matches!(
+        assert_eq!(
             vm.call(
                 Value::Object(conversion),
                 Value::Object(root),
                 &[f.clone()],
                 &mut RejectHost
             )
-            .unwrap_err()
-            .kind,
-            ErrorKind::Unsupported("Function conversion ScriptFunction reference profile")
-        ));
+            .unwrap()
+            .value,
+            f
+        );
         let Value::Object(f_id) = f else { panic!() };
         assert_eq!(
             vm.get(conversion, "prototype").unwrap(),

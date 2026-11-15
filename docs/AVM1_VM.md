@@ -709,16 +709,21 @@ actual modeled namespace owners and class identities before the change.
 
 ## Native Function conversion and empty apply lists
 
-**Correction / current gate:** The earlier native research incorrectly classified
-interface `0x142513260` as the ordinary script-function table. DefineFunction2
-actually uses interface `0x142513090`. Its exact `+0x60` getter must be proved before
-reusing the native function-reference result for script functions. Function
-conversion therefore rejects every ScriptFunction input pending that evidence;
-the native-callable/noncallable conversion and empty Apply lists remain supported.
-The historical original-adapter executions below are Rust observations, not proof
-of the unverified native ScriptFunction reference behavior. They are not runnable
-under this temporary gate. The corrected research document is
-`docs/REA_FUNCTION_CALLS.md` (root correction `112762e`).
+**Corrected native binding, VERIFIED static:** The earlier research incorrectly
+classified interface `0x142513260` as the ordinary script-function table. Both
+DefineFunction (`0x9b`, type 1) and DefineFunction2 (`0x8e`, type 2) are now traced
+to constructor `0x1401e14c0`, actual interface `0x142513090`, and its `+0x60`
+getter `0x14018c580`. That getter preserves the function object while clearing
+auxiliary frame and reference flags. The creators capture an active frame when
+present, and invocation consumes that auxiliary pointer as a frame parent.
+Therefore general closure conversion is not object-identity conversion.
+
+The temporary all-Script gate is replaced by the proved target/global-only
+profile. `rea-script-function-conversion/finding-summary.json`,
+`definefunction-type1.bundle.json` and the research lane's
+`docs/REA_SCRIPT_FUNCTION_CONVERSION.md` retain the corrected producer, getter,
+capture and invocation evidence. Both old and newer original script producers
+have been checked; no table category is inferred from a nearby interface.
 
 `install_function_conversion()` installs the verified one-argument global Function
 path after Object initialization. An existing supported callable returns the same
@@ -728,10 +733,10 @@ explicitly; no source-string function construction is inferred.
 
 The native function-reference getter clears auxiliary reference/frame fields while
 retaining the underlying function object. The VM currently models ordinary
-function-object references, not every native wrapper form. The earlier supported script profile retained only target/global scopes and
-rejected nested activation/With scopes. The table correction now gates even that
-profile until the actual ScriptFunction getter is grounded. This is deliberately not
-an assertion that a native function-value wrapper is byte-for-byte unchanged.
+function-object references, not every native wrapper form. Supported script
+conversion requires scopes exactly `[captured target, global]`; nested activation
+and With scopes remain explicit errors. This is not an assertion that a native
+function-value wrapper is byte-for-byte unchanged.
 
 Native apply forwards zero arguments for omitted, null and undefined lists and
 preserves the supplied object receiver. This does not replace lexical scope,
@@ -755,8 +760,16 @@ or claimed to have run.
 `vm-tests-function-conversion.txt` and `function-conversion-evidence.json` retain
 these probes and 25 passing focused checks. They cover callable identity, explicit
 receivers, zero-argument list forms, native/noncallable values, arity, captured
-activation rejection and unsupported construction. Native typed MovieClip
-allocation remains a separate boundary in ordered startup.
+activation rejection and unsupported construction. These historical probes are superseded for the corrected table binding by
+`run-owned-function-conversion-verified.rs`,
+`owned-function-conversion-verified.tsv`,
+`vm-tests-function-conversion-verified.txt` and
+`function-conversion-verified-evidence.json`: the original type1 empty constructor
+adapter still runs 8 instructions; the original type2 getter variant runs 16 and
+returns the controlled width 320. One focused test verifies identity and retained
+captured-frame rejection. These are selected-script observations, with plain
+controlled receivers; no full containing initializer or native wrapper execution
+is claimed.
 
 ## Indexed movie-property host seam
 
