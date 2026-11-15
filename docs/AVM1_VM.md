@@ -663,6 +663,50 @@ flags, a generic `dispatchQueue` field, and rejection without partial flag write
 for missing or unsupported selectors. This bounded rejection policy is not a claim
 about native failure handling outside the supported profile.
 
+## Qualified class namespace reads in the modeled root
+
+**VERIFIED static, bounded profile:** GetVariable splits the observed three-part
+ASCII dot path, resolves its first name using the existing target-before-global
+scope, and resolves later names on each returned namespace object without a scope
+restart. Existing ordinary own data members use exact names for loaded versions
+above 6. The final FunctionRef copy preserves the function object and auxiliary
+frame reference; it does not perform `Function(value)` conversion. Receipts are
+`rea-qualified-variable/combined-proof-receipt.json` and
+`rea-qualified-variable-entry/finding-summary.json`; the research lane records
+them in `docs/REA_QUALIFIED_VARIABLES.md`.
+
+The VM accepts only a three-segment ASCII identifier path with scopes exactly
+`[target, global]`, no local activation, and plain parentless target/global objects.
+Intermediate namespaces must be Plain objects with existing own data properties;
+the final value must be a ScriptFunction. Missing or primitive intermediates,
+accessors, inherited namespace fields, native/display categories, reserved/root
+paths, With scopes, other grammars and qualified writes remain explicit errors.
+Segment allocation and member work are bounded. Only opcode GetVariable uses this
+new route; CallFunction and constructor name resolution retain their prior gates.
+
+**OBSERVED controlled Rust execution:** All **452 original manager root-frame
+initializers** complete in serialized order with the explicit minimal globals,
+SelectionHost and the actual bounded ClassRegistry. The final five registrations
+retain the original constructor identities for ListItemRenderer, Cursor,
+NotificationManager, Manager and ScrollingList. The Selection singleton remains
+one listener, and the earlier typed unbound Tween checks still pass. Two focused
+checks cover scope shadowing without global restart, exact function identity,
+unsupported accessors without invocation, and the retained grammar/scope gates.
+
+This count is diagnostic progress, not complete native startup parity. The VM's
+parentless Plain root does not establish absence of `gfx` from a retail attached
+root's script storage, named children, prototype or resolver. The global baseline
+is also explicitly incomplete; omitted real native globals can change existence
+branches. Attached-root resolution and complete native global registration require
+separate evidence and integration. No retail process, display attachment or server
+was used by this probe.
+
+Private `avm1-qualified-variable/namespace-profile-receipt.json` captures the
+actual modeled namespace owners and class identities before the change.
+`avm1-runtime/run-init-order-qualified-variable.rs`,
+`init-order-qualified-variable.tsv`, `vm-tests-qualified-variable.txt` and
+`qualified-variable-runtime-evidence.json` retain the new controlled execution.
+
 ## Native Function conversion and empty apply lists
 
 **Correction / current gate:** The earlier native research incorrectly classified

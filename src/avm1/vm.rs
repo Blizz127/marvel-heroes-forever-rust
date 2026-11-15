@@ -1667,6 +1667,107 @@ impl Vm {
         }
         Ok(Value::Undefined)
     }
+    // This is an ordinary namespace profile in the modeled target/global scope.
+    // An attached native display target has separate child/prototype resolution.
+    fn get_variable(&mut self, frame: &Frame, key: &Text, host: &mut impl Host) -> Result<Value> {
+        if !key.iter().any(|v| matches!(*v, 46 | 47 | 58)) {
+            return self.variable(frame, key, host);
+        }
+        if frame.scopes.as_slice() != [frame.target, self.global] || frame.locals != frame.target {
+            return self.fail(ErrorKind::Unsupported(
+                "qualified variable activation/With scope",
+            ));
+        }
+        for id in &frame.scopes {
+            self.check_object(*id)?;
+            if !matches!(self.objects[id.0].kind, Kind::Plain)
+                || self.objects[id.0].prototype.is_some()
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "qualified variable modeled root/global profile",
+                ));
+            }
+        }
+        if key.split(|v| *v == 46).take(4).count() != 3 {
+            return self.fail(ErrorKind::Unsupported(
+                "qualified variable three-segment profile",
+            ));
+        }
+        if self.limits.prototype_depth < 3 {
+            return self.fail(ErrorKind::Budget("qualified variable path depth"));
+        }
+        let parts: Vec<_> = key.split(|v| *v == 46).collect();
+        for part in &parts {
+            if !part
+                .first()
+                .is_some_and(|v| matches!(*v, 65..=90 | 97..=122))
+                || part
+                    .iter()
+                    .any(|v| !matches!(*v, 48..=57 | 65..=90 | 95 | 97..=122))
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "qualified variable ASCII identifier profile",
+                ));
+            }
+        }
+        let first = self.allocate_text(parts[0].to_vec())?;
+        if ["this", "super", "arguments", "NaN", "Infinity"]
+            .iter()
+            .any(|v| first.as_ref() == text(v).as_ref())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "qualified variable reserved first segment",
+            ));
+        }
+        for id in &frame.scopes {
+            if let Some(property) = self.objects[id.0].properties.get(&first) {
+                if !matches!(property, Property::Data(_)) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "qualified variable first-segment accessor",
+                    ));
+                }
+                break;
+            }
+        }
+        // Preserve the normal first-segment target-before-global precedence.
+        let mut value = self.variable(frame, &first, host)?;
+        for part in &parts[1..] {
+            if self.member_visits >= self.limits.member_visits {
+                return self.fail(ErrorKind::Budget("qualified variable member visits"));
+            }
+            self.member_visits += 1;
+            let Value::Object(owner) = value else {
+                return self.fail(ErrorKind::Unsupported(
+                    "qualified variable primitive/missing segment",
+                ));
+            };
+            self.check_object(owner)?;
+            if !matches!(self.objects[owner.0].kind, Kind::Plain) {
+                return self.fail(ErrorKind::Unsupported(
+                    "qualified variable namespace object kind",
+                ));
+            }
+            let name = self.allocate_text(part.to_vec())?;
+            value = match self.objects[owner.0].properties.get(&name) {
+                Some(Property::Data(value)) => value.clone(),
+                _ => {
+                    return self.fail(ErrorKind::Unsupported(
+                        "qualified variable own data member profile",
+                    ));
+                }
+            };
+        }
+        if let Value::Object(id) = value {
+            if matches!(self.objects[id.0].kind, Kind::Script(_)) {
+                // Ordinary member copy preserves this function reference. This is
+                // deliberately distinct from Function() wrapper conversion.
+                return Ok(value);
+            }
+        }
+        self.fail(ErrorKind::Unsupported(
+            "qualified variable final ScriptFunction profile",
+        ))
+    }
     fn simple_name(&self, key: &Text) -> Result<()> {
         if key.iter().any(|v| matches!(*v, 46 | 47 | 58)) {
             self.fail(ErrorKind::Unsupported(
@@ -2490,7 +2591,7 @@ impl Vm {
                     0x1c => {
                         let value = self.pop(frame)?;
                         let key = self.to_text(&value)?;
-                        let value = self.variable(frame, &key, host)?;
+                        let value = self.get_variable(frame, &key, host)?;
                         self.push(frame, value)?;
                     }
                     0x1d | 0x3c => {
@@ -3951,6 +4052,106 @@ mod tests {
                 .unwrap_err()
                 .kind,
             ErrorKind::Budget(_)
+        ));
+    }
+    #[test]
+    fn qualified_get_variable_preserves_modeled_scope_and_function_identity() {
+        let mut vm = setup();
+        execute(&mut vm, &function("class", &[0])).unwrap();
+        let class = vm.get(vm.root(), "class").unwrap();
+        let global_namespace = vm.object().unwrap();
+        let global_controls = vm.object().unwrap();
+        vm.set(vm.global(), "gfx", Value::Object(global_namespace))
+            .unwrap();
+        vm.set(global_namespace, "controls", Value::Object(global_controls))
+            .unwrap();
+        vm.set(global_controls, "Widget", class.clone()).unwrap();
+        let mut lookup = push(&[Value::string("gfx.controls.Widget")]);
+        lookup.push(0x1c);
+        let result = execute(&mut vm, &lookup).unwrap();
+        assert_eq!(result.stack, [class.clone()]);
+        assert_eq!(result.host_calls, 0);
+        // A target binding wins, including a missing inner member: no global restart.
+        let target_namespace = vm.object().unwrap();
+        let target_controls = vm.object().unwrap();
+        vm.set(vm.root(), "gfx", Value::Object(target_namespace))
+            .unwrap();
+        vm.set(target_namespace, "controls", Value::Object(target_controls))
+            .unwrap();
+        assert!(matches!(
+            execute(&mut vm, &lookup).unwrap_err().kind,
+            ErrorKind::Unsupported("qualified variable own data member profile")
+        ));
+        vm.set(target_controls, "Widget", class.clone()).unwrap();
+        assert_eq!(execute(&mut vm, &lookup).unwrap().stack, [class]);
+        vm.set(vm.root(), "gfx", Value::Undefined).unwrap();
+        assert!(matches!(
+            execute(&mut vm, &lookup).unwrap_err().kind,
+            ErrorKind::Unsupported("qualified variable primitive/missing segment")
+        ));
+    }
+    #[test]
+    fn qualified_get_variable_rejects_unproved_routes_without_getters() {
+        let mut vm = setup();
+        let getter = vm.native(99).unwrap();
+        vm.raw_member(
+            vm.global(),
+            text("gfx"),
+            Property::Accessor {
+                getter: Value::Object(getter),
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        let mut lookup = push(&[Value::string("gfx.controls.Widget")]);
+        lookup.push(0x1c);
+        let error = execute(&mut vm, &lookup).unwrap_err();
+        assert_eq!(
+            error.kind,
+            ErrorKind::Unsupported("qualified variable first-segment accessor")
+        );
+        assert_eq!(error.opcode, Some(0x1c));
+        assert_eq!(vm.host_calls, 0);
+        for path in [
+            "gfx..Widget",
+            "gfx/Widget",
+            "gfx:Widget",
+            "_global.gfx.Widget",
+            "gfx.É.Widget",
+            "this.Widget",
+        ] {
+            let mut code = push(&[Value::string(path)]);
+            code.push(0x1c);
+            assert!(matches!(
+                execute(&mut vm, &code).unwrap_err().kind,
+                ErrorKind::Unsupported(_)
+            ));
+        }
+        let frame = Frame {
+            stack: vec![],
+            registers: vec![],
+            scopes: vec![vm.root(), vm.global()],
+            pool: Arc::new(vec![]),
+            target: vm.root(),
+            this: Value::Object(vm.root()),
+            this_visible: true,
+            locals: vm.object().unwrap(),
+        };
+        assert!(matches!(
+            vm.get_variable(&frame, &text("gfx.controls.Widget"), &mut RejectHost)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Unsupported("qualified variable activation/With scope")
+        ));
+        // Qualified writes and CallFunction paths remain outside this read-only subset.
+        assert!(vm.simple_name(&text("gfx.controls.Widget")).is_err());
+        let parent = vm.object().unwrap();
+        vm.set(vm.root(), "__proto__", Value::Object(parent))
+            .unwrap();
+        assert!(matches!(
+            execute(&mut vm, &lookup).unwrap_err().kind,
+            ErrorKind::Unsupported("qualified variable modeled root/global profile")
         ));
     }
     #[test]
