@@ -269,3 +269,16 @@ EditText definitions (553 glyph placements). These counts are asset/source
 coverage; dynamic visibility, materials, gameplay and typography parity remain
 unverified. Evidence and outside-source licenses are linked from
 `docs/PROVENANCE.md` and the respective format documents.
+
+**VERIFIED (private dev.4 staging):** All nine focused CLI/startup/composition
+checks pass, including exact login RGBA identity with the independent adapter
+harness and two native preview frames on fresh Xvfb/llvmpipe. A case-sensitive
+preset assertion was corrected and that single check rerun; implementation was
+unchanged. The receipt retains this correction. All 262 packaged file hashes and
+the packaged version/Original checks pass; dependency notices cover114 crates
+with217 texts. Source `83e77def51cc1a7567a40b97969a648f8108fa19` was clean.
+The binary SHA-256 is
+`49cfb8b659c8e11239add5be3080825c609dc4d0c25ff13009cde1a8bd72c785`.
+Receipts: `evidence/build-0.1.0-dev.4-smoke.json` and
+`evidence/build-0.1.0-dev.4-package-validation.json`. This is private staging,
+not confirmed launcher publication, owner-device testing or retail parity.

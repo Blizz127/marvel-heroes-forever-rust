@@ -5,14 +5,16 @@ in progress. Login, world and combat remain incomplete; no retail parity is clai
 
 ## Private build
 
-`0.1.0-dev.3` is staged at
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.3/`.
-Its original asset readers and optional Vulkan image renderer passed focused
-startup, 716-image binding, raw-channel GPU identity and output-boundary checks.
-All 154 packaged files match manifest hashes; notices cover 61 selected crates.
+`0.1.0-dev.4` is staged at
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.4/`.
+Nine focused checks passed, including integrated saved-login GPU composition,
+byte identity with the renderer harness, bounded initializer rejection, private
+output boundaries and two native window frames. All 262 packaged files match
+manifest hashes; notices cover 114 selected crates with 217 texts. The clean
+source commit is `83e77de`; earlier private builds remain available.
 No Rust-client owner launcher channel is configured here. Staged is not published.
 
-`0.1.0-dev.4` is under integration: original saved-movie imports, static scenes,
+The current diagnostic includes original saved-movie imports, static scenes,
 shape/glyph geometry, plain editable-text layout, triangle rendering, native
 preview windows, bounded AVM1 execution, localization and StaticMesh readers.
 These are compatibility foundations, not a playable client or completed upgrades.
@@ -48,7 +50,7 @@ frontend, font, locale and mesh subsets already have source hash receipts.
 
 ## Next work and boundaries
 
-Finish the composed static preview integration, then execute actual frontend
+Integrate saved text glyphs into the composed preview, then execute actual frontend
 initialization and connect its display state, text and input behavior. Continue
 login/character/world/combat milestones after those dependencies are established.
 A fresh private build will include original code and dependency notices only.
