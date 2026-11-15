@@ -357,3 +357,11 @@ The inventory data remains outside git and packages; live VM state guards remain
 separate from static membership.
 [Reduced native trace](NATIVE_REDUCED_METADATA_TRACE.md) records actual offline
 package opens, local connection metadata and unchanged private inputs.
+
+[Localization preparation cache](LOCALIZED_LABEL_CACHE.md) records the original
+instance-local immutable cache, actual resource/VM comparisons and paired private
+measurements. That measurement harness also read glibc (LGPL-2.1-or-later)
+`/usr/include/time.h`, `/usr/include/x86_64-linux-gnu/bits/time.h`, and
+`/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h` for the process-CPU
+timing ABI/constant only; exact private hashes and limits are in the linked ledger.
+No glibc implementation was copied into product sources.
