@@ -646,3 +646,241 @@ mod tests {
         assert!(LocaleMetadata::parse_with_limits(&metadata(), limits).is_err());
     }
 }
+
+/// An explicitly selected locale and its string partitions. Unknown IDs remain
+/// None; a stored empty string remains Some with an empty text value.
+pub struct LocaleCatalog {
+    pub metadata: LocaleMetadata,
+    tables: Vec<StringTable>,
+    by_id: std::collections::HashMap<u64, (usize, usize)>,
+}
+
+impl LocaleCatalog {
+    pub fn new(metadata: LocaleMetadata, tables: Vec<StringTable>) -> std::io::Result<Self> {
+        if tables.len() > 64 {
+            return Err(locale_error("locale partition limit exceeded"));
+        }
+        let mut count = 0usize;
+        for table in &tables {
+            count = count
+                .checked_add(table.entries().len())
+                .ok_or_else(|| locale_error("locale entry count overflow"))?;
+        }
+        if count > 1_000_000 {
+            return Err(locale_error("combined locale entry limit exceeded"));
+        }
+        let mut by_id = std::collections::HashMap::new();
+        by_id
+            .try_reserve(count)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::OutOfMemory, e))?;
+        for (table_index, table) in tables.iter().enumerate() {
+            for (entry_index, entry) in table.entries().iter().enumerate() {
+                if by_id.insert(entry.id, (table_index, entry_index)).is_some() {
+                    return Err(locale_error("duplicate string ID across locale partitions"));
+                }
+            }
+        }
+        Ok(Self {
+            metadata,
+            tables,
+            by_id,
+        })
+    }
+
+    /// Paths are supplied by the caller. Serialized locale directory text is
+    /// metadata only and is never joined onto a filesystem path here.
+    pub fn open<P: AsRef<std::path::Path>>(
+        metadata_path: impl AsRef<std::path::Path>,
+        string_paths: impl IntoIterator<Item = P>,
+    ) -> std::io::Result<Self> {
+        let bytes = read_locale_file(metadata_path.as_ref())?;
+        let mut total_bytes = bytes.len();
+        let metadata = LocaleMetadata::parse(&bytes)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+        let mut tables = Vec::new();
+        for path in string_paths {
+            if tables.len() >= 64 {
+                return Err(locale_error("locale partition limit exceeded"));
+            }
+            let bytes = read_locale_file(path.as_ref())?;
+            total_bytes = total_bytes
+                .checked_add(bytes.len())
+                .ok_or_else(|| locale_error("locale byte sum overflow"))?;
+            if total_bytes > 256 * 1024 * 1024 {
+                return Err(locale_error("combined locale file byte limit exceeded"));
+            }
+            tables
+                .push(StringTable::parse(&bytes).map_err(|error| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, error)
+                })?);
+        }
+        Self::new(metadata, tables)
+    }
+
+    pub fn get(&self, id: u64) -> Option<&StringEntry> {
+        let &(table, entry) = self.by_id.get(&id)?;
+        self.tables.get(table)?.entries().get(entry)
+    }
+    pub fn len(&self) -> usize {
+        self.by_id.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
+    }
+    pub fn tables(&self) -> &[StringTable] {
+        &self.tables
+    }
+}
+
+/// Directly serialized UI localization fields, resolved through existing
+/// schema-aware prototype decoding. Absent fields are not inherited or guessed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UiKeyBinding {
+    pub key: String,
+    pub member: String,
+    pub serialized_parent_reference: Option<u64>,
+    pub display_text_id: Option<u64>,
+    pub tooltip_text_id: Option<u64>,
+}
+
+impl UiKeyBinding {
+    /// Resolves the exact archive identifier UI/LocalizedInfo/{key}.prototype.
+    /// None means no such key; Some with an absent field means its value was not
+    /// serialized directly. A present ID may still be missing from the locale.
+    pub fn read(
+        reader: &mut crate::prototype_catalog::PrototypeReader<'_>,
+        key: &str,
+    ) -> std::io::Result<Option<Self>> {
+        validate_ui_key(key)?;
+        let member = format!("Calligraphy/UI/LocalizedInfo/{key}.prototype");
+        let prototype = match reader.read_member(&member) {
+            Ok(prototype) => prototype,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let mut result = Self {
+            key: key.to_owned(),
+            member,
+            serialized_parent_reference: prototype.header.reference,
+            display_text_id: None,
+            tooltip_text_id: None,
+        };
+        for group in &prototype.groups {
+            for field in &group.simple_fields {
+                let schema = reader
+                    .blueprint(field.schema_blueprint_id)
+                    .ok_or_else(|| locale_error("localized UI field schema is unavailable"))?;
+                let declaration = schema
+                    .members
+                    .iter()
+                    .find(|item| item.id == field.id)
+                    .ok_or_else(|| locale_error("localized UI field declaration is unavailable"))?;
+                let target = match declaration.name.as_str() {
+                    "DisplayText" => &mut result.display_text_id,
+                    "TooltipText" => &mut result.tooltip_text_id,
+                    _ => continue,
+                };
+                if group.copy_number != 0 || schema.runtime_binding != "UILocalizedInfoPrototype" {
+                    return Err(locale_error("unsupported localized UI field ownership"));
+                }
+                let crate::calligraphy::prototype::FieldData::Simple(
+                    crate::calligraphy::prototype::Value::String(id),
+                ) = field.data
+                else {
+                    return Err(locale_error("localized UI text field is not a string ID"));
+                };
+                if target.replace(id).is_some() {
+                    return Err(locale_error("ambiguous duplicate localized UI text field"));
+                }
+            }
+        }
+        Ok(Some(result))
+    }
+}
+
+fn validate_ui_key(key: &str) -> std::io::Result<()> {
+    if key.is_empty()
+        || key.len() > 4096
+        || key.chars().any(|c| c.is_control() || "\\:".contains(c))
+        || key
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(locale_error("invalid localized UI key"));
+    }
+    Ok(())
+}
+
+fn read_locale_file(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    const MAX: usize = 64 * 1024 * 1024;
+    let file = std::fs::File::open(path)?;
+    let len = usize::try_from(file.metadata()?.len())
+        .map_err(|_| locale_error("locale file size overflow"))?;
+    if len > MAX {
+        return Err(locale_error("locale file byte limit exceeded"));
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(len)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::OutOfMemory, e))?;
+    file.take(MAX as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > MAX {
+        return Err(locale_error("locale file grew past byte limit"));
+    }
+    Ok(bytes)
+}
+
+fn locale_error(message: &'static str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message)
+}
+
+#[cfg(test)]
+mod catalog_tests {
+    use super::*;
+    fn metadata() -> LocaleMetadata {
+        LocaleMetadata::parse(&[b'L', b'O', b'C', 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()
+    }
+    fn table(id: u64, text: &str) -> StringTable {
+        let mut bytes = b"STR\x02\x01\x00".to_vec();
+        bytes.extend_from_slice(&id.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&0u16.to_le_bytes());
+        bytes.extend_from_slice(&22u32.to_le_bytes());
+        bytes.extend_from_slice(text.as_bytes());
+        bytes.push(0);
+        StringTable::parse(&bytes).unwrap()
+    }
+    #[test]
+    fn catalog_keeps_empty_and_missing_distinct_and_rejects_cross_partition_collisions() {
+        let catalog =
+            LocaleCatalog::new(metadata(), vec![table(0, ""), table(7, "example")]).unwrap();
+        assert_eq!(catalog.len(), 2);
+        assert!(!catalog.is_empty());
+        assert_eq!(catalog.get(0).unwrap().default.text, "");
+        assert_eq!(catalog.get(7).unwrap().default.text, "example");
+        assert!(catalog.get(8).is_none());
+        assert!(LocaleCatalog::new(metadata(), vec![table(7, "a"), table(7, "b")]).is_err());
+        let empty = StringTable::parse(b"STR\x02\x00\x00").unwrap();
+        assert!(LocaleCatalog::new(metadata(), vec![empty; 65]).is_err());
+    }
+    #[test]
+    fn ui_key_is_an_exact_bounded_archive_identifier() {
+        for key in ["Frontend/Example", "Nested/Example_Label"] {
+            validate_ui_key(key).unwrap();
+        }
+        for key in [
+            "",
+            "/Example",
+            "../Example",
+            "Frontend/./Example",
+            "Frontend//Example",
+            "C:Example",
+            "Frontend\\Example",
+            "Example\0",
+        ] {
+            assert!(validate_ui_key(key).is_err(), "{key:?}");
+        }
+        assert!(validate_ui_key(&"x".repeat(4097)).is_err());
+    }
+}
