@@ -1190,6 +1190,46 @@ unsupported arguments, overlapping definition offsets in different programs,
 and call-origin restoration after cross-program accessor lookup. The integrating
 frontend still owns export association and later instance construction.
 
+## Optional verified attached-name inventory
+
+`install_attached_name_profile(Arc<NativeNameProfile>)` installs one immutable,
+authenticated owner-private profile before any program registration. The VM
+re-exports the parser and classification types from its public
+`attached_name_profile` module; the crate root should re-export that same module,
+not compile a second copy. The integrating loader owns trusted expected hashes,
+actual executable verification and the SHA-256 callback. No extracted inventory
+is embedded in the VM, source tests or packages. Without this optional profile,
+the preceding exact-name slice remains unchanged.
+
+With a profile, the concrete case-3 bridge admits exact nonstandard, nonunderscore
+ASCII names through ordinary handling. Standard IDs and unsupported names still
+reject; membership is not a native property implementation. General writes also
+explicitly reject the `on` prefix and rendererString/rendererFloat/disableBatching
+pre-write routes. The former whitelist never admitted these hooks. Homogeneous
+case-3 parent/lifetime assumptions, storage/child/prototype ordering, accessors,
+resolver insertion history, readonly behavior and the native context gates remain.
+
+The full private builtin inventory is consulted separately from the Rust object
+maps. A missing native MovieClip own key stops before walking to Object.prototype,
+so a script-added ancestor key cannot accidentally replace an omitted native
+function. Matching live storage/child/script own entries still take precedence.
+Only verified baseline absence after the existing native identity, constructor,
+parent and resolver checks becomes `AttachedMember::Missing`. A known native or
+reserved key that is still unmodeled remains unsupported. These facts do not
+turn every absent Rust key into native absence, and do not change global lookup
+or deferred builtin behavior.
+
+**OBSERVED:** three focused integration checks cover installation phase, broader
+ordinary reads/writes, standard/underscore/Unicode boundaries, unsupported child
+shadowing, own Undefined, native-member omission before ancestor lookup, accessor
+and deleted-resolver guards, and unsupported pre-write hooks. They use generated
+synthetic inventory names. Six parser tests cover bounded authentication and
+shape checks. The separate private actual-profile/startup diagnostic is recorded
+with its own source and executable hashes; synthetic tests are not native parity.
+The native theorem and full source/rights ledger are in
+`ATTACHED_NAME_CLASSIFICATION.md`, with private receipts under
+`rea-attached-name-classification/` and `rea-prototype-general-classification/`.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established

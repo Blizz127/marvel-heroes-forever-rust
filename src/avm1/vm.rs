@@ -9,6 +9,8 @@ use std::sync::Arc;
 mod attached;
 #[path = "attached_events.rs"]
 mod attached_events;
+#[path = "../attached_name_profile.rs"]
+pub mod attached_name_profile;
 #[path = "attached_textfield.rs"]
 mod attached_textfield;
 #[path = "deferred.rs"]
@@ -21,6 +23,10 @@ pub use attached::{
     AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
+pub use attached_name_profile::{
+    AttachedNameClass, BaselineMembership, BaselineOwners, ExpectedProfile, NativeNameProfile,
+    ProfileError, ReservedReadName, UnsupportedName,
+};
 pub use attached_textfield::{
     AttachedTextFieldId, AttachedTextFieldInfo, AttachedTextFieldSource, AttachedTextFieldSpec,
     AttachedTextFieldStorageId, TextFieldMember, TextFieldMemberRequest, TextFieldPrototypeId,
@@ -451,6 +457,7 @@ pub struct Vm {
     array_prototype: Option<ObjectId>,
     class_bases: BTreeMap<ObjectId, ClassBase>,
     attached: Vec<attached::AttachedClip>,
+    attached_name_profile: Option<Arc<NativeNameProfile>>,
     attached_targets: BTreeMap<DisplayTargetId, AttachedTarget>,
     text_fields: Vec<attached_textfield::AttachedTextField>,
     attached_child_entries: usize,
@@ -490,6 +497,7 @@ impl Vm {
             array_prototype: None,
             class_bases: BTreeMap::new(),
             attached: Vec::new(),
+            attached_name_profile: None,
             attached_targets: BTreeMap::new(),
             text_fields: Vec::new(),
             attached_child_entries: 0,

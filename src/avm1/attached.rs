@@ -1,10 +1,11 @@
 //! Explicit live source MovieClip owners. No Scene IDs or implicit attachment.
 //! Native evidence and profile limits are recorded in ATTACHED_MOVIECLIP.md.
 use super::{
-    AttachedEventState, AttachedTextFieldId, ErrorKind, Kind, ObjectId, Property, Result, Text,
-    Value, Vm, text,
+    AttachedEventState, AttachedNameClass, AttachedTextFieldId, BaselineMembership, BaselineOwners,
+    ErrorKind, Kind, NativeNameProfile, ObjectId, Property, Result, Text, Value, Vm, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AttachedClipId(pub usize);
@@ -101,6 +102,21 @@ pub(super) struct AttachedClip {
 }
 
 impl Vm {
+    /// Install an authenticated owner-private original native inventory once,
+    /// before compiling scripts. This supplies membership facts only; all live
+    /// instance, state, lookup and native-callback guards remain independent.
+    pub fn install_attached_name_profile(&mut self, profile: Arc<NativeNameProfile>) -> Result<()> {
+        if self.attached_name_profile.is_some()
+            || !self.code.is_empty()
+            || self.current_target.is_some()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached name profile installation phase",
+            ));
+        }
+        self.attached_name_profile = Some(profile);
+        Ok(())
+    }
     pub(super) fn check_attached(&self, id: AttachedClipId) -> Result<()> {
         if id.0 < self.attached.len() {
             Ok(())
@@ -384,6 +400,17 @@ impl Vm {
         Ok(())
     }
     pub(super) fn attached_member_name(&self, key: &Text) -> Result<()> {
+        if let Some(profile) = &self.attached_name_profile {
+            return match profile.classify_attached_name(key) {
+                AttachedNameClass::Ordinary => Ok(()),
+                AttachedNameClass::Standard(_) => self.fail(ErrorKind::Unsupported(
+                    "attached standard native member requires its native implementation",
+                )),
+                AttachedNameClass::UnsupportedName(_) => self.fail(ErrorKind::Unsupported(
+                    "attached native member-name profile",
+                )),
+            };
+        }
         // Exact selected names are absent from the original standard-member
         // map; both possible native flag29 routes fall through ordinary handling.
         // This is not an underscore heuristic or an arbitrary host-classifier bit.
@@ -471,11 +498,33 @@ impl Vm {
                     }
                 });
             }
+            // The partial Rust MovieClip prototype does not contain all native
+            // functions. A known omitted own native member must stop HERE,
+            // before an Object.prototype script addition could shadow it.
+            if Some(id) == self.movie_clip_prototype {
+                if let Some(profile) = &self.attached_name_profile {
+                    if matches!(profile.native_baseline_membership(key),
+                        BaselineMembership::Stored(owners) if owners.contains(BaselineOwners::MOVIECLIP))
+                    {
+                        return self.fail(ErrorKind::Unsupported(
+                            "attached omitted native MovieClip member",
+                        ));
+                    }
+                }
+            }
             cursor = object.prototype;
             depth += 1;
         }
-        if native_clip_seen
-            && ![
+        if native_clip_seen {
+            if let Some(profile) = &self.attached_name_profile {
+                return match profile.native_baseline_membership(key) {
+                    BaselineMembership::Absent => Ok(PrototypeMember::Missing),
+                    _ => self.fail(ErrorKind::Unsupported(
+                        "attached missing builtin prototype member",
+                    )),
+                };
+            }
+            if ![
                 "Function",
                 "gfx",
                 "onLoad",
@@ -487,10 +536,11 @@ impl Vm {
             ]
             .iter()
             .any(|name| key.as_ref() == text(name).as_ref())
-        {
-            return self.fail(ErrorKind::Unsupported(
-                "attached missing builtin prototype member",
-            ));
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached missing builtin prototype member",
+                ));
+            }
         }
         Ok(PrototypeMember::Missing)
     }
@@ -588,6 +638,15 @@ impl Vm {
     ) -> Result<AttachedWrite> {
         self.check_attached(id)?;
         self.attached_member_name(&key)?;
+        // General ordinary names are not proof that the native pre-write hook
+        // is inert. These routes were absent from the earlier exact-name slice.
+        if key.starts_with(&[b'o' as u16, b'n' as u16])
+            || ["rendererString", "rendererFloat", "disableBatching"]
+                .iter()
+                .any(|name| key.as_ref() == text(name).as_ref())
+        {
+            return self.fail(ErrorKind::Unsupported("attached native pre-write hook"));
+        }
         self.check_value(&value)?;
         let storage = self.ensure_attached_storage(id)?;
         self.attached_resolver_guard(storage)?;
@@ -642,6 +701,158 @@ mod tests {
     use super::super::{Limits, RejectHost};
     use super::*;
     use std::sync::Arc;
+
+    fn synthetic_profile() -> Arc<NativeNameProfile> {
+        // Synthetic inventory only; real owner-private names never enter tests.
+        let mut data = format!(
+            "MHF-ATTACHED-NAMES\t1\nbuild\t1.52.0.1700\nsource-sha256\t{}\ncounts\t117\t44\t9\n",
+            "ab".repeat(32)
+        );
+        for id in 0..117 {
+            let alias = id <= 21 || (110..=115).contains(&id);
+            data.push_str(&format!(
+                "standard\t{id}\t{}\t{}native{id:03}\n",
+                u8::from(alias),
+                if alias { "_" } else { "" }
+            ));
+        }
+        let mut mc = vec!["constructor".to_owned(), "__proto__".to_owned()];
+        mc.extend((0..42).map(|id| format!("mc{id:03}")));
+        let mut object = vec!["constructor".to_owned()];
+        object.extend((0..8).map(|id| format!("obj{id:03}")));
+        for (role, mut names) in [("movieclip", mc), ("object", object)] {
+            names.sort();
+            for name in names {
+                data.push_str(&format!("{role}\t{name}\n"));
+            }
+        }
+        Arc::new(
+            NativeNameProfile::parse_verified(
+                data.as_bytes(),
+                &super::super::ExpectedProfile {
+                    build: "1.52.0.1700",
+                    source_sha256: [0xab; 32],
+                    inventory_sha256: [0x51; 32],
+                },
+                |_| Ok([0x51; 32]),
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn verified_name_profile_keeps_live_shadowing_and_native_boundaries() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.set_attached_children(
+            root,
+            vec![AttachedChild::Unsupported {
+                name: text("unsupportedChild"),
+                target: DisplayTargetId(2),
+            }],
+        )
+        .unwrap();
+        assert!(vm.read_attached_member(root, "ordinaryName").is_err());
+        vm.install_attached_name_profile(synthetic_profile())
+            .unwrap();
+        assert!(
+            vm.install_attached_name_profile(synthetic_profile())
+                .is_err()
+        );
+        assert_eq!(
+            vm.read_attached_member(root, "ordinaryName").unwrap(),
+            AttachedMember::Missing
+        );
+        assert!(vm.read_attached_member(root, "unsupportedChild").is_err());
+        vm.write_attached_member(root, "unsupportedChild", Value::Undefined)
+            .unwrap();
+        assert_eq!(
+            vm.read_attached_member(root, "unsupportedChild").unwrap(),
+            AttachedMember::Present(Value::Undefined)
+        );
+        for key in ["native022", "_unmodeled", "é"] {
+            assert!(vm.read_attached_member(root, key).is_err());
+            assert!(
+                vm.write_attached_member(root, key, Value::Undefined)
+                    .is_err()
+            );
+        }
+        for key in [
+            "onPress",
+            "onUnrecognized",
+            "rendererString",
+            "rendererFloat",
+            "disableBatching",
+        ] {
+            assert!(
+                vm.write_attached_member(root, key, Value::Undefined)
+                    .is_err()
+            );
+        }
+        assert_eq!(
+            vm.read_attached_member(root, "onUnrecognized").unwrap(),
+            AttachedMember::Missing
+        );
+    }
+
+    #[test]
+    fn verified_name_profile_does_not_skip_omitted_native_own_members() {
+        let mut vm = vm();
+        vm.install_attached_name_profile(synthetic_profile())
+            .unwrap();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.set_attached_children(root, vec![]).unwrap();
+        let object_prototype = vm.object_prototype.unwrap();
+        vm.set(
+            object_prototype,
+            "mc000",
+            Value::string("must not shadow omitted native own key"),
+        )
+        .unwrap();
+        assert!(matches!(
+            vm.read_attached_member(root, "mc000").unwrap_err().kind,
+            ErrorKind::Unsupported("attached omitted native MovieClip member")
+        ));
+        vm.write_attached_member(root, "mc000", Value::Undefined)
+            .unwrap();
+        assert_eq!(
+            vm.read_attached_member(root, "mc000").unwrap(),
+            AttachedMember::Present(Value::Undefined)
+        );
+        vm.raw_member(
+            object_prototype,
+            text("ordinaryGetter"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        assert!(vm.read_attached_member(root, "ordinaryGetter").is_err());
+        vm.raw_member(
+            object_prototype,
+            text("__resolve"),
+            Property::Data(Value::Undefined),
+            0,
+        )
+        .unwrap();
+        vm.delete_member(object_prototype, &text("__resolve"))
+            .unwrap();
+        assert!(vm.read_attached_member(root, "ordinaryMissing").is_err());
+    }
+
+    #[test]
+    fn verified_name_profile_installation_rejects_after_code_registration() {
+        let mut vm = vm();
+        vm.register(Arc::new(Program::parse(&[0]).unwrap()))
+            .unwrap();
+        assert!(
+            vm.install_attached_name_profile(synthetic_profile())
+                .is_err()
+        );
+        assert!(vm.attached_name_profile.is_none());
+    }
 
     fn vm() -> Vm {
         let mut vm = Vm::new(15, Limits::default()).unwrap();
