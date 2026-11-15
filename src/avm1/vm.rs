@@ -302,6 +302,8 @@ enum Flow {
 
 pub struct Vm {
     limits: Limits,
+    movie_version: u8,
+    loaded_movie_targets: BTreeMap<ObjectId, u8>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
     objects: Vec<Object>,
@@ -313,6 +315,7 @@ pub struct Vm {
     depth: usize,
     current: Option<(usize, u8)>,
     current_code: Option<CodeId>,
+    current_target: Option<ObjectId>,
     global: ObjectId,
     root: ObjectId,
     object_constructor: Option<ObjectId>,
@@ -322,6 +325,8 @@ impl Vm {
     pub fn new(version: u8, limits: Limits) -> Result<Self> {
         let mut vm = Self {
             limits,
+            movie_version: version,
+            loaded_movie_targets: BTreeMap::new(),
             code: Vec::new(),
             code_bytes: 0,
             objects: Vec::new(),
@@ -333,6 +338,7 @@ impl Vm {
             depth: 0,
             current: None,
             current_code: None,
+            current_target: None,
             global: ObjectId(0),
             root: ObjectId(0),
             object_constructor: None,
@@ -359,6 +365,19 @@ impl Vm {
     }
     pub fn root(&self) -> ObjectId {
         self.root
+    }
+    /// Integration must establish that this target belongs to a successfully
+    /// loaded movie. Failed/empty definitions and arbitrary objects do not qualify.
+    /// Every registered program executed in this context must share this profile.
+    pub fn bind_loaded_movie_target(&mut self, target: ObjectId, header_version: u8) -> Result<()> {
+        self.check_object(target)?;
+        if header_version != self.movie_version {
+            return self.fail(ErrorKind::Unsupported(
+                "loaded movie target version mismatch",
+            ));
+        }
+        self.loaded_movie_targets.insert(target, header_version);
+        Ok(())
     }
     pub fn instruction_count(&self) -> usize {
         self.instructions
@@ -1113,6 +1132,7 @@ impl Vm {
         self.depth = 0;
         self.current = None;
         self.current_code = None;
+        self.current_target = None;
     }
     pub fn execute(
         &mut self,
@@ -1192,12 +1212,13 @@ impl Vm {
         if self.depth >= self.limits.call_depth {
             return self.fail(ErrorKind::Budget("function call depth"));
         }
-        let caller = (self.current, self.current_code);
+        let caller = (self.current, self.current_code, self.current_target);
         self.depth += 1;
         let result = self.invoke_inner(callable, this, args, host);
         self.depth -= 1;
         self.current = caller.0;
         self.current_code = caller.1;
+        self.current_target = caller.2;
         result
     }
     fn invoke_inner(
@@ -1560,6 +1581,7 @@ impl Vm {
         while let Some(instruction) = program.instructions.get(pc) {
             self.current = Some((instruction.span.offset, instruction.opcode));
             self.current_code = Some(code);
+            self.current_target = Some(frame.target);
             if self.instructions >= self.limits.instructions {
                 return self.fail(ErrorKind::Budget("instructions"));
             }

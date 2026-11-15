@@ -12,6 +12,15 @@ returns a stable `CodeId`. Functions retain that ID and their defining source
 offset, so additional movies can register after execution starts. Code is shared
 immutably; function definitions do not deep-copy code or borrow a caller's stack.
 
+`bind_loaded_movie_target(target, header_version)` records an integration-validated
+successfully loaded movie target. It rejects invalid IDs and a version differing
+from the VM's profile. The integration must also validate every registered movie's
+header; registering raw Program bytes cannot establish that relationship. Failed
+loads, empty definitions and arbitrary objects must not be bound. Function bodies
+retain their captured movie target separately from `this`, and nested invocation
+restores the caller target. This metadata alone does not yet select a property-flag
+default; the native header-producer evidence remains required.
+
 `execute(code, target, host)` runs an action stream. `call(callable, this, args,
 host)` invokes an already created function. `Execution` reports the return value,
 remaining root stack, instruction count and host-call count. `get`, `set`,
