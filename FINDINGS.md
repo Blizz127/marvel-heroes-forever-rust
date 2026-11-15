@@ -79,8 +79,15 @@ No renderer defaults follow. Receipt:
 `evidence/scale9-texture-load/final-index.json`, SHA-256
 `df9afdbbddf04acaad47ff708c40516daee12225a6cc10008dd4d0790dbc63f2`.
 
-Private dev19 staging follows these focused checks. Zero Forever upgrades are
-finished, and all inherited service/access holds remain in force.
+**VERIFIED private staging, 13:04 UTC:** `builds/0.1.0-dev.19` contains 397
+original-only selected files. Every manifest size/hash and the complete file set
+match; packaged version and Original-preset readback pass. Clean package source
+is `b9943ef77b059b8ea80bf1b01885241eb23c6ad9`, differing from tested code only
+in documentation. Receipt:
+`evidence/build-0.1.0-dev.19-package-validation.json`. Coordinator intake is
+queued and supersedes dev18's Rust diagnostic only. Staging does not establish
+publication or owner-device validation. Zero Forever upgrades are finished;
+all inherited service/access holds remain in force.
 
 **VERIFIED saved class-default preparation:** explicit archive namespaces and
 import bindings now produce checked class/default identities, parent chains,

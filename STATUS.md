@@ -1,25 +1,25 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 12:50 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:04 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.19`.
 
 ## Latest private diagnostic
 
-**VERIFIED:** `0.1.0-dev.18` is staged under
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.18/`.
-The window-enabled offline build, 23 CLI/image checks and isolated two-frame
-Rust-window startup pass. All 389 packaged file sizes/hashes and the complete
+**VERIFIED:** `0.1.0-dev.19` is staged under
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.19/`.
+The window-enabled offline build, 40 CLI/image checks and isolated two-frame
+Rust-window startup pass. All 397 packaged file sizes/hashes and the complete
 file set match; packaged version and Original-preset readback pass. The clean
-package source is `ae9dae0323e40a92d17b59827b0b923197bfc884`; tested code is
-`e9388f34c5a7a5ed4e2fa324abc846a301ab175e`, with documentation-only differences.
+package source is `b9943ef77b059b8ea80bf1b01885241eb23c6ad9`; tested code is
+`4bc1827a07e983ecbd724bf26066f249844c7191`, with documentation-only differences.
 Binary SHA-256:
-`4e8e589a1ee9b8a957a58dd8e62055796127e0b6f603db63594929880f4f01cb`.
+`da50b5512ecbde1e5a0d84de789253d3971ade5ac5de91d6ee6c46389c4010d7`.
 
-Receipts are `evidence/build-0.1.0-dev.18-smoke.json`,
-`evidence/dev18-native-html/receipt.json` and
-`evidence/build-0.1.0-dev.18-package-validation.json`. Dependency notices cover
+Receipts are `evidence/build-0.1.0-dev.19-smoke.json`,
+`evidence/dev19-native-html/receipt.json` and
+`evidence/build-0.1.0-dev.19-package-validation.json`. Dependency notices cover
 121 selected packages and 231 notice texts. Coordinator intake is queued;
 publication and owner-device validation remain unconfirmed. Staged is not
 published. Earlier private builds remain available.
@@ -37,7 +37,8 @@ notices; no retail executable, game assets, captures or extracted data.
   `evidence/alienware-full-pin-verification-20261115T1050Z.json`.
 - **VERIFIED asset increments:** both selected Entry/FrontEnd Model exports
   now have complete serialized framing. Four UClass records match all 4,367
-  bytes, including exact terminal default references. Typed package, texture,
+  bytes, including exact terminal default references. Ten ModelComponents and
+  four class/default intakes retain explicit links and tag origins. Typed package, texture,
   shape/font, Calligraphy, static/skeletal mesh and animation components retain
   their documented unsupported fields and runtime conditions.
 - **OBSERVED controlled original execution:** 452 manager initializers complete.
@@ -46,7 +47,7 @@ notices; no retail executable, game assets, captures or extracted data.
   name in that replay remain explicitly supplied diagnostic inputs. The newly
   integrated Mouse factory now builds the bounded native graph and reaches an
   explicit default-rejecting user-event host boundary. No cursor effect is
-  implemented; the combined dev19 build has not yet run.
+  implemented; the next controlled replay reaches that rejecting boundary.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions
@@ -70,7 +71,7 @@ and the component ledgers linked from [PROVENANCE.md](docs/PROVENANCE.md).
 Continue the actual Mouse user-event handler path, fresh target and root
 construction, default application, ModelComponent linkage and native Scale9
 geometry/resource inputs. Saved class-default provenance and bounded source-path
-staging are integrated for dev19. Then connect the complete display lifecycle to the
+staging are included in dev19. Then connect the complete display lifecycle to the
 persistent renderer and input host. A callback stub, guessed default or synthetic
 check must not be presented as original startup success.
 
