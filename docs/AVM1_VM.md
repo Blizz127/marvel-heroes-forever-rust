@@ -2120,3 +2120,36 @@ incorrectly expected executed Push strings to consume no string budget; its
 assertion now preserves and checks that normal charge while requiring no new
 object/property allocation. No runtime behavior changed for that correction.
 Original manager replay is a separate evidence step, not implied by these tests.
+
+### Original manager Rectangle execution and Mouse frontier
+
+OBSERVED controlled run on frozen `6877965`: the same 452 selected initializers
+complete in 49,244 instructions. The original frame advances to 290 instructions,
+constructs Rectangle at 168768 and assigns screenRect at 168769. Rectangle15918
+has supported x/y/width/height reads all positive zero, constructor15916 and
+prototype15917. The three separate Points are movieSize15915,
+m_halfResDiff15919 and m_uiScale15920, sharing constructor15913/prototype15914.
+The retained namespace tokens publish the corresponding cached constructors.
+
+The next explicit stop is original `Mouse.hide()` CallMethod6391 in CodeId452,
+argc0, after ordinary GetVariable(Mouse)6385. The minimal diagnostic environment
+cannot produce an object receiver there. This is not evidence that native Mouse
+is absent, nor evidence that its callback, result or cursor effects ran. Those
+require the actual deferred Mouse and native host contract.
+
+Only the explicit installer changes from Point-only to Point/Rectangle relative
+to increment9. The supplied raw words/name, saved children, minimal other globals,
+real Selection/class-registry host and chosen initializer-before-frame ordering
+remain unchanged. New initial-prototype APIs, SavedEnvironment, visibility or
+Stage setup were not adopted. Historical initial_prototype_selection remains
+None. No retry, native callback stub, manual cursor effect or lifecycle completion
+is asserted. The receipt's inherited no-new-globals label must be read relative
+to increment9, alongside its explicit geometry setup; it does not erase that
+setup or imply a complete native global environment.
+
+Private `avm1-attached-manager-frame-action-increment10/receipt.json` SHA-256:
+`7a2347e0d81fb9e9d6e45297e13723e4c47ef7acc742d82a9b1fe6bc7e96f73d`.
+Its source-only `static-context/receipt.json`, SHA-256
+`56ef566a9e6d16e5adb2398983b4bd624e5e8106e78ee4646bcd56181d712605`,
+checks all 26 frozen source entries and exact original call operands. Later
+cursor properties in that source remain separate, unexecuted dependencies.
