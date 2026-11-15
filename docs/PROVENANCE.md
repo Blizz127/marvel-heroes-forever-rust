@@ -225,6 +225,10 @@ captured closures remain outside the admitted conversion profile.
 and [MovieClip callback](REA_MOVIECLIP_CONSTRUCTOR.md) register additional bounded
 REA evidence from the owned executable. The callback alone does not establish
 native allocation, and the lifecycle findings do not establish complete startup.
+[Vista camera and browser surfaces](FRONTEND_VISTA.md) records exact saved camera
+and sequence bindings and distinguishes browser replacement textures from the
+unresolved Vista output. Camera math, active view and target dimensions remain
+separate contracts.
 [Skeletal mesh geometry](SKELETAL_MESH.md) records the exact read-only MIT UEViewer
 source files, owner asset hashes and independent raw-field checks used for the
 original bounded skeletal reader. Animation and skinning are separate work.

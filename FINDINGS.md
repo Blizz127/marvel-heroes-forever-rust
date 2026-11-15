@@ -404,3 +404,24 @@ source is the preceding findings prose. Binary identity is unchanged. Receipt:
 documentation and dependency notices, with no retail binaries or game assets.
 Publication and owner-device validation remain unconfirmed; the actionable Rust
 diagnostic intake was queued for the coordinator, superseding dev.6 only.
+
+## Dev.8 frontend runtime progress
+
+**OBSERVED (integrated original manager, 2026-11-15):** Native ASCII hash ordering
+and the three hidden InitObject properties advance the diagnostic to 447 of 452
+initializers and 49,205 instructions. One Selection listener remains; no class
+registration has yet run. The next record starts at source2055321 and stops at
+GetVariable source2055355 on the qualified class name `gfx.controls.ListItemRenderer`.
+The session halts there. Root CLI CodeId448 is session-local. Thirty-one focused
+VM tests pass; this is not native-client execution or full frontend startup.
+Receipt: `evidence/dev8-integration/initialization-native-hash.json`.
+
+**VERIFIED (resource preparation):** The new bounded localized-prototype resolver
+preserves explicit parent copying and local zero overrides. A frozen independent
+raw oracle matches all 27 selected UI keys' 54 references and origins. A separate
+raw locale scan matches all 54 resulting text strings. The Help button inherits
+its zero tooltip from the default layer; the other 26 explicitly store child zero.
+Twelve boundary cases pass. Native callback installation, VM result allocation and
+actual label updates remain separate work. Receipt:
+`evidence/localized-prototype-check/verification.json`; exact scope and source
+ledger are in `docs/LOCALIZED_PROTOTYPE_FIELDS.md`.
