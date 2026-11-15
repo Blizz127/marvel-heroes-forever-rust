@@ -5,6 +5,7 @@ use super::library::{MovieLibrary, Resolution, SymbolBinding};
 use super::{AssetLocation, AssetSet, ImageBinding, ImageResolution};
 use crate::gfx::edit_layout::{self, EditLayoutError, EditTextLayout};
 use crate::gfx::glyphs::{FontIdentity, GlyphMesh, GlyphOutline, OutlineLimits, ResolvedFont};
+use crate::gfx::html_layout::{self, HtmlFont, HtmlLayout, HtmlLayoutError};
 use crate::gfx::scene::{
     ActionNode, Affine, DefinitionRef, MovieId, NodeId, OpaqueNode, Scene, SceneNode, TagRef,
 };
@@ -68,6 +69,7 @@ pub enum PreparationStage {
     FontBinding,
     FontDecode,
     TextLayout,
+    HtmlLayout,
     GlyphDecode,
     GlyphTessellation,
     ShapeDecode,
@@ -187,14 +189,29 @@ pub struct TextGlyph {
     pub color: Option<[u8; 4]>,
 }
 
+/// Exact symbols verified along the same declared import route as the font.
+/// The complete hop chain remains in TextAsset.font_binding; no global symbol
+/// search, face-name normalization or fallback supplies these strings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HtmlFontRoute {
+    pub source_import_symbol: String,
+    pub target_export_symbol: String,
+    pub resolved_font: FontIdentity,
+}
+
 #[derive(Clone, Debug)]
 pub struct TextAsset {
     pub definition: DefinitionRef,
     pub field: Option<EditText>,
     pub font_binding: Option<FontBinding>,
-    /// Original saved initial plain text only. No localization or VM updates.
+    /// Saved initial geometry, from the unchanged plain path or html_layout.
+    /// HTML glyph source indices address original markup, never stripped text.
     pub layout: Option<EditTextLayout>,
     pub layout_error: Option<EditLayoutError>,
+    /// Full source-preserving HTML record including exact rational geometry.
+    pub html_layout: Option<HtmlLayout>,
+    pub html_layout_error: Option<HtmlLayoutError>,
+    pub html_font_route: Option<HtmlFontRoute>,
     /// Aligned with layout.glyphs; failed geometry remains a referenced cache entry.
     pub glyphs: Vec<TextGlyph>,
     pub issues: Vec<PreparationIssue>,
@@ -384,6 +401,74 @@ pub fn prepare(
         });
     }
     Ok(builder.result)
+}
+
+fn verified_html_font_route(
+    library: &MovieLibrary,
+    fonts: &[FontAsset],
+    binding: &FontBinding,
+) -> Result<HtmlFontRoute, HtmlLayoutError> {
+    let font_index = binding
+        .font
+        .ok_or(HtmlLayoutError::UnresolvedFont(binding.character_id))?;
+    let target = fonts
+        .get(font_index)
+        .ok_or(HtmlLayoutError::Invalid("font cache index outside assets"))?;
+    if target.font.is_none() {
+        return Err(HtmlLayoutError::UnresolvedFont(binding.character_id));
+    }
+    let Some(first) = binding.import_chain.first() else {
+        return Err(HtmlLayoutError::Unsupported(
+            "HTML font without a declared import/export route",
+        ));
+    };
+    let mut current = (binding.movie_id, binding.character_id);
+    for hop in &binding.import_chain {
+        if (hop.source_movie, hop.local_character_id) != current
+            || library.binding(current.0, current.1) != Some(hop)
+        {
+            return Err(HtmlLayoutError::Invalid(
+                "HTML font import-hop identity differs",
+            ));
+        }
+        let Resolution::Resolved {
+            movie,
+            character_id,
+            ..
+        } = hop.resolution
+        else {
+            return Err(HtmlLayoutError::UnresolvedFont(binding.character_id));
+        };
+        let entry = library
+            .entry(movie)
+            .ok_or(HtmlLayoutError::Invalid("HTML font target movie missing"))?;
+        let ids = entry
+            .exports
+            .get(&hop.symbol)
+            .ok_or(HtmlLayoutError::Invalid(
+                "HTML font target export symbol missing",
+            ))?;
+        if ids.len() != 1 || !ids.contains(&character_id) {
+            return Err(HtmlLayoutError::Invalid(
+                "HTML font target export identity ambiguous or different",
+            ));
+        }
+        current = (movie, character_id);
+    }
+    let resolved_font = FontIdentity {
+        movie_id: target.definition.movie_id,
+        character_id: target.definition.character_id,
+    };
+    if current != (resolved_font.movie_id, resolved_font.character_id) {
+        return Err(HtmlLayoutError::Invalid(
+            "HTML import route does not end at the decoded font",
+        ));
+    }
+    Ok(HtmlFontRoute {
+        source_import_symbol: first.symbol.clone(),
+        target_export_symbol: binding.import_chain.last().unwrap().symbol.clone(),
+        resolved_font,
+    })
 }
 
 fn node_limitations(node: &SceneNode) -> Vec<Limitation> {
@@ -586,6 +671,9 @@ impl Builder<'_> {
             font_binding: None,
             layout: None,
             layout_error: None,
+            html_layout: None,
+            html_layout_error: None,
+            html_font_route: None,
             glyphs: Vec::new(),
             issues: Vec::new(),
         };
@@ -614,9 +702,10 @@ impl Builder<'_> {
                     if field.id != definition.character_id {
                         return Err(invalid("decoded EditText ID differs from definition"));
                     }
-                    // These unsupported formats are rejected by layout_initial before
-                    // font selection or content layout, including empty passwords.
-                    if !field.flags.password() && !field.flags.html() {
+                    // Both layout paths reject passwords before asking for a font.
+                    // Scalar preflight conservatively includes HTML syntax/attributes;
+                    // no tag stripping or paragraph newline is invented here.
+                    if !field.flags.password() {
                         if let Some(local_id) = field.font_id {
                             asset.font_binding =
                                 Some(self.font_binding(definition.movie_id, local_id)?);
@@ -644,43 +733,72 @@ impl Builder<'_> {
                                 definition: font,
                             })
                         });
-                    match edit_layout::layout_initial(&field, |id| {
-                        if Some(id) != field.font_id {
-                            return Err(EditLayoutError::UnresolvedFont { local_id: id });
+                    if field.flags.html() {
+                        let route = asset.font_binding.as_ref().map(|binding| {
+                            verified_html_font_route(self.library, &self.result.fonts, binding)
+                        });
+                        if let Some(Ok(value)) = &route {
+                            asset.html_font_route = Some(value.clone());
                         }
-                        resolved.ok_or(EditLayoutError::UnresolvedFont { local_id: id })
-                    }) {
-                        Err(error) => {
-                            if matches!(error, EditLayoutError::Limit(_)) {
-                                return Err(invalid(format!(
-                                    "scene-content text layout limit: {error}"
-                                )));
+                        match html_layout::layout_initial(&field, |id| {
+                            if Some(id) != field.font_id {
+                                return Err(HtmlLayoutError::UnresolvedFont(id));
                             }
-                            asset.layout_error = Some(error);
-                        }
-                        Ok(layout) => {
-                            add_budget(
-                                &mut self.result.stats.glyph_placements,
-                                layout.glyphs.len(),
-                                self.limits.max_glyph_placements,
-                                "glyph placement",
-                            )?;
-                            if field.color.is_none() && !layout.glyphs.is_empty() {
-                                asset.issues.push(PreparationIssue::message(
-                                    PreparationStage::TextLayout,
-                                    "saved text color is absent; paint must remain unresolved",
+                            let resolved = resolved.ok_or(HtmlLayoutError::UnresolvedFont(id))?;
+                            let verified = route
+                                .as_ref()
+                                .ok_or(HtmlLayoutError::UnresolvedFont(id))?
+                                .as_ref()
+                                .map_err(Clone::clone)?;
+                            if verified.resolved_font != resolved.identity {
+                                return Err(HtmlLayoutError::Invalid(
+                                    "HTML route/resolved font identity differs",
                                 ));
                             }
-                            for (layout_index, glyph) in layout.glyphs.iter().enumerate() {
-                                let glyph_index = self.glyph(glyph.font, glyph.glyph_index)?;
-                                asset.glyphs.push(TextGlyph {
-                                    layout_index,
-                                    glyph: glyph_index,
-                                    local_matrix: edit_glyph_matrix(glyph),
-                                    color: glyph.color,
-                                });
+                            Ok(HtmlFont {
+                                resolved,
+                                source_import_symbol: &verified.source_import_symbol,
+                                target_export_symbol: &verified.target_export_symbol,
+                            })
+                        }) {
+                            Ok(html) => {
+                                self.text_geometry(&mut asset, &field, html.geometry.clone())?;
+                                asset.html_layout = Some(html);
                             }
-                            asset.layout = Some(layout);
+                            Err(error) => {
+                                if matches!(&error, HtmlLayoutError::Parse(parsed)
+                                    if matches!(parsed.kind, crate::gfx::html_text::ErrorKind::Limit(_)))
+                                {
+                                    return Err(invalid(format!(
+                                        "scene-content HTML layout limit: {error}"
+                                    )));
+                                }
+                                // Existing GPU consumers collect SourceText preparation issues.
+                                // Keep the typed failure here as well, without coercing it into
+                                // a plain-layout error or silently omitting its exact cause.
+                                asset.issues.push(PreparationIssue::message(
+                                    PreparationStage::HtmlLayout,
+                                    format!("saved HTML layout: {error}"),
+                                ));
+                                asset.html_layout_error = Some(error);
+                            }
+                        }
+                    } else {
+                        match edit_layout::layout_initial(&field, |id| {
+                            if Some(id) != field.font_id {
+                                return Err(EditLayoutError::UnresolvedFont { local_id: id });
+                            }
+                            resolved.ok_or(EditLayoutError::UnresolvedFont { local_id: id })
+                        }) {
+                            Err(error) => {
+                                if matches!(error, EditLayoutError::Limit(_)) {
+                                    return Err(invalid(format!(
+                                        "scene-content text layout limit: {error}"
+                                    )));
+                                }
+                                asset.layout_error = Some(error);
+                            }
+                            Ok(layout) => self.text_geometry(&mut asset, &field, layout)?,
                         }
                     }
                     asset.field = Some(field);
@@ -690,6 +808,37 @@ impl Builder<'_> {
         self.texts.insert(key, index);
         self.result.texts.push(asset);
         Ok(index)
+    }
+
+    fn text_geometry(
+        &mut self,
+        asset: &mut TextAsset,
+        field: &EditText,
+        layout: EditTextLayout,
+    ) -> io::Result<()> {
+        add_budget(
+            &mut self.result.stats.glyph_placements,
+            layout.glyphs.len(),
+            self.limits.max_glyph_placements,
+            "glyph placement",
+        )?;
+        if field.color.is_none() && !layout.glyphs.is_empty() {
+            asset.issues.push(PreparationIssue::message(
+                PreparationStage::TextLayout,
+                "saved text color is absent; paint must remain unresolved",
+            ));
+        }
+        for (layout_index, glyph) in layout.glyphs.iter().enumerate() {
+            let glyph_index = self.glyph(glyph.font, glyph.glyph_index)?;
+            asset.glyphs.push(TextGlyph {
+                layout_index,
+                glyph: glyph_index,
+                local_matrix: edit_glyph_matrix(glyph),
+                color: glyph.color,
+            });
+        }
+        asset.layout = Some(layout);
+        Ok(())
     }
 
     fn font_binding(&mut self, movie_id: MovieId, character_id: u16) -> io::Result<FontBinding> {

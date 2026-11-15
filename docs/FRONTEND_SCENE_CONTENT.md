@@ -2,7 +2,8 @@
 
 `frontend::scene_content::prepare(&assets, &library, &scene, limits)` prepares
 owned CPU data for the supplied structural scene. It uses original shape edges,
-existing tessellation, declared texture bindings and saved plain EditText glyphs. It makes no GPU calls,
+existing tessellation, declared texture bindings and supported saved plain/HTML
+EditText glyphs. It makes no GPU calls,
 executes no scripts and invents no replacement or bounding-box geometry.
 
 ## Owned caches and instances
@@ -20,7 +21,7 @@ retains its original identity.
 | Cache | Identity | Retained data |
 | --- | --- | --- |
 | `meshes` | Resolved `(movie_id, character_id)` | `DefinitionRef`, optional original `Shape`, optional `tessellate::Mesh`, per-fill image indices and preparation issues |
-| `texts` | Resolved `(movie_id, character_id)` | Original EditText, exact font binding, optional saved layout, typed failure and glyph placements |
+| `texts` | Resolved `(movie_id, character_id)` | Original EditText, exact font binding, optional saved geometry, full HTML source/layout and route proof, typed plain/HTML failures and glyph placements |
 | `fonts` | Exact resolved font `(movie_id, character_id)` | Original FontDefinition and parse issues |
 | `glyphs` | Exact FontIdentity plus glyph index | Original GlyphOutline and optional neutral-white mesh in font EM units |
 | `images` | Local movie bitmap character ID, before import resolution | Exact import chain, resolved definition, existing `ImageBinding`, logical dimensions, texture index, explicit unverified padding policy and issues |
@@ -43,14 +44,15 @@ world transforms to screen pixels or normalize fill coordinates.
 ## Saved plain text and geometry
 
 `TextAsset` preserves the original `EditText` body, bounds, flags, saved color,
-variable name and initial text. `layout` is the original `EditTextLayout` from
-`edit_layout::layout_initial`; it is always `SavedInitial`, never a localization,
+variable name and initial text. For plain fields, `layout` is the original
+`EditTextLayout` from the unchanged `edit_layout::layout_initial` path; it is
+always `SavedInitial`, never a localization,
 script update, inferred runtime string or populated input control. Its source
 spans, UTF-8/UTF-16 indices, rational pens, baselines, advances, line boxes and
 original font/glyph identity remain available to the caller. Repeated placements
 of one text definition reuse one text cache record.
 
-Font selection follows only `MovieLibrary::binding`. Each `FontBinding` keeps
+Font imports follow only `MovieLibrary::binding`. Each `FontBinding` keeps
 its local ID, complete import chain and resolved font-cache index. Missing
 aliases, symbols, definitions, cycles and unsupported font formats remain
 explicit issues; there is no global symbol search, filename guess or fallback.
@@ -60,7 +62,7 @@ routing evidence and its remaining limits belong to `REA_NATIVE_ALTERNATIVE.md`
 and `MOVIE_LIBRARY.md`.
 
 `TextAsset.layout_error` retains the typed `EditLayoutError`, separately from
-`issues`. HTML, password, automatic sizing, device fonts, wrapping-needed cases
+`issues`. Password, automatic sizing, device fonts, wrapping-needed cases
 and the layout module's other unsupported features produce no glyph placements.
 Even an empty password field is rejected before content layout. Static DefineText
 records are still explicit unsupported text entries in this bridge; their
@@ -101,6 +103,56 @@ rectangle, replacement character or substitute font. Consumers must inspect
 text layout errors, font-binding issues, font issues and glyph issues as well as
 ordinary shape/texture preparation issues.
 
+## Source-preserving saved HTML
+
+HTML fields use `gfx::html_layout::layout_initial`, with its documented and
+observed P/FONT subset, rather than the plain-text routine. `TextAsset.layout`
+receives an exact clone of `HtmlLayout.geometry`, preserving the existing GPU
+contract. `TextAsset.html_layout` separately owns the complete markup, defaults,
+tokens, elements, atoms, runs, issues and paragraphs, including source ranges,
+alignment, exact font sizes, explicit kerning declarations and adjustments.
+Glyph source byte/UTF-16 coordinates address the original markup; no stripped
+string, inserted paragraph newline or invented movie span is created.
+
+`TextAsset.html_font_route` retains `source_import_symbol`,
+`target_export_symbol` and `resolved_font`. The proof follows the same
+`FontBinding.import_chain` that supplied the decoded font. Every hop must match
+the library binding at its exact `(movie, local character)` identity, resolve
+through an existing target movie, and select that symbol's single exact
+ExportAssets character. The final pair must equal the decoded FontIdentity.
+The source and final target symbols are passed unchanged to `HtmlFont`; FACE
+equality preserves case and `$`. A local embedded font without a declared
+import/export route is explicitly unsupported here. A matching name elsewhere
+in the library is never a fallback or a font-resolution proof.
+
+The HTML module owns paragraph layout, explicit kerning and paint semantics.
+The bridge does not apply kerning a second time: each glyph's rational X is
+already positioned, and its advance already includes the adjustment after that
+glyph. The existing glyph cache remains keyed by exact font identity/index.
+`TextGlyph.local_matrix` uses that glyph's own height, pen and baseline;
+`TextGlyph.color` receives its resolved source RGBA unchanged. Plain fields keep
+their previous routine and paint path, including their previous kerning policy.
+
+The current HTML subset requires explicit supported declarations and opaque
+saved field alpha; ambiguous nonopaque-alpha composition, required wrapping,
+unsupported paragraph/field combinations, font routes or glyphs produce no
+replacement geometry. The authoritative restrictions are in
+`docs/HTML_TEXT_LAYOUT.md`. Those rules are not broadened by the bridge.
+
+`TextAsset.html_layout_error` retains the typed `HtmlLayoutError` separately
+from the plain `layout_error`. Each recoverable HTML failure also produces a
+`PreparationIssue` at `PreparationStage::HtmlLayout`, so the unchanged GPU
+adapter reports the exact reason through its existing SourceText diagnostic.
+The original field and font-binding issues remain available even when layout
+fails. Parser `Limit` failures are fatal preparation limits, rather than
+successful scenes with silently skipped excessive input. All HTML glyphs use
+the existing shared placement, font, outline and triangle budgets.
+
+Accepted HTML fields retain `SavedTextStateOnly`, field-bound clipping and
+font-rasterization limitations. Retaining source markup/metric geometry does
+not establish runtime localization, script updates, native glyph pixels or
+complete HTML support. No GPU adapter changes or dependencies are required.
+
 ## Image resolution and sampling boundaries
 
 Imported bitmap IDs follow `MovieLibrary::binding`, which uses the host's saved
@@ -134,7 +186,7 @@ cache requests, opaque backgrounds, morph ratios, scene unsupported markers,
 bound actions and all unbound/opaque script records. Those behaviors are not
 silently called implemented. Unsupported text nodes retain their real
 `DefinitionRef`, typed layout error or decode issue, and `TextNotPrepared`.
-Prepared saved plain text retains the limitations described above.
+Prepared saved plain/HTML text retains the limitations described above.
 Direct bitmap instances retain image bindings but have
 `DirectBitmapGeometryNotPrepared`, because this module does not manufacture a
 quad or use a definition's bounds as a visual substitute.
@@ -153,7 +205,8 @@ records, 2,000,000 triangles, 256 MiB decoded RGBA, 64 MiB selected shape bodies
 at 256. Text adds 4,096 text records, 128 fonts, 16,384 glyph meshes, 16 MiB
 of text tag bodies, 64 MiB of font tag bodies, 2,000,000 glyph records/edges and
 1,000,000 cached glyph placements. Before layout, source scalar count is a
-conservative placement-budget preflight (line separators also count there).
+conservative placement-budget preflight (line separators and original HTML
+syntax/attributes also count there).
 Existing shape/texture/text/font/tessellation input and work bounds also apply.
 Triangle counts cover both unique shape and glyph meshes; placement counts cover
 unique cached layouts, not repeated display instances. Decoded bytes cover unique
@@ -211,7 +264,7 @@ Private evidence under
 `verification.json`. Original client packages and decoded image bytes stay
 private; neither is a repository or distributable asset.
 
-## Saved EditText actual-file smoke
+## Saved plain EditText checkpoint
 
 **VERIFIED (CPU preparation only):** the extension smoke used the same three
 private packages and first-frame snapshots, first without logical aliases and
@@ -259,9 +312,73 @@ actual input hashes, exact original-project source snapshot, compiled smoke and
 focused test. The snapshot supplies existing glyph/layout module hooks privately;
 this increment changes only this document and `src/frontend/scene_content.rs`.
 
+## Saved HTML bridge validation
+
+**VERIFIED (original files, CPU preparation and offscreen GPU):** a focused
+private fixture compared the preceding plain-text bridge with this extension,
+using the same original login/character scenes, three pinned packages and explicit
+English alias above. The renderer-feature project build passed with offline
+dependencies, two compiler jobs and lowered priority. No GPU source changed.
+
+| Saved scene | HTML definitions / instances | Supported HTML layouts | New unique / instanced glyph placements | Submitted nonempty text glyphs, before → after | Changed full-frame pixels |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Login | 5 / 6 | 5 | 65 / 75 | 232 → 303 | 482 |
+| Character select | 6 / 6 | 4 | 51 / 51 | 92 → 139 | 0 |
+
+An independent exact-arithmetic expectation model matched all 116 supported HTML
+glyph records from nine definitions, including rational placement, original
+markup spans, exact font identity and saved color. Both character fields requiring
+wrapping retained typed errors. Omitting the explicit font alias produced
+unresolved bindings without fallback. A separately selected original field 311
+retained its unsupported nonopaque-alpha error. Text source-byte and glyph-placement
+ceilings rejected the actual login scene rather than returning partial success.
+
+The frozen comparison preserved plain layouts and errors for 16 login definitions
+(142 cached placements) and 11 character definitions (101 placements), including
+font bindings and glyph mesh geometry. Cache ordinals were compared by their exact
+font/glyph identities because new HTML entries legitimately change cache ordering.
+For the isolated plain-pixel check only, HTML instances were hidden explicitly;
+both GPU frames were byte-identical to the earlier plain-text captures. Full-frame
+checks retained all saved visibility, color and placement unchanged.
+
+**VERIFIED (saved character state):** HTML fields 307 and 281 draw before node 77,
+whose two original triangles cover the stage. Its original bitmap has alpha 255
+throughout and its composed RGB multiplier is zero with alpha multiplier one.
+The later supported HTML fields 260 and 248 have composed alpha zero. The other
+two HTML fields require wrapping. Thus the saved full frame remains opaque black
+despite the additional submitted glyphs. This is a check of the saved snapshot;
+initialized/script-controlled visibility and intended retail presentation remain
+unverified. No colors or visibility were changed to make text appear.
+
+**OBSERVED (private capture inspection):** the login capture contains the newly
+prepared source text alongside the existing saved placeholder labels and overlapping
+panels. The lossless PNG is only a container for the original RGBA readback. This
+does not establish startup execution, usable login or retail rasterization parity.
+
+Private evidence is under `evidence/scene-html-checks/`:
+`validation.json` combines the exact source hashes and completed checks;
+`result.json`, `expected/comparison.json`, `actual-html-glyphs.tsv`,
+`actual-html-errors.tsv` and `character-source-visibility.txt` retain the details.
+The first private fixture attempt incorrectly required new HTML to change every
+scene's visible pixels. Its failed character assertion is preserved in `attempt1/`;
+the later source-backed visibility check corrected that assertion without changing
+product code or saved scene state. The passed login GPU result was retained rather
+than repeated. A prior private fixture compile issue involved relocated module
+paths only and is retained in its build log. The actual project build receipt is
+`evidence/scene-html-build.log`.
+
+At 1920×1200 the raw login HTML frame has SHA-256
+`67ca5b733220f7a71992ee8f024f75f0b35ec6da1d83804f404a15757dee6ae9`;
+the unchanged character frame has SHA-256
+`42355e4ebb230ebc5c3522380404efa7d0cd6e4aaec13e9f5cc44cf381239b35`.
+Captures and extracted source data remain private. No full suite, native window
+test, server connection, VM localization or retail pixel comparison was run for
+this bridge increment.
+
 ## Sources and provenance
 
-The saved text extension also reads original project `docs/MOVIE_LIBRARY.md` and
+The saved text extensions also read original project `docs/HTML_TEXT_LAYOUT.md`,
+`docs/MOVIE_LIBRARY.md` and
 `docs/REA_NATIVE_ALTERNATIVE.md` for the explicit font-route boundary. It does not
 claim new native observations from those records.
 
@@ -270,11 +387,12 @@ implementation was studied or copied for this increment.
 
 | Input read | Ownership / licence | Use |
 | --- | --- | --- |
-| Project `src/frontend.rs`, `src/frontend/library.rs`, `src/gfx/{scene,shapes,tessellate,text,glyphs,edit_layout}.rs`, `src/texture.rs`, `src/texture_cache.rs`, `src/upk.rs` and module declarations | Original project code; underlying source studies retain their existing PROVENANCE entries | Existing APIs, explicit identity, metadata, decode and budget behavior |
+| Project `src/frontend.rs`, `src/frontend/library.rs`, `src/gfx/{scene,shapes,tessellate,text,glyphs,edit_layout,html_text,html_layout}.rs`, `src/texture.rs`, `src/texture_cache.rs`, `src/upk.rs` and module declarations | Original project code; underlying source studies retain their existing PROVENANCE entries | Existing APIs, explicit identity, metadata, decode and budget behavior |
 | Private `evidence/frontend-import-library-smoke.json` and original `evidence/frontend-movie-dependencies.rs` | Original project findings/harness | Select the already established private package inputs and lookup identities |
 | Private pins `alienware-candidate/.../MarvelFrontEnd_SF.upk`, `frontend-startup/.../MarvelGame.upk`, `frontend-fonts/.../MarvelFonts_SF.upk` | Proprietary game files, owner-authorized compatibility study | Actual scene/asset preparation and limits checks only |
 
 The full private paths and input hashes are recorded in the verification receipt.
 No new external documentation, SDK, network source or proprietary implementation
-was accessed. These are static-parser observations, not REA/native execution;
-the integrator maintains the separate native evidence.
+was accessed. Source findings come from static parsing, with the explicitly scoped
+offscreen checks above; no new REA/native-client execution is claimed. The
+integrator maintains the separate native evidence.
