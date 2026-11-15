@@ -11,6 +11,8 @@ use marvel_heroes_forever::{
 };
 use std::{error::Error, ffi::OsString, io, path::Path, process::ExitCode};
 
+mod cli_assets;
+
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 fn main() -> ExitCode {
@@ -42,6 +44,10 @@ fn usage() {
     println!("  mhf upk summary|inspect|exports <package.upk>");
     println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
     println!("  mhf upk verify-objects <package.upk>");
+    println!("  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]");
+    println!("  mhf frontend verify <package.upk> [dependency.upk ...]");
+    println!("  mhf texture inspect <package.upk> <texture-name|1-based-index>");
+    println!("  mhf texture render <package.upk> <texture-name|1-based-index> <private-output.pam>");
     println!("  mhf --version");
     println!("No assets are embedded. No server connection is made.");
 }
@@ -53,6 +59,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
     match text(&args[0])? {
         "--help" | "-h" if args.len() == 1 => usage(),
         "--version" if args.len() == 1 => println!("mhf {BUILD_VERSION}"),
+        "frontend" | "texture" => cli_assets::run(&args)?,
         "status" => {
             let preset = match args.as_slice() {
                 [_] => Preset::default(),
@@ -350,8 +357,9 @@ fn status(preset: Preset) {
         options.enabled_upgrades().len()
     );
     println!(
-        "Implemented: SIP/LZ4, Calligraphy prototype bodies, UE3/LZO tables and asset property streams."
+        "Implemented: SIP/LZ4, Calligraphy prototype bodies, UE3/LZO, textures, GFX structure and movie image binding."
     );
+    println!("Offscreen image renderer compiled: {}", cfg!(feature = "renderer"));
     println!("Not implemented: playable frontend, login, world or combat.");
     println!("Retail behavior parity is not verified.");
 }

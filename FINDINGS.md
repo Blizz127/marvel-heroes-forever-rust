@@ -187,3 +187,46 @@ UPK export selection, malformed/missing selection, all 606 frontend asset stream
 version and Original preset. Exact outputs and binary identities are private in
 `build-0.1.0-dev.2-prototype-smoke.json` and
 `build-0.1.0-dev.2-object-smoke.json` under `evidence/`.
+
+## Increment 0.1.0-dev.3 — saved frontend assets and GPU image path
+
+**VERIFIED:** Four independently copied startup packages (46,069,713 bytes)
+match the source inventory SHA-256 values. The private subset receipt is
+`evidence/frontend-startup-pin.json`; the full distribution transfer is separate.
+`MarvelGame.upk` contains `MarvelFrontEnd.frontend_manager` at zero-based export
+17004, matching both the saved frontend map and class-default movie reference.
+The exact extracted movie, offsets and hashes are private in
+`evidence/frontend-startup/manifest.json`. Static configuration does not prove
+which screen a running client presents.
+
+**VERIFIED:** The original inline texture reader decodes all 582 frontend
+Texture2D exports. The original movie reader parses all 20 frontend movies, and
+the integrated bridge matches all 716 external image records to the independent
+reference-constrained inventory. All 39 imports resolve by full object paths to
+11 textures in MarvelGame. Missing and duplicated dependency inputs preserve
+39 explicit unresolved/ambiguous results; outer-chain cycles are rejected.
+The manager's 11 images resolve separately. See `docs/FRONTEND_READER.md` and
+`evidence/frontend-binding-validation.json`.
+
+**VERIFIED:** A private optional Vulkan renderer drew the decoded native-size
+2560×1440 background. Every one of 14,745,600 GPU-readback bytes equals its
+supplied RGBA input on llvmpipe. The integrated CLI repeated this check and saved
+a private lossless PAM; its PNG wrapper was visually inspected. This is the
+SHIELD-pattern background alone, not the composed login/frontend. No original
+client display, physical GPU, runtime UI or visual parity comparison was run.
+Settings, hashes and receipts are in `docs/RENDERER.md` and private
+`evidence/dev3-integration-smoke.json`.
+
+**VERIFIED:** Geometry parsing consumes all 676 actual shapes in the 20 movies
+plus manager. The bounded AVM1 decoder parses 779,489 instructions in 2,863 action
+roots across those movies, with no unknown opcode or push-value encoding.
+These are structural results; tessellation, scripting execution and native host
+semantics remain further work. See `docs/GFX_SHAPES.md`, `docs/AVM1_FORMAT.md` and
+their private receipts. No runtime parity is implied by decoding instructions.
+
+**VERIFIED:** The manifest reader preserves 47,769 texture records and 143,422
+mips, including ambiguous GUIDs. Three independently pinned cache ranges contain
+seven LZO blocks; all 731,056 decoded bytes match an independent liblzo2 oracle.
+Existing pixel conversion handles the selected BC3/BGRA samples. Range identities
+are verified separately; no whole-cache hash or native cache rendering claim is
+made. See `docs/TEXTURE_CACHE.md` and `evidence/texture-cache-ranges/`.

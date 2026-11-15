@@ -1,8 +1,8 @@
 [package]
 name = "marvel-heroes-forever"
-version = "0.1.0-dev.2"
+version = "0.1.0-dev.3"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [lib]
@@ -12,6 +12,14 @@ path = "src/lib.rs"
 [[bin]]
 name = "mhf"
 path = "src/main.rs"
+
+[features]
+default = []
+renderer = ["dep:wgpu", "dep:pollster"]
+
+[dependencies]
+wgpu = { version = "=27.0.1", default-features = false, features = ["std", "vulkan", "wgsl"], optional = true }
+pollster = { version = "=0.4.0", optional = true }
 
 [profile.release]
 opt-level = 2

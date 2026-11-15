@@ -94,3 +94,32 @@ references for property tags and the independent frontend object study. These
 were studied without copying implementation. Selected private exported objects
 and movie arrays were compared across original Rust and independent readers;
 none is included in source or builds.
+
+## Textures, movies and optional renderer
+
+[BC format](BC_FORMAT.md), [Texture2D](TEXTURES.md), [texture cache](TEXTURE_CACHE.md),
+[GFX format](GFX_FORMAT.md) and [frontend composition](FRONTEND_COMPOSITION.md)
+extend this register with exact Microsoft/Adobe/Autodesk/Epic documentation,
+MIT UEViewer field references and private owner-file observations. These are
+format and interoperability studies, not imported implementations. The new
+`frontend` bridge and CLI compose the original project readers and use those
+private observations; they add no reference implementation source.
+
+[Renderer](RENDERER.md) records exact installed primary wgpu/pollster API source
+and dependency metadata read for original GPU code. The optional feature links
+the registered third-party wgpu ecosystem (MIT/Apache and other declared
+dependency licences); it is not claimed to be newly written library code.
+No proprietary game bytes are embedded. Dependency notices accompany private
+renderer builds, separately from asset evidence.
+
+[Shape geometry](GFX_SHAPES.md) and [AVM1 decoding](AVM1_FORMAT.md) register the
+Adobe-authored SWF v19 specification (copyright Adobe, study only) and exact
+private owner movie evidence used for the new original bounded shape and action
+readers. These parse geometry/instructions without importing another VM or
+claiming scripting execution. Their source ledgers are incorporated here.
+
+The texture-cache ledger also records MIT UEViewer `UnCoreSerialize.cpp` ranges
+1036–1168 and 1531–1570 studied for bulk LZO framing. System liblzo2
+(GPL-2.0-or-later) was used solely as a private independent oracle for three
+owner-supplied cache ranges; it is neither copied, linked nor shipped. Full-cache
+identity and rendering are separate from the recorded range/decode checks.

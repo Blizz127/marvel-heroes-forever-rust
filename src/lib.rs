@@ -4,8 +4,15 @@
 pub const TARGET_BUILD: &str = "1.52.0.1700";
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod avm1;
 pub mod calligraphy;
+pub mod frontend;
+pub mod gfx;
 pub mod options;
 pub mod prototype_catalog;
+#[cfg(feature = "renderer")]
+pub mod render;
 pub mod sip;
+pub mod texture;
+pub mod texture_cache;
 pub mod upk;

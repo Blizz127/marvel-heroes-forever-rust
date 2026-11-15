@@ -9,6 +9,7 @@ use std::path::Path;
 
 #[path = "upk/lzo.rs"]
 mod lzo;
+pub(crate) use lzo::decompress as decompress_lzo;
 #[path = "upk/objects.rs"]
 pub mod objects;
 
@@ -557,7 +558,7 @@ fn decode_chunk_range(
         let payload = input.take(stored)?;
         let block_end = logical_position + logical;
         if block_end > offset && logical_position < requested_end {
-            let decoded = lzo::decompress(payload, logical)?;
+            let decoded = decompress_lzo(payload, logical)?;
             let start = offset.saturating_sub(logical_position);
             let end = logical.min(requested_end - logical_position);
             output.extend_from_slice(&decoded[start..end]);
