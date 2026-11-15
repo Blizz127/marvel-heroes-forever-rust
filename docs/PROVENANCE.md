@@ -299,6 +299,9 @@ does not establish attached-root lookup behavior.
 [Attached MovieClip identity](ATTACHED_MOVIECLIP.md) distinguishes the display
 receiver from lazy script storage and records property precedence, state and
 onLoad gates without substituting generic-object behavior.
+[Attached member names](ATTACHED_MEMBER_NAMES.md) records the finite native
+standard-member map and exact ordinary-name admission gates, including the
+distinction between a missing property and a present Undefined value.
 [Native HTML wrapping](HTML_WRAPPING.md) records rounding and word-break evidence
 while retaining unresolved translator/font-state gates; the existing diagnostic
 layout is not promoted to native parity by a conditional mathematical model.

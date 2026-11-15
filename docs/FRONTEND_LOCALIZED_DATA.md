@@ -25,8 +25,10 @@ The original Rust result preserves that profile:
 
 Each string also retains its catalog partition and original entry/text byte
 spans as provenance. Those metadata fields are not ActionScript properties.
-Strings retain their validated UTF-8 without normalization; `encode_utf16`
-provides the lossless conversion at a future VM seam.
+Strings retain their validated UTF-8 without normalization; `into_host_result`
+uses `encode_utf16` for the VM's fresh-object materializer. The four fields keep
+their saved reflected order and ordinary setter behavior; see
+[native result objects](LOCALIZED_RESULT_OBJECT.md).
 
 The resolver rejects zero prototype identity, absent string IDs, `#` formatter
 markers and the native missing-translation sentinel. It does not synthesize
@@ -41,9 +43,11 @@ conversion from those optional fields to this module's `References`; callers
 must resolve that separate contract first. The separately evidenced
 [localized prototype preparation](LOCALIZED_PROTOTYPE_FIELDS.md) now supplies
 references for its bounded same-blueprint scalar profile. The runtime callback, native receiver,
-label-path lookup, object allocation and failure-return semantics remain outside
-this module. A successful pure lookup does not establish frontend execution or
-wire/behavior parity.
+failure-return semantics remain outside this module. The separate
+[configured label resolver](LOCALIZED_LABEL_RESOLVER.md) supplies typed resource
+membership through the saved Globals directory; neither resolver installs a
+native movie handler. A successful pure lookup does not establish frontend
+startup or wire/behavior parity.
 
 ## Focused verification
 
