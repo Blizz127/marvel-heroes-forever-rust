@@ -940,3 +940,225 @@ Detailed source ledgers and field/arithmetic reviews remain under
 `2f3f874e048af8bb17bb99d0a95d4224e3ebfd868bdddce4f081c7d63418bca4`.
 It was exported and REA resources closed. No product source,
 renderer profile, full-suite result or native execution claim changes here.
+
+## Frontend movie source, resolver snapshot and inherited image base
+
+The next bounded study closes the **conditional static producer** of the
+image-binding base and its resolver/creator snapshot. Successful engine
+construction installs a custom state-10 resolver. For the selected saved
+relative strings that resolver deliberately delegates to the default combiner;
+the combiner is not selected by assuming that state 10 is absent.
+
+This provides a possible package-prefixed input for the saved Tooltip image.
+Actual movie invocation, application of runtime object names, cache selection,
+allocation success and selected Q dimensions remain separate gates. No renderer
+or native-math code changes accompany this evidence.
+
+### Engine movie filename producer
+
+The previously retained new-Start path is
+`0x14127fdf0 → 0x141276a60 → 0x141277340`; see
+[FRONTEND_EXTERNAL_RECEIVER.md](FRONTEND_EXTERNAL_RECEIVER.md). The last helper
+calls `0x141277840` at `0x1412773f8`, with engine E and an explicitly supplied
+wide filename. Complete `0x141277840..0x141277c26` now establishes:
+
+- Null input returns null. A separate narrow examination classifies the supplied
+  filename for the engine's package-name branch. This examination treats an
+  ordinary slash/backslash as qualified; it must not replace the GFx resolver's
+  different predicate below.
+- For an unqualified input, the function prefixes the exact wide string
+  `/ package/` and changes every dot in the result to `/`. The prefix is copied
+  from `0x1421bbd18` by actual 16/4/2-byte loads, explaining why an initial
+  LEA-only reference search did not find this producer. No `.swf` extension is
+  appended by this branch.
+- Already qualified input bypasses that prefix/rewrite. The chosen string is
+  converted and passed to `0x1400316c0` for a prerequisite query. On success,
+  `0x140031710` receives RCX=`E+0x44`, the narrow filename in RDX and zero
+  explicit flags/auxiliary input.
+
+The conversion helper `0x14070b140` imports `KERNEL32.dll!lstrlenW` and
+`WideCharToMultiByte`. It supplies CodePage 0, flags 0 and a source count
+including NUL. Loaded DLL behavior, selected codepage, conversion failure and
+non-ASCII results are not observed here. The selected witness below explicitly
+uses successful ASCII conversion. This is not a UTF8 or case-folding contract.
+
+The stored artifact names have independently verified lowercase spelling:
+`marvelfrontend.marvel_login_dialog` and `marvelhud.!uisource`. These come from
+the original package name table and outer chains, not a lowercasing display
+tool. The physical container is `MarvelFrontEnd_SF.upk`; its basename must not
+replace either logical namespace. A stored object name does not prove the
+spelling or value of an executing native FName or filename argument.
+
+### Positive state production and the binding snapshot
+
+Let I=`E+0x44`, L=`[I+0x08]`, and T=`[L+0x20]`. The captured constructors and
+forwarding methods establish the following selected interface chain:
+
+| Interface | Table | Forwarding/backend contract |
+| --- | --- | --- |
+| I | `0x1424fd1f8` | Virtual `+0` returns `L+0x10` through `0x140087860` |
+| `L+0x10` | `0x1424fe218` | Virtual `+0` returns `T+0x10` through `0x14004e330` |
+| `T+0x10` | `0x1424fe410` | Bulk get `0x140050920`; setter `0x140050a60` |
+
+Outer bulk-get and setter wrappers are `0x140031510` and `0x1400314a0`.
+Consequently the engine installers and the fresh-load snapshot use the same
+backend. Bulk acquisition fills null outputs and can consult a parent statebag
+for missing entries; the captured constructor initializes that parent null.
+Later parenting or replacements are not excluded.
+
+Engine constructor `0x14125dd90` calls `0x1412706b0(I)` at `0x14125e0bb`.
+On successful allocation, that function writes the new object's own state ID
+10, installs table `0x1421c3268`, and registers it. The previously retained
+`0x141273a20` creates state ID 11 through `0x140067210`, installs engine creator
+table `0x1421c3288`, and registers it through I. The retained frontend load
+path calls this initializer behind its existing global initialization guard.
+Those explicit stores, rather than an incomplete list of requested setter IDs,
+ground the resolver and creator identities.
+
+For a non-null state, the backend inserts/replaces using the object's **own**
+u32 ID at `+0x10`; a null state removes the explicit requested ID. Allocation
+failure therefore must not be described as preserving an earlier default.
+Replacement before snapshot acquisition can change the selected pointers.
+
+Fresh `0x140031710 → 0x14004ffc0` constructs binding context B through
+`0x1400927a0(B,L,0,0)`: explicit source-statebag and supplied-snapshot overrides
+are both null on this route. The constructor selects `L+0x10`, allocates a
+separate snapshot C and stores it at `B+0x10`. Acquisition `0x140065b60`
+requests exact state IDs `[9,10,11,15,16,27,28]`; the relevant assignments are
+state 10 → `C+0x18` and state 11 → `C+0x20`. The image binder thus uses retained
+snapshot pointers, not repeated queries of the current global engine state.
+Other constructor callers can explicitly supply a different statebag or snapshot.
+
+The import path calls `0x140092d30(parentB)`, which copies the parent snapshot
+through `0x140090a30`, retaining the same resolver/creator pointers in a new
+snapshot. It constructs a new B through `0x140092c60`. The new base string is
+initialized separately; parent `B+0x70` is not simply copied into it. This
+captured ownership path does not prove universal snapshot immutability or an
+executing client's current state table.
+
+### Resolved source filename to the exact image-binding context
+
+Retained loader `0x14004ef00` calls `0x1400907d0` to resolve its incoming
+URLInfo. That leaf invokes `[[B+0x10]+0x18]` virtual `+0x08` when present,
+otherwise the default combiner. On the new-definition branch it supplies the
+resolved C-string to definition constructor `0x140090520`, which forwards it
+to task constructor `0x14008fc90`. The definition's `+0x40` points to task T;
+T's string at `+0x48` stores this resolved filename.
+
+Writer `0x140090790(B,D)` copies that retained filename into `B+0x70` and calls
+`0x140031830` to retain the prefix through the last `/` or `\`, including the
+separator. No separator clears the base to empty. The selected ASCII helpers
+preserve byte/scalar indexing; they perform no separator conversion or `..`
+normalization. The base comes from the selected movie definition, not a host
+filesystem directory or an inferred image filename.
+
+The context identity is also connected: `0x14004e4b0 → 0x14008a8e0 →
+0x14004eae0` stores B in the binding process at `+0x18`. Driver
+`0x14008df70` later restores that same B and passes it in R9 to the pending
+resource interface's `+0x18` callback at `0x14008e659`. For the proved tag1009
+datum that callback is `0x140091ee0`, so its base read belongs to this context.
+
+Standard tag 71's callback slot `0x142adbaa8` points to `0x14006fb40`.
+The loader reads the saved ImportAssets2 URL into the pending record's `+0x18`.
+`0x140091090`, `0x140091100` and `0x140088b40` connect that record to the frame
+list consumed by the binding driver. The actual login import is ID 71 with
+key `Tooltip_Main_BG_PNG` and URL `../MarvelHUD/!UISource.swf`; the imported
+saved library exports that key as ID 44 and defines tag1009 ID 44.
+
+The nested-load driver builds URLInfo from this import string and the **parent**
+base, then calls `0x14004ef00` with the cloned B. Its new definition retains the
+resolved imported filename and updates the cloned base through the same writer.
+A guarded earlier attempt replaces a matching final `.swf` by `.gfx`; a failed
+load falls back to the original filename. The selecting flag/value remains an
+explicit input. Both selected leaf extensions have the same base in the witness.
+
+### The installed resolver's selected relative-path behavior
+
+Table `0x1421c3268` virtual `+0x08` is `0x141263ca0`. It uses GFx predicate
+`0x140031590`, whose ASCII behavior differs from the engine producer: a leading
+separator qualifies, while the first ordinary later separator before a qualifying
+colon returns false. A colon followed immediately by slash/backslash qualifies;
+null/empty input has a separate true branch. This is not general URI validation.
+
+For `../MarvelHUD/!UISource.swf`, the first two dots are scanned, then the slash
+returns false. The image basename also returns false. The installed resolver
+therefore invokes adapter `0x140031990 → 0x140031760` for both strings. It joins
+the nonempty base and relative filename, adding `/` only when needed, preserving
+the literal `..` segment. Its separate qualified `gamedir://` expansion branch
+is not needed for these inputs and is not substituted for them.
+
+**INFERRED conditional witness:** supply the original stored login object name
+to the proved package-name branch, then assume successful selected ASCII
+conversion, expected snapshot and new-definition/load paths. The resulting
+string stages are:
+
+| Stage | Exact selected string |
+| --- | --- |
+| Engine package filename | `/ package/marvelfrontend/marvel_login_dialog` |
+| Login base | `/ package/marvelfrontend/` |
+| Resolved original import | `/ package/marvelfrontend/../MarvelHUD/!UISource.swf` |
+| Imported definition base | `/ package/marvelfrontend/../MarvelHUD/` |
+| Resolved external image | `/ package/marvelfrontend/../MarvelHUD/Tooltip_Main_BG_PNG.tga` |
+
+The conditional `.gfx` attempt changes the imported leaf extension and produces
+the same imported base and image string. This witness preserves the authored
+mixed case. It does not claim a live argument, successful object lookup, native
+case folding or a normalized filesystem path. The resulting image string now
+meets the previously recovered creator's exact `/ package/` prefix test.
+
+An additional original witness applies the already retained factory operations
+to that selected image string. Prefix removal, final-extension removal, lexical
+separator/parent-segment processing and final separator replacement produce the
+**requested** Engine.Texture name `MarvelHUD.Tooltip_Main_BG_PNG` for either
+import extension. The case is preserved. This calculation identifies the lookup
+argument; it does not establish lookup success or the returned object identity.
+
+Remaining runtime boundaries are the actual movie/player invocation and input
+name, successful engine/state installation, any replacement before acquisition,
+selected definition/cache/import attempt, task scheduling and object lifetime,
+successful factory lookup and manager/Q initialization. The snapshot proof does
+not turn a decoded 64×64 asset into observed Q dimensions. No `1/64` image matrix,
+renderer admission or retail pixel parity follows merely from this possible path.
+
+### Retained evidence and focused validation
+
+New private root is `evidence/frontend-image-context/` under the owner data
+directory. Source licence remains proprietary owner assets for compatibility
+study only. Additional reads were original project evidence and documents,
+the installed REA skill/tool schema, original Python analysis helpers and GNU
+objdump 2.46 (GPL-3.0-or-later tool, no implementation copied). The retained
+package research's earlier UEViewer provenance remains recorded; this increment
+reads original bytes and existing metadata, not outside parser implementation.
+
+| Canonical record | Evidence ID |
+| --- | --- |
+| `rea-engine-movie-source.json` | `ev_182145254a4103a65fcb7cb93a79380a27844cf393a51a3f520e3d4fdbbd128c` |
+| `rea-base-source-and-imports.json` | `ev_d1ce3551393a22d2f8defda1c432949f4eec4846e4ff5751b665a8518425e77b` |
+| `rea-resolver-and-state-snapshot.json` | `ev_f44f02ac96fc0430d1e48cf519c943bb71515d58ce48dd012d8c5c7483278f22` |
+| `rea-import-wire-and-string-profile.json` | `ev_b0765a8d1cde179818f626ed73bd29d30aa6fab87b8bf5500acba9c4b7ba7130` |
+
+Reused complete loader wrappers `0x14004ef00` and `0x14004f720` are retained in
+`rea-movie-header/header-4.bundle.json`, Evidence
+`ev_1932b7a9b8862af41551a97204f600d748e4b664b2ef8241e0934319abdf9bae`.
+Prior frontend receiver, external-image and Scale9 records supply their already
+proved callers, resolver predicate/default combiner and factory methods.
+
+The original selected ASCII witness is `base-producer/selected-ascii-witness.json`,
+SHA256 `dc39e5d966af34b1d559dfaedba987930ccbe27289673ac54be01e328b899d3b`.
+The continued factory witness is `factory-witness.json`, SHA256
+`17f5c352be6627c7f2ea19298a1f1b84a2e9172a1a245b9b5173b9a75de27df6`.
+The exact-case receipt is
+`verification/saved-anchors-independent/exact-case/exact-case-receipt.json`,
+SHA256 `d97d1756d47cfcb90d9dab63aa620389de882ec3d21a756c43caa3a29bd063ce`.
+It rechecks logical package SHA256
+`2c199b2b523e4334e8193b875024de101a8702714f2752c9502711f22ca1082c` and
+reads only its header, name table and first 24 exports; no new package copy is
+made. Both saved movies and the selected source spans were rechecked separately.
+
+The complete 66-record bundle was exported, SHA256
+`3f22987efc77413698246d85bb24c6f1937ff907cdbd85129cb06384d3d0046d`,
+and REA resources closed. All four new command records completed with exit 0,
+untruncated output and unchanged artifact digests. Independent PE-section checks
+match **5,050 instruction spans / 19,166 bytes and 354 data bytes**, with no
+unreturned requested commands. These are static byte/field/conditional string checks.
+No native client, GPU, full test suite or live service was run.
