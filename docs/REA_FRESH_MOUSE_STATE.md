@@ -7,12 +7,10 @@ The category comes from each constructed state's `+0x10` field, not the numeric
 registration argument. The category-23 member-array initialization is separate
 from the state map and does not manufacture category 4.
 
-**Conditional conclusion:** with the ordinary successful allocation, reference,
-lock and no-reentry profile below, and the separately verified state-map
-preservation contract, state 4 is absent from this fresh backing bag at the
-constructor's successful return. The local receipt does not certify that
-separately owned map contract: its final verification must be joined before
-this condition is used as an admitted return profile. This advances the earlier empty-bag checkpoint
+**INFERRED conditional return profile, derived from VERIFIED static paths:**
+with the ordinary successful allocation, reference, lock and no-reentry profile
+below, the joined constructor and state-map contracts establish state 4 absent
+from this fresh backing bag at the constructor's successful return. This advances the earlier empty-bag checkpoint
 in [REA_MOUSE_HOST.md](REA_MOUSE_HOST.md) past default construction. It does
 not establish a current MovieImpl cache, preserve absence through the later
 loader/engine, prove a current Mouse handler missing, or implement its diagnostic
@@ -95,14 +93,55 @@ do not enter a destructor. This reasoning requires actual map retention,
 valid counts without overflow, and no concurrent/untracked release. Arbitrary
 zero-reference destructor effects are not assumed harmless.
 
+## Sealed state-map join
+
+The separately owned map audit is now sealed and joins the exact constructor
+identities above. The setter supplies **the address of C+0x28**, not the parent
+slot C+0x20. For nonnull input, **0x140050770** reads the category from the
+supplied state at **0x14005078d** and compares the actual stored category at
+**0x1400507ca**. A missing entry passes the same pointer/category to insertion
+**0x14004e7c0 at 0x14005081c**; it does not construct another state or change
+its category. The admitted fresh path has four distinct absent categories.
+
+Capacity helper **0x140050230** requests eight slots for the null map. Complete
+**0x1400500d0..0x140050226**, including all chained unwind fragments, allocates
+`16 + 24*capacity` bytes. The complete integer helper
+**0x141259450..0x141259527** and its byte-checked lookup table close initial
+rounding: input 7 returns 2, so `1 << (2+1)` gives capacity **8**. The map
+header holds count and mask; each 24-byte entry holds link, home bucket and the
+actual state pointer. None of those fields is a state object's category.
+
+| Actual supplied category | Bucket under mask 7 | Count after insertion |
+| --- | --- | --- |
+| 2 | 2 | 1 |
+| 11 | 3 | 2 |
+| 22 | 6 | 3 |
+| 23 | 7 | 4 |
+
+All four buckets are distinct. There is one initial 208-byte map allocation,
+no collision or replacement, no removal and no subsequent growth in this
+successful fresh sequence. Empty-bucket insertion retains the supplied state
+at **0x14004e809** before publishing its pointer at **0x14004e811**, closing
+the reference-count path in the preceding section. The final **map count 4**
+is not a category-4 state. Bucket 4 remains empty, and C+0x20 remains null.
+
+The broader map audit also verifies that collision/growth move existing
+pointers using actual category fields, and removal only deletes or relocates
+existing entries. This does not make arbitrary replacement/removal
+callback-free: final release of an old state can invoke its destructor.
+Those branches are unnecessary to the four distinct fresh insertions. The
+heap allocation/free virtuals and standard critical-section imports retain
+the stated no-reentry/valid-reference conditions.
+
 ## Category-23 array resize is not state registration
 
 Constructor **0x140094280..0x1400942b4** sets S+0x10 to 0x17 and zeros the
 three vector fields **S+0x18 (data), S+0x20 (length), S+0x28 (capacity)**.
 The subsequent complete initializer **0x140094320..0x140095266** retains S in
-RSI, performs 24 finite record insertions, then returns **the same S pointer
-at 0x14009522e**. Its only direct calls are 24 calls to **0x140094130** and
-24 calls to the memory-move thunk **0x141c6ec1c**. The body itself invokes neither a state-bag method nor a user
+RSI, performs 24 finite record insertions on the admitted fresh path, then
+returns **the same S pointer at 0x14009522e**. Its body contains 24 resize
+call sites targeting **0x140094130** and 24 conditional memory-move call sites
+targeting **0x141c6ec1c**; these are static counts, not runtime observations. The body itself invokes neither a state-bag method nor a user
 callback; its allocation/import callees have the explicit conditions below.
 
 Each resize receives the vector address S+0x18. Complete
@@ -219,6 +258,26 @@ Earlier short constructor captures are not substituted for the later complete
 | Original private PE parser, verifier and constructor review | Original project research; Python standard library PSF | Independent byte joins, routine boundaries, import binding and derived array capacities |
 
 This document contains no original client bytes, member inventory or native
-implementation. Its construction conclusion remains conditional on the stated
-primitives and map proof; later preservation and actual Mouse behavior are not
-claimed from the fresh checkpoint.
+implementation. Its joined construction conclusion remains conditional on the stated
+primitives; later preservation and actual Mouse behavior are not claimed from
+the fresh checkpoint.
+
+The joined map proof is retained privately under `rea-fresh-state-map/`:
+
+| Receipt | SHA-256 |
+| --- | --- |
+| `verification.json` | `aa76a1de7bf33505ef67779c991fb248b848dfe23efee67fd126fb25e1849cf7` |
+| `finding-summary.json` | `01294142136280dfabd127a667cef8fbf5bf663c49dad3f04e3a78b8cb73449d` |
+| `fresh-insertion-trace.json` | `4b97fbfe7c3f5e8d6e959aab928674f485c2a65ef185888b3f4f637f8db85a02` |
+
+It independently checks **461 instruction spans / 1,704 instruction bytes**,
+the 256-byte capacity table and exact lock imports. Its three new REA records
+were exported/reset with a byte-identical reset bundle; the complete bundle
+SHA-256 is `df2c59ff45281bacfc1970f1cb563c75a35698c2fd4ea4325e7e7cd6655775e2`.
+These counts overlap some constructor-wrapper/reference evidence and must not
+be summed as unique coverage. The insertion trace is an analyst arithmetic
+projection of the verified branches, not a native execution. The original
+project map study and its constructor dependency introduce no outside
+implementation source. The combined private
+`rea-fresh-mouse-state/joined-return-receipt.json` binds all four study inputs,
+the return checkpoint and the explicit conditional postcondition.
