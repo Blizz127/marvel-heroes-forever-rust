@@ -738,6 +738,14 @@ tessellation](SCALE9_TESSELLATION.md) records exact owner-binary scan/triangle
 paths, independently checked native bytes and supplied-input oracle limits.
 Neither increment supplies current scene, material or renderer state.
 
+[Windows cursor backend](REA_CURSOR_BACKEND.md) extends the owned executable's
+hardware-cursor dispatch with concrete platform interface tables, bounded
+constructor/factory evidence and named USER32 import calls. Its private ledger
+retains every selected REA result and original PE byte/extent check. Current
+window identity, actual OS effects and the separate Mouse.hide state-4 provider
+remain unproved. No native client, input API or external implementation ran or
+was copied; no new dependency was added.
+
 [Selected-fill matrix arithmetic](SCALE9_FILL_MATRIX.md) reuses the owned
 native paint/bounds/helper records and original finite Scale9 math. An independent
 instruction-derived scalar oracle freezes operation-order witnesses before code
