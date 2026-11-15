@@ -24,6 +24,19 @@ current transforms/visibility, with exact bounded movie-content validation.
 Three focused synthetic checks pass. Current-frame text composition is being
 integrated; the original constructor and GPU visibility boundaries remain open.
 
+**VERIFIED component checks:** explicitly admitted saved script calls now use
+one Environment operand/register store and native current-top cleanup. Eight
+new shared-call checks and ten saved-state checks pass, including retained
+partial state on failure. Invocation is still restricted to its documented
+same-Environment profile; no original body was replayed for this increment.
+Receipt: `evidence/avm1-runtime/shared-call-checks.json`.
+
+The Model/Polys prefix readers are integrated. Six focused tests and four owned
+export comparisons pass, covering 34 Model records and preserving the remaining
+tails. Model suffixes and polygon records remain undecoded; no world geometry
+or runtime parity follows from these checks. The combined dev16 build remains
+pending.
+
 **VERIFIED bounded member admission:** native-evidence-backed ordinary
 underscore names now reach existing storage while standard aliases, reserved
 metadata and unsupported level-name routes remain excluded. Four focused checks

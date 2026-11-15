@@ -585,3 +585,10 @@ no outside implementation, new native execution or third-party source was used.
 serializer/bulk-array evidence, paired original-byte validation, preserved opaque
 tails and original-code source ledger. No new third-party implementation source
 was read or copied; serialized polygons and later Model containers remain open.
+
+[Fresh Environment initialization](FRESH_AVM1_ENVIRONMENT.md) records constructor
+checkpoints in the same owned executable, with exact source/byte receipts and
+later owner/publication boundaries. [Point construction](REA_POINT_CONSTRUCTION.md)
+records native deferred registration, namespace/constructor graph and the
+zero-argument allocation path. These are static interoperability findings;
+neither supplies current adopted-instance state or a native execution result.
