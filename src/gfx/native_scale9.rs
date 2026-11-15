@@ -16,6 +16,9 @@ pub enum MathError {
     SubnormalSensitive(&'static str),
     UnorderedRectangle,
     NonPositiveGrid,
+    TooManyPrimaryVertices,
+    AllocationFailed,
+    IntegerConversionOutOfRange,
 }
 
 impl fmt::Display for MathError {
@@ -29,6 +32,13 @@ impl fmt::Display for MathError {
             Self::UnorderedRectangle => f.write_str("Scale9 rectangle endpoints are reversed"),
             Self::NonPositiveGrid => {
                 f.write_str("Scale9 builder requires positive grid dimensions")
+            }
+            Self::TooManyPrimaryVertices => {
+                f.write_str("primary output vertex admission limit exceeded")
+            }
+            Self::AllocationFailed => f.write_str("cannot reserve primary output vertices"),
+            Self::IntegerConversionOutOfRange => {
+                f.write_str("primary coordinate is outside finite signed32 conversion range")
             }
         }
     }
@@ -412,6 +422,173 @@ pub fn build_finite_ieee_nearest(inputs: SourceInputs) -> Result<NativeScale9Con
     ))
 }
 
+/// Conservative Rust admission cap, not a universal native tessellator limit.
+pub const MAX_PRIMARY_OUTPUT_VERTICES: usize = 65_535;
+
+/// Arithmetic result for explicitly supplied primary-tessellator vertices.
+/// No native export selection, output receiver or final pixel space is inferred.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PrimaryNormalizedVertices {
+    /// Input order retained. These are in normalization space when applied,
+    /// otherwise in the space produced by inverse_outer.
+    pub positions: Vec<Point>,
+    /// Native seeded extrema AFTER inverse_outer and BEFORE normalization, in
+    /// xmin/ymin/xmax/ymax order. Empty input retains the reversed sentinels.
+    pub pre_normalization_extrema: [f32; 4],
+    /// Applied first to every supplied point, with recovered +0x38 operation order.
+    pub inverse_outer: Matrix2x4,
+    /// Maps the post-inverse-outer points to normalization space when applied.
+    /// Identity when either final extent fails the strict-positive guard.
+    pub forward_normalization: Matrix2x4,
+    /// Native inverse-helper result handed to the unbound output receiver.
+    /// It does not include outer_matrix or establish final reconstruction.
+    pub inverse_normalization: Matrix2x4,
+    pub normalization_applied: bool,
+    /// Whether the native +0x40 invalid-extrema scan branch was taken.
+    pub extrema_rescanned: bool,
+}
+
+fn extrema_seed() -> [f32; 4] {
+    let high = f32::from_bits(0x7149_f2ca);
+    let low = f32::from_bits(0xf149_f2ca);
+    [high, high, low, low]
+}
+
+fn include_point(extrema: &mut [f32; 4], p: Point) {
+    // Strict comparisons retain the first encountered signed zero. Sentinels
+    // are the native finite constants, not infinities or the first vertex.
+    if extrema[0] > p[0] {
+        extrema[0] = p[0];
+    }
+    if extrema[1] > p[1] {
+        extrema[1] = p[1];
+    }
+    if p[0] > extrema[2] {
+        extrema[2] = p[0];
+    }
+    if p[1] > extrema[3] {
+        extrema[3] = p[1];
+    }
+}
+
+fn primary_inverse_outer_point(matrix: Matrix2x4, p: Point) -> Result<Point> {
+    let [x, y] = p;
+    let [r0, r1] = matrix.rows;
+    Ok([
+        add(add(mul(x, r0[0])?, mul(y, r0[1])?)?, r0[3])?,
+        add(add(mul(y, r1[1])?, mul(x, r1[0])?)?, r1[3])?,
+    ])
+}
+
+fn primary_normalization_point(matrix: Matrix2x4, p: Point) -> Result<Point> {
+    let [x, y] = p;
+    let [r0, r1] = matrix.rows;
+    Ok([
+        add(add(mul(x, r0[0])?, mul(y, r0[1])?)?, r0[3])?,
+        add(add(mul(x, r1[0])?, mul(y, r1[1])?)?, r1[3])?,
+    ])
+}
+
+/// Replays inverse-outer/+0x38 followed by primary-tessellator +0x40 arithmetic.
+/// `all_vertices` must represent ALL positions whose native extrema are wanted;
+/// selecting an export subset before this call would change normalization.
+///
+/// Inputs and intermediates use the existing finite IEEE nearest-rounding
+/// profile. Empty input or a nonpositive final seeded axis span retains identity
+/// normalization and does not rewrite the post-inverse-outer points. This does
+/// not replay the enclosing output routine's mesh/count guards or selection.
+/// Caller input is never mutated, including on allocation/arithmetic failure.
+pub fn normalize_primary_vertices_finite_ieee_nearest(
+    all_vertices: &[Point],
+    outer_matrix: Matrix2x4,
+) -> Result<PrimaryNormalizedVertices> {
+    if all_vertices.len() > MAX_PRIMARY_OUTPUT_VERTICES {
+        return Err(MathError::TooManyPrimaryVertices);
+    }
+    for &point in all_vertices {
+        check_point(point)?;
+    }
+    let inverse_outer = outer_matrix.inverse_into(Matrix2x4::IDENTITY)?;
+    let mut positions = Vec::new();
+    positions
+        .try_reserve_exact(all_vertices.len())
+        .map_err(|_| MathError::AllocationFailed)?;
+    let mut extrema = extrema_seed();
+    for &point in all_vertices {
+        let transformed = primary_inverse_outer_point(inverse_outer, point)?;
+        include_point(&mut extrema, transformed);
+        positions.push(transformed);
+    }
+    let extrema_rescanned = extrema[0] >= extrema[2] || extrema[1] >= extrema[3];
+    if extrema_rescanned {
+        extrema = extrema_seed();
+        for &point in &positions {
+            include_point(&mut extrema, point);
+        }
+    }
+    let normalization_applied = extrema[2] > extrema[0] && extrema[3] > extrema[1];
+    let mut forward_normalization = Matrix2x4::IDENTITY;
+    let mut inverse_normalization = Matrix2x4::IDENTITY;
+    if normalization_applied {
+        let [xmin, ymin, xmax, ymax] = extrema;
+        let low = f32::from_bits(0xc6ff_f800);
+        let high = f32::from_bits(0x46ff_f800);
+        forward_normalization = three_point_affine(
+            [[xmin, ymin], [xmax, ymin], [xmax, ymax]],
+            [[low, low], [high, low], [high, high]],
+        )?;
+        for point in &mut positions {
+            *point = primary_normalization_point(forward_normalization, *point)?;
+        }
+        // The native destination still contains the forward matrix; its unused
+        // lanes therefore survive the nonzero-determinant copy-inverse branch.
+        inverse_normalization = forward_normalization.inverse()?;
+    }
+    Ok(PrimaryNormalizedVertices {
+        positions,
+        pre_normalization_extrema: extrema,
+        inverse_outer,
+        forward_normalization,
+        inverse_normalization,
+        normalization_applied,
+        extrema_rescanned,
+    })
+}
+
+/// Packs one explicitly selected coordinate to its native raw stored word.
+/// Standard host f32 floor is used under the finite nearest-rounding profile;
+/// loaded MSVCR120 floorf/MXCSR equivalence is unverified. No signed16 clamp or
+/// receiver signedness is inferred. Out-of-signed32 CVTT behavior is rejected.
+pub fn pack_primary_coordinate_finite_ieee_nearest(value: f32) -> Result<u16> {
+    checked(value, "primary packing input")?;
+    let adjusted = if value < 0.0 {
+        sub(value, 0.5)?
+    } else {
+        add(value, 0.5)?
+    };
+    let floored = checked(adjusted.floor(), "floor")?;
+    // i32::MAX as f32 rounds UP to 2^31, so a binary32 inclusive-max check
+    // would wrongly admit an overflowing CVTT. Check the exact wider value.
+    let wide = f64::from(floored);
+    if wide < -2_147_483_648.0 || wide >= 2_147_483_648.0 {
+        return Err(MathError::IntegerConversionOutOfRange);
+    }
+    // This cast cannot saturate: the explicit check admits only finite signed32
+    // integers. The following low-word conversion deliberately wraps as native.
+    let integer = floored as i32;
+    Ok((integer as u32 & 0xffff) as u16)
+}
+
+/// Packs an explicitly selected normalized (or degenerate unnormalized) point.
+/// Selection itself and the other bytes of the native vertex record are outside
+/// this arithmetic primitive.
+pub fn pack_primary_point_finite_ieee_nearest(point: Point) -> Result<[u16; 2]> {
+    Ok([
+        pack_primary_coordinate_finite_ieee_nearest(point[0])?,
+        pack_primary_coordinate_finite_ieee_nearest(point[1])?,
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,6 +720,132 @@ mod tests {
             }),
             Err(MathError::NonPositiveGrid)
         );
+    }
+
+    #[test]
+    fn primary_normalization_uses_post_inverse_outer_extrema() {
+        let outer = matrix([[2.0, 0.0, 7.0, 10.0], [0.0, 4.0, 9.0, -8.0]]);
+        let input = [[10.0, -8.0], [26.0, -8.0], [10.0, 24.0], [26.0, 24.0]];
+        let result = normalize_primary_vertices_finite_ieee_nearest(&input, outer).unwrap();
+        assert_eq!(result.pre_normalization_extrema, [0.0, 0.0, 8.0, 8.0]);
+        assert!(result.normalization_applied);
+        assert!(!result.extrema_rescanned);
+        assert_eq!(
+            result.forward_normalization.rows(),
+            [[8191.0, 0.0, 0.0, -32764.0], [0.0, 8191.0, 0.0, -32764.0]]
+        );
+        assert_eq!(result.inverse_outer.rows()[0][2].to_bits(), 0);
+        assert_eq!(result.inverse_outer.rows()[1][2].to_bits(), 0);
+        assert_eq!(
+            result.positions,
+            [
+                [-32764.0, -32764.0],
+                [32764.0, -32764.0],
+                [-32764.0, 32764.0],
+                [32764.0, 32764.0]
+            ]
+        );
+        assert_eq!(
+            pack_primary_point_finite_ieee_nearest(result.positions[0]).unwrap(),
+            [0x8003, 0x8003]
+        );
+        assert_eq!(input[0], [10.0, -8.0]);
+    }
+
+    #[test]
+    fn primary_degenerate_and_empty_sequences_skip_only_normalization() {
+        let outer = matrix([[2.0, 0.0, 0.0, 10.0], [0.0, 4.0, 0.0, -8.0]]);
+        for (input, expected, bounds) in [
+            (
+                [[12.0, 0.0], [12.0, 16.0]],
+                [[1.0, 2.0], [1.0, 6.0]],
+                [1.0, 2.0, 1.0, 6.0],
+            ),
+            (
+                [[12.0, 0.0], [20.0, 0.0]],
+                [[1.0, 2.0], [5.0, 2.0]],
+                [1.0, 2.0, 5.0, 2.0],
+            ),
+        ] {
+            let result = normalize_primary_vertices_finite_ieee_nearest(&input, outer).unwrap();
+            assert_eq!(result.positions, expected);
+            assert_eq!(result.pre_normalization_extrema, bounds);
+            assert!(!result.normalization_applied);
+            assert!(result.extrema_rescanned);
+            assert_eq!(result.forward_normalization, Matrix2x4::IDENTITY);
+            assert_eq!(result.inverse_normalization, Matrix2x4::IDENTITY);
+        }
+        let empty =
+            normalize_primary_vertices_finite_ieee_nearest(&[], Matrix2x4::IDENTITY).unwrap();
+        assert!(empty.positions.is_empty());
+        assert!(!empty.normalization_applied);
+        assert!(empty.extrema_rescanned);
+        assert_eq!(
+            empty.pre_normalization_extrema.map(f32::to_bits),
+            [0x7149_f2ca, 0x7149_f2ca, 0xf149_f2ca, 0xf149_f2ca]
+        );
+    }
+
+    #[test]
+    fn primary_packing_preserves_negative_floor_and_low_word() {
+        for (input, expected) in [
+            (-0.0, 0),
+            (0.0, 0),
+            (-1.0, 0xfffe),
+            (1.0, 1),
+            (-32764.0, 0x8003),
+            (32764.0, 0x7ffc),
+            (-32768.0, 0x7fff),
+            (65536.0, 0),
+            (f32::from_bits(0xbf00_0001), 0xffff),
+            (f32::from_bits(0xbf00_0002), 0xfffe),
+        ] {
+            assert_eq!(
+                pack_primary_coordinate_finite_ieee_nearest(input).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn primary_output_rejects_unsupported_conversion_and_resource_profiles() {
+        assert_eq!(
+            pack_primary_coordinate_finite_ieee_nearest(f32::from_bits(0x4eff_ffff)).unwrap(),
+            0xff80
+        );
+        assert_eq!(
+            pack_primary_coordinate_finite_ieee_nearest(-2_147_483_648.0).unwrap(),
+            0
+        );
+        for value in [2_147_483_648.0, f32::from_bits(0xcf00_0001)] {
+            assert_eq!(
+                pack_primary_coordinate_finite_ieee_nearest(value),
+                Err(MathError::IntegerConversionOutOfRange)
+            );
+        }
+        assert!(matches!(
+            pack_primary_coordinate_finite_ieee_nearest(f32::INFINITY),
+            Err(MathError::NonFinite(_))
+        ));
+        assert!(matches!(
+            pack_primary_coordinate_finite_ieee_nearest(f32::from_bits(1)),
+            Err(MathError::SubnormalSensitive(_))
+        ));
+        let over_budget = vec![[0.0, 0.0]; MAX_PRIMARY_OUTPUT_VERTICES + 1];
+        assert_eq!(
+            normalize_primary_vertices_finite_ieee_nearest(&over_budget, Matrix2x4::IDENTITY),
+            Err(MathError::TooManyPrimaryVertices)
+        );
+        let original = [[1.0, 2.0], [f32::MAX, 3.0]];
+        assert!(
+            normalize_primary_vertices_finite_ieee_nearest(
+                &original,
+                matrix([[0.5, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
+            )
+            .is_err()
+        );
+        assert_eq!(original[0], [1.0, 2.0]);
+        assert_eq!(original[1][0], f32::MAX);
     }
 
     #[test]

@@ -680,3 +680,87 @@ The saved-input witness is `verification/quantization-independent/saved-modal-wi
 SHA256 `7cc54db97fa2f8d0512ab6785a78bdd8237f112454b9f0e024c85f7aede46fab`.
 Evidence was exported and REA resource close completed. No native client,
 renderer, GPU or live service was started for this increment.
+
+## Executable primary-output arithmetic
+
+`gfx::native_scale9` now exposes the proved output arithmetic as a separate
+conditional primitive. It accepts explicit supplied point positions and an
+outer matrix. It does not infer that a scene, provider, layer, output receiver
+or runtime cache meets the selected native profile.
+
+| API | Input/output boundary |
+| --- | --- |
+| `normalize_primary_vertices_finite_ieee_nearest(all_vertices, outer_matrix)` | Inverse-outer transform, native seeded extrema/rescan, positive-extent guards, normalization and its inverse |
+| `pack_primary_coordinate_finite_ieee_nearest(value)` | One explicitly selected coordinate to a raw u16 stored word |
+| `pack_primary_point_finite_ieee_nearest(point)` | Explicit selected X/Y pair to two raw words; other vertex fields remain outside scope |
+
+Normalization must receive **all** positions whose primary-tessellator bounds
+are intended. Selecting an export subset first can change the native result.
+The returned `PrimaryNormalizedVertices` preserves input order in `positions`;
+the caller explicitly selects any positions to pack afterward. Native mesh IDs,
+record filtering and export iteration are not guessed.
+
+The result exposes `inverse_outer`, `pre_normalization_extrema`,
+`forward_normalization`, `inverse_normalization`, `normalization_applied` and
+`extrema_rescanned`. The extrema are the literal seeded native state after the
+inverse-outer stage and before normalization. Positions are in normalization
+space if that stage applied; otherwise they remain in post-inverse-outer space.
+The inverse normalization matrix is the value handed to the unresolved output
+receiver. It does not include the outer matrix or establish final pixels.
+
+The fresh sequence follows the retained leaf contracts: inverse-outer storage
+starts from identity, so unused lanes of the supplied outer matrix are not copied
+into its inverse. Both native transformation stages keep their distinct product
+and addition orders. Extrema use exact finite sentinel words, strict comparisons
+and the optional rescan. Either nonpositive final axis span skips normalization
+and leaves the already transformed positions unchanged. Empty input retains the
+reversed sentinels and identity normalization. This empty leaf sequence does not
+claim that the enclosing native output routine enters it past its earlier
+mesh/count guards. The implementation does not add a generic area, collinearity
+or minimum-point-count predicate.
+
+The existing finite IEEE nearest-rounding profile applies throughout. Standard
+host `f32::floor` supplies the finite floor operation; loaded retail CRT/MXCSR
+equivalence remains unverified. Packing first performs the separately rounded
+signed-half operation, then floor, then checks exact signed32 representability
+before the float-to-integer cast. In particular, `i32::MAX as f32` is not used
+as an inclusive upper limit, because it rounds up to the invalid `2^31` input.
+Values outside the admitted signed32 range return a typed error. Low16 wrapping
+within that range is preserved, including negative coordinates and normalization
+overshoot. It is not a signed16 saturation or a proof of consumer signedness.
+
+A fixed **65,535-point Rust admission cap** bounds input work and one reserved
+output vector; this conservative limit is not asserted as the universal native
+tessellator storage limit. Allocation failures, nonfinite/subnormal-sensitive
+operations and unsupported integer conversion return errors. Caller inputs are
+immutable, and no partially rewritten output escapes on failure. No renderer
+profile, image binding, option or output-receiver behavior is enabled here.
+
+Focused checks cover stage-specific extrema, distinct outer unused lanes,
+one-axis degeneracy, empty input, negative and adjacent-half packing cases,
+low16 wrapping, signed32 endpoint admission and resource limits. Private original
+oracles reuse the frozen instruction-derived normalization and saved-modal
+witnesses above. Raw source assets and numerical asset fixtures remain private
+under `evidence/native-scale9-output-math/`; no new native execution or external
+implementation source is used.
+
+**VERIFIED conditional arithmetic replay:** the frozen private harness passes
+**49/49 checks in both debug and optimized builds**: forty private oracle/admission
+checks plus nine module checks. Expected numeric bits were frozen before the
+implementation was inspected and were not adjusted to fit it. Coverage includes
+the saved modal's complete supplied-input output witness, exact matrix/extrema
+bits, reversed point order, collinear positive boxes, empty/one-axis-degenerate
+cases, finite-sentinel edge cases, large-offset low16 wrapping, and signed32
+conversion and 65,535/65,536-point admission boundaries. No full test suite or
+native/GPU execution was run for this increment.
+
+The private receipt is
+`evidence/native-scale9-output-math/oracle/verification.json`, SHA256
+`25a25e67b9d64ce913ec348519f03750fd28b8ea5a830f1c8b6f7b14ae3e8fb7`.
+It records compiler commands, unchanged oracle hashes and tested source SHA256
+`29e70b57343a5ff08bfdbb53f61d2ff345739270475864bcce019b17ef2193de`.
+Additional source reads were original project evidence and tools only:
+`scale9-output/verification/quantization-independent/`, the prior matrix oracle,
+and `native-scale9-output-math/contract/CONTRACT_NOTES.md`. The underlying owned
+binary/asset licence and compatibility-study provenance remain as recorded above;
+no outside implementation was copied or linked.
