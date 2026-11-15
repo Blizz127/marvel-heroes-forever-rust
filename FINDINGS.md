@@ -407,21 +407,41 @@ diagnostic intake was queued for the coordinator, superseding dev.6 only.
 
 ## Dev.8 frontend runtime progress
 
-**OBSERVED (integrated original manager, 2026-11-15):** Native ASCII hash ordering
-and the three hidden InitObject properties advance the diagnostic to 447 of 452
-initializers and 49,205 instructions. One Selection listener remains; no class
-registration has yet run. The next record starts at source2055321 and stops at
-GetVariable source2055355 on the qualified class name `gfx.controls.ListItemRenderer`.
-The session halts there. Root CLI CodeId448 is session-local. Thirty-one focused
-VM tests pass; this is not native-client execution or full frontend startup.
-Receipt: `evidence/dev8-integration/initialization-native-hash.json`.
+**OBSERVED (integrated original manager, 2026-11-15):** Native ASCII hash ordering,
+hidden InitObject properties, qualified class reads and the verified Function
+conversion profile allow all 452 saved initializers to complete: 49,244
+instructions, six host calls, one retained Selection listener and five class
+registrations. This uses minimal explicit globals and an initially parentless
+Plain root. Native global inventory and attached-root behavior remain incomplete;
+this is not retail startup. The next original frame action stops after 31
+instructions at the unimplemented MovieClip member boundary. Thirty-seven
+focused VM tests pass. Receipts: `evidence/build-0.1.0-dev.8-smoke.json` and
+`evidence/avm1-runtime/manager-frame-after-inits.tsv`; the earlier 447-action
+receipt remains preserved at `evidence/dev8-integration/initialization-native-hash.json`.
 
 **VERIFIED (resource preparation):** The new bounded localized-prototype resolver
 preserves explicit parent copying and local zero overrides. A frozen independent
 raw oracle matches all 27 selected UI keys' 54 references and origins. A separate
 raw locale scan matches all 54 resulting text strings. The Help button inherits
 its zero tooltip from the default layer; the other 26 explicitly store child zero.
-Twelve boundary cases pass. Native callback installation, VM result allocation and
-actual label updates remain separate work. Receipt:
+Twelve boundary cases pass. The VM now materializes fresh native-profile Object
+results with ordered ordinary setters, including supported setter reentry. Native
+callback installation, configured label lookup and actual label updates remain
+separate work. Receipt:
 `evidence/localized-prototype-check/verification.json`; exact scope and source
 ledger are in `docs/LOCALIZED_PROTOTYPE_FIELDS.md`.
+
+**VERIFIED (dev.8 focused build/startup):** The window-enabled offline build and
+eight final CLI/image checks pass. The original cursor output and saved login
+HTML output retain their prior pixel identities. The exact tested binary also
+presents two saved-login frames in a fresh private Xvfb window with zero stderr;
+this uses llvmpipe, not an owner-device or retail comparison. The new animation
+constant-key timing module passes five focused tests and its independent static
+arithmetic comparison; interpolation and playback are not implemented. Test
+source is `38c0570260c1ef21336e0bb8a55d8e7aa1bbb877`; binary SHA-256 is
+`0c5b54295dff275370fb8c0f0904ab3e8734113cf4409dfb7a7eb70041b1fdcb`.
+Receipts: `evidence/build-0.1.0-dev.8-smoke.json`,
+`evidence/dev8-native-html/receipt.json`,
+`evidence/avm1-runtime/host-object-fields-evidence.json` and
+`evidence/animation-timing/validation.json`. Dependency notices cover 114 packages
+and 217 texts without collection issues. Publication remains unconfirmed.

@@ -43,7 +43,9 @@ observed heads and evidence limits. The private reference hash manifest is
 | `/home/blizz/.local/share/devbox-coordinator/coordinator.py` report interface | Owner local operational tool; implementation not read | Authorized task status/handoff reporting only |
 
 Search hits are discovery context, not proof of current runtime behavior. The
-original-client executables were inspected as data, not executed. No server data,
+initial discovery inspected original-client executables as data. Later isolated
+retail execution and its exact limits are recorded in
+[native reference capture](NATIVE_REFERENCE_CAPTURE.md). No server data,
 accounts, credentials, access settings or other project sources were changed.
 
 ## Named references not yet studied
