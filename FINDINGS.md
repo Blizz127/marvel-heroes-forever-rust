@@ -7,6 +7,23 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev16 integration in progress
 
+**VERIFIED integration:** the window-feature type check after underscore
+admission and the test-only import correction passes without warnings at
+`3411f2bdbe9cd4b73d1f31d8d41cfa00b6c066cb` (private
+`evidence/dev16-underscore-window-check.json`). Later changes below have their
+own focused checks; this receipt does not cover them.
+
+Dynamic event-member lookup now follows a completed saved phase, preserving
+Missing, noncallable, callable-pending and deferred-conversion results. Eight
+focused checks pass; no dynamic function is invoked. A separate Function2
+correction preserves an earlier supplied register argument when a later
+duplicate-register argument is missing; three focused checks pass.
+
+Current display projection now retains complete source metadata while using
+current transforms/visibility, with exact bounded movie-content validation.
+Three focused synthetic checks pass. Current-frame text composition is being
+integrated; the original constructor and GPU visibility boundaries remain open.
+
 **VERIFIED bounded member admission:** native-evidence-backed ordinary
 underscore names now reach existing storage while standard aliases, reserved
 metadata and unsupported level-name routes remain excluded. Four focused checks

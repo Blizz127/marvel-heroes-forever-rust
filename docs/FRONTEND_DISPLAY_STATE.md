@@ -254,3 +254,36 @@ source/movie/version and typed-parent bindings. This allows a later TextField
 binding to require an actual DefineEditText tag (37), rather than accepting every
 character classified as text. Tag counts are charged to the existing source-item
 budget. Window-feature compilation passed with this metadata addition.
+
+## Complete current-scene projection
+
+`DisplayState::snapshot_scene` now returns a renderer-facing Scene with current
+world transforms and effective visibility, retaining original raw placement,
+action bindings, opaque nodes and unbound action tags. Those global metadata
+vectors are captured during `from_scene` and charged to its source-item budget.
+Later changes to the caller's source Scene cannot replace the retained vectors.
+The snapshot does not rebuild DisplayState or execute actions.
+
+The caller supplies the original Scene's exact movie-ID map. Construction hashes
+bounded movie bytes; projection checks the complete ID set, byte lengths,
+SHA-256 and header versions. The new `max_source_movie_bytes` budget defaults to
+256 MiB across the selected Scene. Identical movie content can pass this check
+in another parsed object; the existing content preparer separately enforces
+the actual MovieLibrary pointer association. These checks establish source
+content, not a native instance or VM lifetime. The caller's same-session domain
+contract still applies.
+
+**VERIFIED Rust checks:** three focused synthetic checks cover current parent
+transform/visibility propagation, exact source metadata retention after caller
+mutation, complete movie-set/content/version rejection, and the input-byte
+budget boundary. Projection leaves revision, traces and source raw placement
+unchanged. Receipt `evidence/current-scene-projection/focused-check-2.json`,
+SHA-256 `d89e29ac1caef8cc8584b2d1c1c10f3abb16b53bd64bf45e098adffb2cf5c74b`.
+The first compile-only fixture failure used `Span.length` instead of GFX
+`Span.len`; it is retained as `focused-check-1.json` and is not a passing run.
+
+`TextFieldHost::bound_fields` supplies the read-only complete instance inventory
+needed by current-frame text preparation. Reading it neither invokes getters
+nor consumes invalidation. Original script, native-client, GPU or initialized
+frontend behavior was not exercised by these synthetic checks. Existing
+unsupported geometry/style limits remain unchanged.

@@ -573,3 +573,10 @@ operational evidence; no separate publication licence was established and no
 implementation was copied. Root verified the handback hash, retaining its exact
 copy privately. Its underlying controller/runtime claims are attributed to
 DIT's retained review; this read did not query a service or clear any hold.
+
+[Post-saved dynamic lookup](SAVED_DYNAMIC.md) composes the existing owned native
+event-dispatch contract with original VM APIs; it adds no invocation or source
+defaults. The [current display projection](FRONTEND_DISPLAY_STATE.md) is original
+host integration using existing Scene/DisplayState/TextFieldHost definitions and
+the already registered SHA-2 dependency. Its new checks use synthetic data;
+no outside implementation, new native execution or third-party source was used.
