@@ -11,6 +11,10 @@ pub const MAX_PROPERTIES: usize = 16_384;
 // assets can legitimately contain more than one million elements.
 pub const MAX_ARRAY_ITEMS: usize = MAX_EXPORT_BYTES;
 
+// Native UObject::Serialize handles this optional state frame before NetIndex.
+// The four-byte reader cannot skip it; see docs/ENTRY_PACKAGE_OBJECTS.md.
+const HAS_STATE_FRAME: u64 = 0x0200_0000_0000_0000;
+
 /// A byte range relative to the supplied serialized export, never a file path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span {
@@ -110,8 +114,8 @@ pub struct ObjectProperties {
 }
 
 impl ObjectProperties {
-    /// Decode the standard UObject prefix and tags for the asset classes
-    /// established by reference layout and private sample observation.
+    /// Decode the standard UObject prefix and tags for the asset/map classes
+    /// established by reference layout, native evidence and private observation.
     /// UClass, actors and custom gameplay classes are intentionally unsupported.
     pub fn parse_export(package: &Package, export_index: usize, bytes: &[u8]) -> io::Result<Self> {
         let export = package
@@ -127,6 +131,18 @@ impl ObjectProperties {
         if !supports_asset_class(&class_name) {
             return Err(unsupported(format!(
                 "UObject preamble is not established for class {class_name}"
+            )));
+        }
+        if export.object_flags & HAS_STATE_FRAME != 0 {
+            return Err(unsupported(
+                "UObject state-frame preamble requires a class-specific reader",
+            ));
+        }
+        if is_entry_map_class(&class_name)
+            && !has_engine_class_identity(package, export.class_index)
+        {
+            return Err(unsupported(format!(
+                "map object requires an imported Engine.{class_name} class identity"
             )));
         }
         let mut input = Cursor::new(bytes);
@@ -148,18 +164,53 @@ impl ObjectProperties {
 }
 
 pub fn supports_asset_class(name: &str) -> bool {
-    [
-        "texture2d",
-        "swfmovie",
-        "material",
-        "materialinstanceconstant",
-        "materialinstancetimevarying",
-        "package",
-        "objectreferencer",
-        "gazcookedobjectreferencer",
-    ]
-    .iter()
-    .any(|known| name.eq_ignore_ascii_case(known))
+    is_entry_map_class(name)
+        || [
+            "texture2d",
+            "swfmovie",
+            "material",
+            "materialinstanceconstant",
+            "materialinstancetimevarying",
+            "package",
+            "objectreferencer",
+            "gazcookedobjectreferencer",
+        ]
+        .iter()
+        .any(|known| name.eq_ignore_ascii_case(known))
+}
+
+fn is_entry_map_class(name: &str) -> bool {
+    ["level", "model", "polys", "world"]
+        .iter()
+        .any(|known| name.eq_ignore_ascii_case(known))
+}
+
+/// Admit the observed Core.Class import directly under the root Engine package.
+/// A matching short name on an export, custom subclass or other package does
+/// not establish the native serialization layout.
+fn has_engine_class_identity(package: &Package, class_index: i32) -> bool {
+    let import = |index: i32| {
+        (index < 0)
+            .then(|| package.imports.get(index.unsigned_abs() as usize - 1))
+            .flatten()
+    };
+    let named = |reference: NameRef, expected: &str| {
+        package
+            .resolve_name(reference)
+            .is_some_and(|name| name.eq_ignore_ascii_case(expected))
+    };
+    let Some(class) = import(class_index) else {
+        return false;
+    };
+    let Some(outer) = import(class.outer_index) else {
+        return false;
+    };
+    named(class.class_package, "Core")
+        && named(class.class_name, "Class")
+        && named(outer.class_package, "Core")
+        && named(outer.class_name, "Package")
+        && named(outer.object_name, "Engine")
+        && outer.outer_index == 0
 }
 
 /// Parse a property list at a caller-established byte offset. This makes no
@@ -507,6 +558,83 @@ mod tests {
             }
             .logical_offset(usize::MAX)
             .is_err()
+        );
+    }
+
+    #[test]
+    fn entry_map_admission_requires_native_class_identity_and_no_state_frame() {
+        use crate::upk::Import;
+
+        let mut bytes = (-1i32).to_le_bytes().to_vec();
+        end(&mut bytes);
+        bytes.extend_from_slice(&[13, 29, 47]);
+        let mut package = package(bytes.len());
+        let mut add_name = |value: &str| {
+            let reference = NameRef {
+                index: package.names.len(),
+                number: 0,
+            };
+            package.names.push(NameEntry {
+                value: value.into(),
+                flags: 0,
+            });
+            reference
+        };
+        let core = add_name("Core");
+        let class = add_name("Class");
+        let engine = add_name("Engine");
+        let package_name = add_name("Package");
+        let level = add_name("Level");
+        package.imports = vec![
+            Import {
+                class_package: core,
+                class_name: class,
+                outer_index: -2,
+                object_name: level,
+            },
+            Import {
+                class_package: core,
+                class_name: package_name,
+                outer_index: 0,
+                object_name: engine,
+            },
+        ];
+        package.exports[0].class_index = -1;
+        package.exports[0].object_flags = 0;
+        for name in ["Level", "Model", "Polys", "World"] {
+            package.names[level.index].value = name.into();
+            let parsed = ObjectProperties::parse_export(&package, 0, &bytes).unwrap();
+            assert_eq!(parsed.net_index, -1);
+            assert!(parsed.properties.entries.is_empty());
+            assert_eq!(parsed.properties.start_offset, 4);
+            assert_eq!(parsed.properties.end_offset, 12);
+            assert_eq!(parsed.native_payload.bytes(&bytes).unwrap(), &[13, 29, 47]);
+        }
+        for mutation in 0..8 {
+            let mut changed = package.clone();
+            match mutation {
+                0 => changed.imports[1].object_name = core,
+                1 => changed.imports[0].class_package = engine,
+                2 => changed.imports[0].class_name = package_name,
+                3 => changed.imports[1].outer_index = -1,
+                4 => {
+                    changed.exports[0].class_index = 1;
+                    changed.exports[0].object_name = level;
+                }
+                5 => changed.imports[0].outer_index = i32::MIN,
+                6 => changed.imports[1].class_name = class,
+                7 => changed.exports[0].object_flags |= HAS_STATE_FRAME,
+                _ => unreachable!(),
+            }
+            assert!(ObjectProperties::parse_export(&changed, 0, &bytes).is_err());
+        }
+        package.names[level.index].value = "WorldInfo".into();
+        assert!(!supports_asset_class("WorldInfo"));
+        assert_eq!(
+            ObjectProperties::parse_export(&package, 0, &bytes)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::Unsupported
         );
     }
 }
