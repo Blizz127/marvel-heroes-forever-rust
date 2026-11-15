@@ -1057,3 +1057,11 @@ ledgers. Existing original helpers/receipts were reused; no outside
 implementation or new SDK source was read or copied. Raw artifacts remain
 private. The actual incoming draw receiver and selected shader-record identity
 remain unresolved; no native or renderer execution was performed.
+
+[Native index transfer](SCALE9_INDEX_TRANSFER.md) uses the previously registered
+owned `033050/032ee0/032fa0` upload evidence. Original Rust implements bounded
+little-endian word addition without introducing a dependency or imitating
+physical dispatch and non-temporal stores. Its private pre-source oracle,
+focused tests and separately labeled supplemental checks retain exact source
+hashes and the corrected oracle-coverage wording. No outside implementation
+or native runtime was used.

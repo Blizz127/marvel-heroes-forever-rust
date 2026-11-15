@@ -7,12 +7,23 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev26 work in progress
 
+**VERIFIED index rebasing:** the original little-endian transfer preserves
+word order and adds the explicit cumulative offset modulo 65,536. Three focused
+tests, 100 checks across 33 frozen independent cases and two separately labeled
+post-source boundary checks pass. Source/tail bytes and rejection atomicity are
+checked through the engineering cap of 196,605 words. Scalar byte semantics are
+distinct from native dispatch, physical SSE alignment and fault behavior.
+Receipt: `evidence/native-index-transfer/receipt.json`, SHA-256
+`cc90eb111bbf4410382c5d179c90a0d2882e50a320e05efc83d1de47ee95471a`.
+See [index transfer](docs/SCALE9_INDEX_TRANSFER.md).
+
 **VERIFIED focused vertex-upload checks:** an original whole-stride wrapper now
 uses an explicit initial 8,192-byte scratch buffer, retains scratch across
 chunks, applies admitted element transfers in descriptor order and copies the
 complete destination stride. It preserves ordered overlap and skipped fields;
-unsupported input rejects before changing either destination or scratch. Three
-focused checks pass. The native category-two table confirms raw transfers for
+unsupported input rejects before changing either destination or scratch. Four
+focused checks pass, including the proved `251 → 214` byte swap. The native
+category-two table confirms raw transfers for
 unchanged full codes `251/1211/2211`; flag-bearing aliases are not accepted as
 the same codes. Independent comparison and the combined executable are still
 pending at this checkpoint. No live format, GPU upload or pixel parity follows.
