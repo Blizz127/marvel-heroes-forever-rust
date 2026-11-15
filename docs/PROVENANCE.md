@@ -954,3 +954,8 @@ shape, compound and mesh construction stores, with concrete provider retention.
 The extended engine-config and MovieDef cleanup studies keep real cache,
 callback, notification and object-identity conditions explicit. All use the
 previously registered owned executable; none selects current live state.
+
+The dev24 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev24-linux/manifest.json`, SHA-256
+`80eb1d7cd1dc8327311a3359456e5bb68c1df354b88a29c043c2d9976e3e242d`.

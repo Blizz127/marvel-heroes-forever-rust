@@ -5,7 +5,28 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev24 work in progress
+## 2026-11-15 dev24 diagnostic increment
+
+**VERIFIED combined build/startup:** clean source
+`5c06b4445b635dcd6e53ab7fdbb9d5f5a9eb5aaa` builds with window support in
+34.16 seconds without warnings. All eight focused preset/VM/image checks pass.
+The isolated Rust window presents two frames with empty stderr, and the saved
+cursor/login RGBA identities are unchanged. Four integrated changed-source
+hashes match focused validation. Binary SHA-256:
+`34e07d7cd447d231a749eccc79f342a5aa8cff117f7400f0601041f7692ad2a6`.
+Receipts: `evidence/dev24-build-result.json`,
+`evidence/build-0.1.0-dev.24-smoke.json`, `evidence/dev24-native-html/receipt.json`
+and `evidence/dev24-integrated-source-identity.json`. No native-retail launch,
+service request, owner-device test, full suite or retail parity is claimed.
+
+**OBSERVED original replay after the Function callback change:** all 452
+initializers complete in 49,244 instructions. The original frame again stops
+after 290 instructions at CodeId452/6391, the unchanged unbound `Mouse.hide`
+host. All recorded counts/state/identities/errors match the previous replay;
+that equality does not prove which new callback bodies ran. One build and one
+run exit zero with the original inputs/setup and no retry or host override.
+Receipt: `evidence/avm1-attached-manager-frame-action-increment15/receipt.json`,
+SHA-256 `fcdef8f5a8e074af49f50b6cafbe99ee2c89f6a3a195f5adb7e33f66c3b6334d`.
 
 **VERIFIED Function primitive callbacks:** the two actual Function.prototype
 callbacks now execute in their proved receiver/context profiles. `toString`
@@ -22,7 +43,7 @@ descriptor and scans generated vertices with the native cursor, full-width mesh
 comparison and exact record-bit preservation. Four focused tests and all fourteen
 independent sequences / 31 steps pass, comparing 275 vertices / 5,500 bytes plus
 descriptor snapshots and explicit admission failures. Production window-enabled
-library checking passes without warnings; no dev24 executable/startup ran yet.
+library checking passes without warnings; the later combined checks are above.
 Joined receipt: `evidence/native-primary-export/receipt.json`, SHA-256
 `941f9a40f91e1ead3ed1d97b346bc60dacee117726e6be258e091567b653c464`.
 See [vertex export](docs/SCALE9_PRIMARY_VERTEX_EXPORT.md). No normalization,
