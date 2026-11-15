@@ -485,3 +485,100 @@ startup observations identify the first call and its `Extends` construction;
 they are project-owned investigation records with their own source ledgers.
 All other outside inputs are the same executable, installed tools and REA
 guidance listed in the provenance table above.
+
+## Loaded-target version and the default clear mask
+
+**VERIFIED (static native data flow):** For the inspected AS2 target/definition
+construction and a successfully loaded movie, environment byte `0xf0` caches
+the parsed SWF/GFX file version. This resolves the earlier field-identity gap
+for that path. `ASSetPropFlags` with three arguments consequently defaults to
+clear mask `7` for version `5`, and clear mask `0` for other loaded versions.
+Known loaded targets restricted to versions `7..19` therefore use clear mask
+zero. The AVM1 lane independently observed version `15` in the actual manager
+movie header; no retail process memory was read or execution performed here.
+
+The proof follows the version byte through these native operations:
+
+1. Parser `0x140051110` reads the first four file bytes. At `0x1400511b4` it
+   shifts the resulting little-endian word right by 24, then stores that value
+   at stream offset `0x284`. It validates the low 24 bits against the FWS, CWS,
+   GFX and CFX signatures. A native diagnostic explicitly names the extracted
+   value as the SWF file version.
+2. Load-process constructor `0x140091660` places the stream at process offset
+   `0x50`, its header descriptor at `0x2d0`, and the data-definition state
+   pointer at `0x38`. Thus the parsed version resides at process offset
+   `0x2d4`, descriptor offset `4`.
+3. After a successful parse, `0x140090830` passes the state pointer and that
+   descriptor to `0x140087fb0`. This passes destination `state + 0x50` to copy
+   helper `0x140087600`. The helper reads source offset `4` at `0x140087616`
+   and writes destination offset `4` at `0x14008761d`, preserving the parsed
+   version at state offset `0x54`.
+4. Data-definition constructor `0x140090520` installs vtable `0x142504680`
+   and stores this state at object offset `0x40`. Its virtual slot `0x48`
+   points to `0x1400863a0`, which reads exactly the dword at state offset
+   `0x54`. The file-loading wrapper also uses this same data-definition
+   constructor, grounding the field on the successful load path.
+5. Definition constructor `0x14008d520` installs vtable `0x1425048b0` and
+   stores a binding task at offset `0x38`. The task constructor stores its
+   supplied data definition at offset `0x18`. Definition virtual slot `0x20`
+   points to `0x1400877f0`, which follows those two fields and calls the data
+   definition's slot `0x48`.
+6. A concrete creation path at `0x140187410` passes the constructed definition
+   as the second pointer in a creation record to the registered AS2 support
+   factory. The factory's numeric kind-`3` path forwards that pointer through
+   constructors `0x1400b6d40`, `0x1400b4dd0`, and `0x1400a1130` into target
+   offset `0xb0`. The final target vtable `0x1425069d0` has slot `0x208`
+   bound to `0x1400a12b0`, which returns that exact pointer. The same factory
+   constructs the environment owner and points its environment back to this
+   target. Support creation, owner fields and constructor argument remapping
+   are retained in the target-side receipt.
+7. Getter `0x140099650` calls target slot `0x208`, then definition slot `0x20`.
+   The environment constructor/setters cache its low return byte at `0xf0`.
+   The two further known writes at `0x1401ac326` and `0x1401ac352` use the
+   same getter after temporarily switching and restoring the target; neither
+   introduces a literal version `5` or another override.
+
+This is a static field identity and scoped function contract, not a live
+observation that retail executed the manager with a particular environment.
+The concrete target construction establishes which virtual implementations
+apply; it is not a universal enumeration of native subclasses. The descriptor
+constructor initializes its version to `-1`, and the environment constructor
+starts its cache at zero. Empty definitions, unbound environments, imports and
+unsupported target transitions must retain explicit handling. An implementation
+must associate execution with its known loaded target instead of substituting
+the main movie's version for every possible context. The observed manager
+version is `15`; the previously studied font movies do not establish that value.
+
+The combined private receipt is
+`evidence/rea-native-alternative/movie-version-proof-receipt.json`. It records
+all links, scope conditions, component hashes and 19 complete REA records.
+One header-study timeout record is also retained for audit; the decisive
+instructions were subsequently recovered in a complete bounded call. Every
+complete record has exit code zero, untruncated output and the unchanged
+executable hash.
+
+| Component | Private evidence |
+| --- | --- |
+| Definition getters, constructors and final descriptor copy | `evidence/rea-native-alternative/movie-version-final.bundle.json`, SHA-256 `b0cbf86b170e2c9565f37bb5d543fe3206e4e06d887940fce703c554c825a20e` |
+| Target constructor, support owner, factory and virtual slot binding | `evidence/rea-asflags-followup-version-proof/finding-summary.json` and `final.bundle.json` |
+| Initial environment setter/cache proof | `evidence/rea-asflags-followup-version/finding-summary.json` and `final.bundle.json` |
+| Temporary target-switch version writes | `evidence/rea-asflags-followup-version-writes/finding-summary.json` and `final.bundle.json` |
+| Signature parsing, native version diagnostic and load-success forwarding | `evidence/rea-movie-header/finding-summary.json` and `final.bundle.json` |
+
+Key REA records for the final bridge are
+`ev_47e67828cec2070571189c32f0cc694d6ea20d00f05e62c697459d7b9407a1fc`
+(parsed byte),
+`ev_becd42442b6cccd80bc4c8e7c6824cdd010cd8f83da3d8654d9def193278609a`
+(successful loader forwarding),
+`ev_40816f75c02c0fb99f5b09ff056d4ec8752bf97e34047db24565abe6be980c66`
+(destination state offset), and
+`ev_d37bdccbdab5682db5e6270ea46dc77ec4ccc20dda3863619e3b3b6a1940fbf8`
+(exact version-field copy).
+
+The final two code-only calls used REA's supported raw mapping with
+`asm_arch=x86`, `asm_bits=64`, and base `0x140000c00`, calculated as PE image
+base plus `.text` RVA minus `.text` file offset. Every one of their 222 decoded
+instruction byte spans matched the original PE section bytes. This mapping was
+used only for `.text` instructions, not for data-section reads. Sessions were
+exported/reset; no configuration, original asset or executable was modified.
+No additional external implementation source was read for this proof.
