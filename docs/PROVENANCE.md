@@ -417,3 +417,19 @@ The [runtime text GPU observation](RUNTIME_TEXT_PREPARATION.md) records the
 failed whole-scene visibility assertion, private dependency drift and installed
 Pillow 13.0.0 metadata (MIT-CMU). Pillow only encoded unchanged diagnostic RGBA;
 neither that tool nor the captures are bundled in the client.
+
+[Attached Function.apply](REA_ATTACHED_FUNCTION_APPLY.md) records the owned
+binary's typed display receiver conversion and independent invocation
+Environment. [Saved event execution](SAVED_EVENT_EXECUTION.md) records persistent
+source-wrapper pools, owner registers/operand stacks and the null activation
+fence. These contracts do not make the generic diagnostic executor a native
+startup or event dispatcher.
+[Persistent saved-action state](SAVED_ACTION_STATE.md) implements the recovered
+state ownership and successful pool/register operations in a standalone module;
+its focused synthetic checks do not establish native event execution.
+
+[TextField format mapping](TEXTFIELD_FORMAT_MAPPING.md) follows the owned
+EditText loader through fresh HTML document formatting and layout consumers.
+The recovered scalar style/effect values remain conditional on that specific
+runtime path; current font selection and effective layout flags are separate
+inputs. Raw tables, disassembly and all extracted movie data stay private.
