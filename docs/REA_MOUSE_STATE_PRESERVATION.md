@@ -231,3 +231,33 @@ disassembly. Original Python standard-library scripts verified file bytes and
 receipts. No third-party VM source, client execution, network request, shared
 configuration change, asset publication or diagnostic invocation occurred.
 REA evidence was exported and the investigation reset.
+
+## Follow-up: MovieImpl public secondary interface
+
+**VERIFIED (static):** the secondary interface at **`M + 10`** is distinct
+from the secondary interface at **`C_M + 10`**. The complete MovieImpl
+constructor loads table `0x1424feb48` at `0x1400650b8` and stores it at
+`M + 10` at `0x1400650c2` (retained evidence
+`ev_149d3f952db9806b9f26bcba22adae820ef892183dd23cf8afafbedb7bdbc709`).
+
+Its virtual `+18` is forwarding adapter `0x1400314e0`. This calls the
+receiver's virtual-zero getter, `0x140062be0`. That getter reads
+`[receiver + 70] = [M + 80] = C_M` and returns `C_M + 10` when nonnull.
+The adapter then tail-calls that returned interface's virtual `+18`, preserving
+the requested numeric state ID. The concrete backing table `0x1424fe410`
+selects **single-state lookup `0x140050840`**, not bulk lookup `0x140050920`.
+
+Complete `0x140050840..0x140050919` compares the requested ID with each
+candidate state's actual DWORD at `+10`, retains a local hit, and otherwise
+calls the parent's secondary interface `+18` or returns null when the parent
+is null. Therefore an ID-2 request on `M + 10` follows the actual MovieImpl
+bag and its parents. This proves dispatch/ownership, not the current presence
+or contents of state 2, and does not invoke or inspect a diagnostic helper.
+
+Canonical new evidence:
+`ev_4283c0a7e86560c60e930ba8a0e3b0dc28a041f53bd9ef1319f7cc00f0d6543c`,
+`evidence/rea-mouse-state-preservation/movieimpl-secondary.bundle.json`.
+The corresponding verification checks 85 instructions / 274 bytes and 80
+vtable bytes against the unchanged owned PE. Receipt:
+`movieimpl-secondary-receipt.json`, SHA-256
+`4544cd46fde7efd683a67b02c21a8d5129c2ed7c3bbc33f11c079340bef6c161`.
