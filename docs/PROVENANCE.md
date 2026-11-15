@@ -350,3 +350,10 @@ pinned MarvelFrontEndMap and its conditional OpenMovie producer through REA.
 style/provenance inputs and unchanged saved definitions. Neither proves native
 lifecycle execution. [World transform defaults](WORLD_TRANSFORM_DEFAULTS.md)
 records native copy/constructor gates while preserving unresolved effective inputs.
+
+[Attached name classification](ATTACHED_NAME_CLASSIFICATION.md) uses complete
+owner-private inventories authenticated with the exact-buffer digest seam.
+The inventory data remains outside git and packages; live VM state guards remain
+separate from static membership.
+[Reduced native trace](NATIVE_REDUCED_METADATA_TRACE.md) records actual offline
+package opens, local connection metadata and unchanged private inputs.

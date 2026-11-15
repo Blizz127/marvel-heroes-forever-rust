@@ -95,8 +95,10 @@ the saved label. The global registration evidence is in
 The verified standard-member table maps `text` to ID **40**, `html` to **45**,
 and `htmlText` to **46**. Each has the table's bit-29 classification and not
 bit 28. Attached setter `0x1401eb7d0` uses the canonical name lookup
-`0x14018ff00`; getter `0x140195640` uses the corresponding IDs. A generic
-standard-property helper declines these IDs before the TextField switch.
+`0x14018ff00`; getter `0x140195640` uses the corresponding IDs. The setter first calls a generic
+standard-property helper, which declines these IDs before the TextField switch.
+The getter routes directly into its own ID switch; its generic getter is in
+the out-of-range/default path.
 
 For these setters, a non-null environment can first cause lazy storage creation
 and invoke its watch path. A watch can replace the copied Value consumed by the

@@ -250,3 +250,14 @@ Rust tests passed. No original client, live server or full suite was run.
 
 The parser, classification code, format, synthetic tests and private verification
 helpers are original. No SDK source or third-party VM implementation was used.
+
+## Root exact-buffer integration
+
+**VERIFIED Rust execution:** the integrated SHA-256 provider checked the owned
+48,544,080-byte executable and the exact 4,226-byte private inventory before
+parsing. Nine real initializer/label frontier names classified Ordinary and
+absent from the original native baseline; a changed inventory byte rejected.
+The source hashes remained unchanged across build/run. Receipt:
+`evidence/native-name-profile-root/receipt.json`. The root module hook was
+uncommitted at capture and is covered by its file hash. This proves inventory
+membership, not a live missing property or initialized attached frontend.

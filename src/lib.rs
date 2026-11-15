@@ -5,6 +5,7 @@ pub const TARGET_BUILD: &str = "1.52.0.1700";
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod animation;
+pub mod attached_name_profile;
 pub mod avm1;
 pub mod calligraphy;
 pub mod camera;
