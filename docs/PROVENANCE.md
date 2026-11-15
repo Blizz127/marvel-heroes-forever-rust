@@ -370,3 +370,15 @@ No glibc implementation was copied into product sources.
 identity and conditional text-state contracts with exact scene bindings. Its
 synthetic cross-layer checks remain separate from original-script execution,
 native startup and renderer integration.
+
+[Saved startup map](FRONTEND_STARTUP_MAP.md) prepares explicit serialized
+sequence properties and ordered links without inventing omitted defaults or
+executing the native player lifecycle. [Targeted startup trace](NATIVE_TARGETED_METADATA_TRACE.md)
+and [original client configuration](NATIVE_CLIENT_CONFIG.md) record the isolated
+retail path observation and private inspection of the owner's exact file.
+[Text vertical layout](TEXTFIELD_VERTICAL_LAYOUT.md) records saved action order,
+native alignment and metric paths, preserving unresolved early state and public
+transform semantics. [Native String methods](STRING_NATIVE_METHODS.md) records
+the owned executable's boxing/constructor graph and exact ASCII uppercase map;
+unsupported Unicode and mutable-graph cases remain explicit. All native evidence
+and raw source inputs remain private under the paths in those studies.

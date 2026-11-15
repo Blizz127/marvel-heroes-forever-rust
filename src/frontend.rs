@@ -51,6 +51,8 @@ pub mod scene_content;
 pub mod selection;
 #[path = "frontend/stage_state.rs"]
 pub mod stage_state;
+#[path = "frontend/startup_map.rs"]
+pub mod startup_map;
 #[path = "frontend/textfield_state.rs"]
 pub mod textfield_state;
 #[path = "frontend/textfield_host.rs"]
