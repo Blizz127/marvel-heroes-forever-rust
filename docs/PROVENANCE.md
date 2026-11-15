@@ -503,3 +503,14 @@ the owned executable and preserves its shared target-status word with focus stat
 UObject/class serializers used for narrow Level, Model, Polys and World property
 admission. WorldInfo remains with the existing actor reader; retained native
 tails and successful property parsing do not establish startup behavior.
+
+[Saved dispatch](SAVED_DISPATCH.md) composes the previously registered native
+wrapper, installed-vector and persistent Environment contracts in original Rust.
+The phase leaves dynamic member lookup pending and does not infer event timing.
+
+[Saved script calls](SAVED_SCRIPT_CALLS.md) records shared operands and exact
+Function2 register allocation from the owned executable. [Saved assignment](SAVED_VARIABLE_ASSIGNMENT.md)
+adds the native simple-name target route; it also registers the studied Microsoft
+CRT `strchr` documentation (CC BY 4.0), used only to interpret delimiter search.
+[MovieClip autoSize](ATTACHED_AUTOSIZE_FALLTHROUGH.md) records the concrete
+case-3 ordinary-property fallback separately from TextField layout behavior.
