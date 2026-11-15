@@ -1,7 +1,45 @@
 # Retail client and implementation findings
 
 Task `a3d58c579542`, first inspection 2026-11-15 UTC. Claims below distinguish
-file observations from execution. No retail client or server login has been run.
+file observations from execution. Earlier entries retain the state when recorded;
+later dated build/probe entries supersede them. Isolated offline retail probes
+have now run; no server login or playable Rust frontend has been demonstrated.
+
+## 2026-11-15 dev10 diagnostic increment
+
+**VERIFIED Rust execution:** source
+`49aa8b6a60b99f5f10f43066deadbfd4879cfbd1` builds with the optional window feature.
+Binary SHA256 `cec700be0be7a4ebef750a7acd337389bc187e3c0f3be3ba05614c11fba459a3`
+passes eight focused CLI/image checks and a fresh isolated native-window smoke
+presenting two frames, with no stderr. Saved login text remains 33/33 fields and
+303 glyph fills; cursor and login pixels equal their retained diagnostic outputs.
+The Plain-root initializer diagnostic remains a conditional 452-action model,
+not attached retail startup. Receipts: private
+`evidence/build-0.1.0-dev.10-smoke.json` and `dev10-native-html/receipt.json`.
+
+The build adds checked attached display/source identities, active script-target
+host calls, native zero-argument Object metadata, a fresh ExternalInterface
+graph, bounded attached event state, resource localization and explicit
+movie/player/receiver routing. Four display-state and three external-context
+checks pass. The original attached cursor runs 14 instructions/six property
+calls. The new composed localization route's original-wrapper validation is
+separate and still in progress at this build checkpoint. World-transform math
+also has independent explicit-input checks; actual Vista defaults remain gaps.
+
+**OBSERVED retail limit:** the owner-documented standalone command remained a
+black primary window through the bounded offline probe. Its original assets were
+unchanged. No successful frontend, login or gameplay is claimed. The later
+metadata-only trace is also bounded, and reaching its syscall cap is not retail
+startup completion. Detailed private evidence is linked from the native-probe
+documents.
+
+The Linux dependency notice collection covers 114 dependencies/217 texts,
+manifest SHA256 `3a48fbb2860337440711eb74d77d45c882700de3f8f2f91effc5022be518132c`.
+The earlier all-platform metadata collection was incomplete and is preserved
+separately; only `dependency-notices-dev10-linux` is selected for this Linux build.
+This remains an original-code diagnostic, with no bundled game assets, no server
+connection, and zero finished upgrades. Private staging is distinct from launcher
+publication, for which no Rust delivery route has been confirmed.
 
 ## Target identity and private preservation
 
