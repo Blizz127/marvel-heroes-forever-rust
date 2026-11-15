@@ -133,7 +133,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Twenty-two focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twenty-three focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -369,8 +369,9 @@ Equals2 at13730: ECMA abstract equality returns false without object coercion, s
 null/undefined checks now precede the unsupported object-to-primitive path. Its
 four Selection extension flags, `gfxExtensions`, and `_focusrect` are stored, but
 this probe does not implement or claim their eventual input/focus effects. The
-next stop is DataProvider's Extends at30980 (CodeId7) because Array is not installed.
-Normal root actions and later initializers do not run after that failure.
+next stop at that increment is DataProvider's Extends at30980 (CodeId7), before
+Array is installed. Normal root actions and later initializers do not run after
+that failure; the following Array increment advances this baseline.
 
 `run-init-order-selection.rs`, `init-order-selection.tsv` (the earlier function
 inheritance stop), `init-order-function-prototype.tsv`,
@@ -380,6 +381,40 @@ checks also cover loaded target versus receiver identity, restoration after a
 getter from an unbound target, version mismatch, direct intrinsic ambiguity and
 the shared intermediate prototype identity. These are original-Rust observations,
 not execution of the retail client.
+
+## Bounded Array foundation
+
+`install_array_constructor()` explicitly installs Array after Object and before
+any script definitions or array creation. The documented creation forms are
+implemented: zero arguments, one bounded nonnegative integral Number as length,
+or an element list otherwise. Passing an existing array produces a new one-element
+array containing that reference; it is not a cast or flatten operation. Fractional,
+negative and nonfinite numeric lengths stop explicitly, and exceeding the configured
+length limit produces a resource-budget error. Adobe documents integer conversion
+for fractional input, so no ECMAScript/AS3 RangeError behavior is substituted.
+
+Constructed arrays and InitArray results share an Array-prototype identity linked
+to Object.prototype. The Array prototype's own native category, initial length and
+index/resize behavior are still gated pending the dedicated native study. Numeric
+or length accesses that reach this prototype therefore stop; this includes sparse
+index reads that cannot be satisfied by an own stored element. Real array instances
+expose their own length and stored elements. Array methods are not fabricated.
+The native Extends operation can use this prototype identity without invoking the
+Array constructor or depending on unproved prototype length behavior.
+
+**OBSERVED:** The original manager now completes 52 serialized root-frame
+initializers in the same VM, with the original FocusHandler accessor returning the
+one retained Selection listener. The next stop is NewMethod at323687 (CodeId52,
+initializer321958), entering a constructor that requests unsupported super/parent
+register preloading. No initializer after that stop or ordinary root action runs.
+Array-prototype index/length guards are not reached in this probe.
+
+`run-init-order-array.rs`, `init-order-array.tsv`, `vm-tests-array.txt` and
+`array-startup-evidence.json` retain the owned result and 23 passing focused VM
+checks. The Array check exercises creation forms, nested reference identity,
+constructor opcodes, bounds, version-independent unsupported coercions, and the
+prototype-specific guards. This is an execution increment, not completed Array
+or frontend parity.
 
 ## Indexed movie-property host seam
 
@@ -485,11 +520,12 @@ manager/login root-frame distributions and registration dependencies.
 | --- | --- | --- |
 | [Adobe SWF19 specification](https://open-flash.github.io/mirrors/swf-spec-19.pdf) | © 2006–2012 Adobe, all rights reserved | Published AVM1 operation, function, register and stack descriptions; study only. |
 | [ECMA-262 edition 3](https://ecma-international.org/wp-content/uploads/ECMA-262_3rd_edition_december_1999.pdf) | Published ECMA standard; no implementation licence asserted | Sections 9.4–9.6, 11.6.1, 11.8.5 and 11.9: integer conversions and newer comparison/addition algorithms referenced by Adobe. |
-| [Adobe AS2 global functions](https://open-flash.github.io/mirrors/as2-language-reference/global_functions.html) and [constants](https://open-flash.github.io/mirrors/as2-language-reference/constants.html) | © 2004–2008 Adobe, all rights reserved | Version-specific primitive conversion cautions. |
+| [Adobe AS2 global functions](https://open-flash.github.io/mirrors/as2-language-reference/global_functions.html) and [constants](https://open-flash.github.io/mirrors/as2-language-reference/constants.html) | © 2004–2008 Adobe, all rights reserved | Version-specific primitive conversion cautions and the global Array creation forms. |
 | [Adobe compiler migration warnings, AIR SDK mirror](https://airsdk.dev/reference/actionscript/3.0/compilerWarnings.html) | Adobe API documentation, copyrighted; maintained mirror | Warning 1039 documents AS2/AS3 empty/whitespace numeric conversion differences; these cases remain unsupported here. |
 | [Adobe SWF v9 specification, authored PDF mirror](https://www.mobilefish.com/download/flash/swf_file_format_spec_v9.pdf) | © 2006–2008 Adobe, all rights reserved | Cross-check Extends `__proto__` / `__constructor__` fields obscured in extracted v19 text. |
 | [Adobe AS2 Object reference](https://open-flash.github.io/mirrors/as2-language-reference/Object.html) and [Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html) | Adobe copyrighted documentation, all rights reserved | Object construction and prototype behavior; registerClass and function call/apply contracts for remaining bootstrap work. |
-| [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; `Function(value)` adoption remains unverified and unimplemented. |
+| [Adobe AS2 Array reference](https://open-flash.github.io/mirrors/as2-language-reference/Array.html) | © 2004–2010 Adobe, all rights reserved | Array/Object inheritance and bounded documented constructor forms. Prototype-specific ECMAScript behavior is not assumed to be AS2 behavior. |
+| [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; Array conversion takes precedence over an identity cast. `Function(value)` adoption remains unimplemented in this increment. |
 | [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage context; native implementation decisions use the cited owned REA evidence. |
 | Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata and return-value behavior; static REA evidence only. |
 | Owner's private frontend-manager and login GFX bytes | Proprietary retail material, private compatibility study | Original-script isolated probes and actual unsupported-dependency measurements. |

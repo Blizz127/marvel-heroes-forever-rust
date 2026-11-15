@@ -264,6 +264,8 @@ enum Kind {
     Script(ScriptFunction),
     Native(u32),
     ObjectConstructor,
+    ArrayConstructor,
+    ArrayPrototype,
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
@@ -277,6 +279,7 @@ impl Kind {
             Self::Native(_)
                 | Self::Script(_)
                 | Self::ObjectConstructor
+                | Self::ArrayConstructor
                 | Self::AddProperty
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
@@ -335,6 +338,8 @@ pub struct Vm {
     root: ObjectId,
     object_constructor: Option<ObjectId>,
     function_prototype: Option<ObjectId>,
+    array_constructor: Option<ObjectId>,
+    array_prototype: Option<ObjectId>,
 }
 impl Vm {
     /// This execution profile supports SWF 7+; legacy coercions are not guessed.
@@ -359,6 +364,8 @@ impl Vm {
             root: ObjectId(0),
             object_constructor: None,
             function_prototype: None,
+            array_constructor: None,
+            array_prototype: None,
         };
         if !(7..=19).contains(&version) {
             return vm.fail(ErrorKind::Unsupported(
@@ -522,6 +529,48 @@ impl Vm {
         self.set(self.global, "Object", Value::Object(constructor))?;
         self.object_constructor = Some(constructor);
         Ok(constructor)
+    }
+    /// Installs the documented Array creation forms. Prototype-specific indexed
+    /// and length behavior remains explicit until native metadata is established.
+    /// Install before defining script functions or creating array values.
+    pub fn install_array_constructor(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.array_constructor {
+            return Ok(id);
+        }
+        let Some(object) = self.object_constructor else {
+            return self.fail(ErrorKind::Unsupported("install Object before Array"));
+        };
+        if self.has_key(self.global, &text("Array"))? {
+            return self.fail(ErrorKind::Unsupported("Array binding already exists"));
+        }
+        if self
+            .objects
+            .iter()
+            .any(|object| matches!(object.kind, Kind::Script(_) | Kind::Array(_)))
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "install Array before scripts or array creation",
+            ));
+        }
+        let parent = self.object_id(self.get(object, "prototype")?)?;
+        let constructor = self.alloc(Kind::ArrayConstructor, None)?;
+        let prototype = self.alloc(Kind::ArrayPrototype, Some(parent))?;
+        self.set(constructor, "prototype", Value::Object(prototype))?;
+        self.set(prototype, "constructor", Value::Object(constructor))?;
+        self.set(self.global, "Array", Value::Object(constructor))?;
+        self.array_constructor = Some(constructor);
+        self.array_prototype = Some(prototype);
+        Ok(constructor)
+    }
+    fn check_array_prototype_member(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if matches!(self.objects[id.0].kind, Kind::ArrayPrototype)
+            && (key.as_ref() == text("length").as_ref() || array_index(key).is_some())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "Array prototype indexed/length semantics",
+            ));
+        }
+        Ok(())
     }
     fn ordinary_object(&mut self) -> Result<ObjectId> {
         let prototype = if let Some(constructor) = self.object_constructor {
@@ -758,6 +807,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
+            self.check_array_prototype_member(id, key)?;
             if key.as_ref() == text("__proto__").as_ref() {
                 return Ok(object.prototype.map_or(Value::Null, Value::Object));
             }
@@ -786,6 +836,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
+            self.check_array_prototype_member(id, key)?;
             if object.properties.contains_key(key)
                 || key.as_ref() == text("__proto__").as_ref()
                 || (matches!(object.kind, Kind::Array(_))
@@ -805,6 +856,12 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
+            if let Kind::Array(length) = object.kind {
+                if key.as_ref() == text("length").as_ref() {
+                    return Ok(Some(Property::Data(Value::Number(f64::from(length)))));
+                }
+            }
+            self.check_array_prototype_member(id, key)?;
             if let Some(property) = object.properties.get(key) {
                 return Ok(Some(property.clone()));
             }
@@ -838,6 +895,7 @@ impl Vm {
                     Kind::Script(_)
                         | Kind::Native(_)
                         | Kind::ObjectConstructor
+                        | Kind::ArrayConstructor
                         | Kind::AddProperty
                         | Kind::RegisterClass
                         | Kind::SetPropertyFlags
@@ -925,6 +983,7 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        self.check_array_prototype_member(id, &key)?;
         self.check_value(&value)?;
         if matches!(self.descriptor(id, &key)?, Some(Property::Accessor { .. })) {
             return self.fail(ErrorKind::Unsupported(
@@ -1465,6 +1524,22 @@ impl Vm {
                 );
                 return Ok(Value::Bool(true));
             }
+            Kind::ArrayConstructor => {
+                if let [Value::Number(length)] = args {
+                    if !length.is_finite() || *length < 0.0 || length.fract() != 0.0 {
+                        return self.fail(ErrorKind::Unsupported(
+                            "Array numeric length conversion profile",
+                        ));
+                    }
+                    if *length > f64::from(self.limits.array_length) {
+                        return self.fail(ErrorKind::Budget("array length"));
+                    }
+                    return Ok(Value::Object(
+                        self.alloc(Kind::Array(*length as u32), self.array_prototype)?,
+                    ));
+                }
+                return Ok(Value::Object(self.array(args)?));
+            }
             Kind::ObjectConstructor => {
                 if args.len() > 1 {
                     return self.fail(ErrorKind::Unsupported("Object constructor extra arguments"));
@@ -1573,9 +1648,10 @@ impl Vm {
         if len > self.limits.array_length {
             return self.fail(ErrorKind::Budget("array length"));
         }
-        let id = self.alloc(Kind::Array(len), None)?;
+        let id = self.alloc(Kind::Array(len), self.array_prototype)?;
         for (i, value) in values.iter().enumerate() {
-            self.set(id, &i.to_string(), value.clone())?;
+            self.check_value(value)?;
+            self.raw_member(id, text(&i.to_string()), Property::Data(value.clone()), 0)?;
         }
         Ok(id)
     }
@@ -1954,6 +2030,7 @@ impl Vm {
                                 Kind::Script(_)
                                     | Kind::Native(_)
                                     | Kind::ObjectConstructor
+                                    | Kind::ArrayConstructor
                                     | Kind::AddProperty
                                     | Kind::RegisterClass
                                     | Kind::SetPropertyFlags
@@ -2167,6 +2244,7 @@ impl Vm {
                                     Kind::Script(_)
                                         | Kind::Native(_)
                                         | Kind::ObjectConstructor
+                                        | Kind::ArrayConstructor
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
@@ -2515,6 +2593,87 @@ mod tests {
         assert_eq!(result.stack, vec![Value::Number(42.0)]);
         assert_eq!(host.calls, 1);
         assert_eq!(result.host_calls, 1);
+    }
+    #[test]
+    fn array_constructor_creation_forms_and_prototype_limits_are_explicit() {
+        let mut vm = setup();
+        assert!(vm.install_array_constructor().is_err());
+        vm.install_object_constructor().unwrap();
+        let constructor = vm.install_array_constructor().unwrap();
+        let root = vm.root();
+        let create = |vm: &mut Vm, args: &[Value]| {
+            let Value::Object(id) = vm
+                .call(
+                    Value::Object(constructor),
+                    Value::Object(root),
+                    args,
+                    &mut RejectHost,
+                )
+                .unwrap()
+                .value
+            else {
+                panic!()
+            };
+            id
+        };
+        let empty = create(&mut vm, &[]);
+        assert_eq!(vm.get(empty, "length").unwrap(), Value::Number(0.0));
+        let sized = create(&mut vm, &[Value::Number(3.0)]);
+        assert_eq!(
+            vm.read_property(sized, "length", &mut RejectHost)
+                .unwrap()
+                .value,
+            Value::Number(3.0)
+        );
+        let values = create(&mut vm, &[Value::Number(2.0), Value::Number(5.0)]);
+        assert_eq!(vm.get(values, "length").unwrap(), Value::Number(2.0));
+        assert_eq!(vm.get(values, "1").unwrap(), Value::Number(5.0));
+        let nested = create(&mut vm, &[Value::Object(values)]);
+        assert_ne!(nested, values);
+        assert_eq!(vm.get(nested, "0").unwrap(), Value::Object(values));
+        let string = create(&mut vm, &[Value::string("3")]);
+        assert_eq!(vm.get(string, "length").unwrap(), Value::Number(1.0));
+        let Value::Object(prototype) = vm.get(constructor, "prototype").unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            vm.get(values, "__proto__").unwrap(),
+            Value::Object(prototype)
+        );
+        assert!(vm.get(prototype, "length").is_err());
+        assert!(vm.set(prototype, "0", Value::Null).is_err());
+        assert!(vm
+            .call(
+                Value::Object(constructor),
+                Value::Object(root),
+                &[Value::Number(-1.0)],
+                &mut RejectHost
+            )
+            .is_err());
+        assert!(vm
+            .call(
+                Value::Object(constructor),
+                Value::Object(root),
+                &[Value::Number(1.25)],
+                &mut RejectHost
+            )
+            .is_err());
+        let huge = vm
+            .call(
+                Value::Object(constructor),
+                Value::Object(root),
+                &[Value::Number(1_000_001.0)],
+                &mut RejectHost,
+            )
+            .unwrap_err();
+        assert_eq!(huge.kind, ErrorKind::Budget("array length"));
+        let mut bytes = push(&[Value::Number(0.0), Value::string("Array")]);
+        bytes.push(0x40);
+        let result = execute(&mut vm, &bytes).unwrap();
+        let Value::Object(new) = result.stack[0] else {
+            panic!()
+        };
+        assert_eq!(vm.get(new, "length").unwrap(), Value::Number(0.0));
     }
     #[test]
     fn inherited_undefined_shadows_outer_scope() {
