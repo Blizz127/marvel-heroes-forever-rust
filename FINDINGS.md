@@ -339,3 +339,33 @@ Records: `evidence/build-0.1.0-dev.6-smoke.json`,
 `evidence/persistent-pointer/verification.json`, and
 `evidence/build-0.1.0-dev.6-package-validation.json`. No game assets are bundled.
 Private staging remains distinct from publisher-channel delivery.
+
+## Dev.7 integration progress
+
+**OBSERVED (2026-11-15, original manager code in the Rust VM):** The evidenced
+typed MovieClip subclass allocator advances the initializer diagnostic to 118
+complete records and 18,572 instructions, retaining one Selection listener. The
+next record starts at source757488 and stops at Enumerate2 source750939, because
+native multi-name hash order remains gated. The native Object prototype's nine
+stored keys and flags are represented; unimplemented method identities reject
+on invocation. This is not full startup or a native-client execution result.
+
+**VERIFIED (saved HTML composition):** All 33 placed login text fields now
+prepare, including six HTML instances with exact imported font identities.
+303 glyph fills are submitted. CLI image bytes match the independent adapter,
+SHA-256 `67ca5b733220f7a71992ee8f024f75f0b35ec6da1d83804f404a15757dee6ae9`.
+A fresh isolated Xvfb/llvmpipe native window presents two frames and closes at
+its frame limit. Source placeholders, visibility and unsupported effects remain
+explicit; this is an uninitialized diagnostic scene, not a functioning login.
+Records: `evidence/dev7-integration/{initialization,login-render}.json` and
+`evidence/dev7-native-html/receipt.json`.
+
+**VERIFIED within their bounded profiles:** Nine action-queue tests and 29 VM
+tests pass. The pure explicit-reference localization helper was independently
+checked against all 77,089 English defaults: 70,103 preserve raw strings/source
+spans and 6,986 reject unresolved formatting/sentinel cases. Actual nonzero empty
+tooltips preserve true, and the stored empty zero-ID entry preserves false.
+The queue has no runtime executor; the localization helper does not infer
+effective prototype references or install an ExternalInterface callback.
+See `evidence/dev7-integration/focused-tests.json` and
+`evidence/localized-data-check/receipt.json` for scope and corrections.
