@@ -50,6 +50,8 @@ mhf upk summary /private/path/MarvelFrontEndMap.upk
 mhf upk inspect /private/path/MarvelFrontEnd_SF.upk
 mhf upk exports /private/path/MarvelFrontEnd_SF.upk
 mhf upk world /private/path/MarvelEntry.upk theworld
+mhf upk model /private/path/MarvelFrontEndMap.upk 13
+mhf upk polys /private/path/MarvelFrontEndMap.upk 26
 mhf frontend startup-map /private/path/MarvelFrontEndMap.upk
 ```
 
@@ -60,6 +62,11 @@ rendering and the playable frontend remain unimplemented.
 `upk world` reads the supported Engine.World native links and preserves its
 seven-word records exactly. It reports opaque trailing bytes and does not load
 or execute the linked Level. See [World payloads](docs/UPK_WORLD.md).
+
+`upk model` reports the supported raw Model arrays, records and linked Polys
+reference; `upk polys` reads the supported header. Both preserve opaque tails
+and validate class identity. They do not reconstruct world geometry. See
+[Model and Polys payloads](docs/UPK_MODEL_POLYS.md).
 
 `frontend startup-map` reports saved LevelLoaded links in their original order,
 OpenMovie resources, variable links and explicit flag origins. Missing serialized

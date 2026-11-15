@@ -5,7 +5,24 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev17 integration in progress
+## 2026-11-15 dev17 diagnostic increment
+
+**VERIFIED combined build/startup:** clean tested code
+`262d77156062a416b774bd21cd4c1f4c66d843fe` builds with the window feature in
+33.23 seconds without warnings. All 18 CLI/image checks pass, including the
+expanded original Model prefixes. The isolated Rust window presents two frames
+with empty stderr; saved-login and cursor pixels match their prior diagnostic
+captures. Binary SHA-256:
+`b92fd3d2b4aa183d60af416b4123649f59ada86510556738f2f84120f5d759f8`.
+Receipts: `evidence/dev17-build-result.json`,
+`evidence/build-0.1.0-dev.17-smoke.json` and
+`evidence/dev17-native-html/receipt.json`.
+
+This increment includes current-frame TextField composition, zero-argument Point
+construction, direct initial MovieClip prototype selection and expanded Model
+payload decoding. These component APIs are not a complete frontend lifecycle.
+The private package remains diagnostic tooling, with zero finished Forever
+upgrades and no retail frontend, login or gameplay parity claim.
 
 **VERIFIED initial prototype allocation:** the explicit-context selector preserves
 missing versus present-null prototype results and installs the selected identity
@@ -58,8 +75,8 @@ preparation, Point, shared saved calls and Model/Polys prefixes. Receipt:
 `evidence/dev17-point-current-scene-check.json`. This is not a dev17 binary
 startup or native execution result.
 
-Dev16 remains the latest staged diagnostic package. The combined dev17 build,
-native startup, login and gameplay remain unverified.
+Native retail startup to a login screen, Rust login and gameplay remain
+unverified. Service/access holds remain in place.
 
 **VERIFIED later Model extension:** decoding now reaches native +0x19c, with
 eight bulk arrays, +0xc8 records, the bounded inline +0x55c table and the Polys
@@ -68,8 +85,9 @@ comparisons pass across 311 record spans. Entry retains 92 opaque bytes and
 FrontEnd 56. Receipt:
 `evidence/model-tail-native/independent/product-check/verification.json`, SHA-256
 `f3a0cd90edc3a684a559cbb238a066368b9ca0c1095bcbc272f84d83fda0fbb6`.
-The CLI now reports the additional arrays and records; its next binary smoke
-remains pending. No geometry semantics or execution is inferred from raw words.
+The CLI reports the additional arrays and records; the dev17 binary smoke above
+passes on both original packages. No geometry semantics or execution is inferred
+from raw words.
 
 ## 2026-11-15 dev16 diagnostic increment
 
