@@ -10,6 +10,11 @@ The actual scope is the ten components reached by the saved
 `MarvelFrontEndMap` Level's ModelComponents links, references **14 through 23**.
 No unrelated package scan or Asgard bridge is part of this increment.
 
+The diagnostic command `mhf upk model-component <package.upk>
+<export-name|1-based-index>` prints the retained Model link, component index,
+ordered nodes and element links. Node range validation still requires the
+linked Model; the command performs no geometry or material evaluation.
+
 ## Admission and component preamble
 
 The reader requires an exact `Core.Class` import named `ModelComponent` directly

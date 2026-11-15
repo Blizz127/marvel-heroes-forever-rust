@@ -703,3 +703,9 @@ ledger records exact owned package/native evidence and the retained parser
 references already registered above. The four original default payloads use an
 explicit observed-file profile; unknown schemas remain unresolved. No effective
 default evaluator or copied external implementation was introduced.
+
+[ModelComponent framing](UPK_MODEL_COMPONENT.md) records owned serializer,
+factory and preamble evidence with an independent comparison of all ten saved
+frontend components. Its original reader preserves unknown record words and
+unimplemented polymorphic branches. The ledger retains exact native/tool inputs
+privately; no third-party implementation or geometry behavior was copied.

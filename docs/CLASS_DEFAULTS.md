@@ -6,6 +6,11 @@ reads explicit CDO tags only for the four established GFx saved-file schemas.
 It does not calculate effective values, apply configuration, execute scripts,
 instantiate objects or combine the action and movie-player defaults.
 
+The diagnostic command `mhf upk class-defaults <package.upk> <logical-package-name>
+<1-based-class-index>` prepares one selected class and its local parents. The
+logical name is explicit, and external imports stay unresolved. Output lists
+saved property counts and unresolved chain endpoints without applying defaults.
+
 ## Explicit inputs and retained identity
 
 ```rust

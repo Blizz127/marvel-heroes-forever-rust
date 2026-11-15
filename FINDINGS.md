@@ -7,6 +7,22 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev19 integration in progress
 
+**VERIFIED bounded ModelComponent reader:** four focused tests, 105 independent
+checks and ten original components match 214 comparison rows across all 1,440
+serialized bytes. Those ten components reference Model +13 and their ordered
+node lists cover its twelve saved Nodes once. The parser preserves raw fields,
+links and tails; it does not impose that observed partition as a general rule.
+Receipt: `evidence/model-component-native/final-receipt.json`, SHA-256
+`ea997928cf1ecf1aa6eceec11d5a02dd999245bed5c0f306a2ae19e758a5b9ff`.
+
+**OBSERVED original Mouse call boundary:** the next frozen manager replay
+completes the unchanged 452 initializers and 290 frame instructions. Its
+`Mouse.hide()` call now materializes the bounded Mouse graph and reaches the
+default rejecting host at offset 6391. No accepting handler or cursor action was
+substituted. Earlier geometry and supplied target/host state remain unchanged.
+Receipt: `evidence/avm1-attached-manager-frame-action-increment11/receipt.json`,
+SHA-256 `4719305722d4d0d88f63ea52fddbf5937bcf069109c5ed79c795ad11a79e6d62`.
+
 **VERIFIED static fresh target checkpoint:** the concrete fresh root-source and
 ordinary successful Environment-allocation path reaches native `0x14020366e`
 with target DWORD +0x6a=`0x52004f80`, WORD +0x88=`0x000a`, source WORD

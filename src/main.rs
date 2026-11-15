@@ -44,7 +44,10 @@ fn usage() {
     println!("  mhf prototype verify <archive.sip>");
     println!("  mhf upk summary|inspect|exports <package.upk>");
     println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
-    println!("  mhf upk world|model|polys|class <package.upk> <export-name|1-based-index>");
+    println!(
+        "  mhf upk world|model|model-component|polys|class <package.upk> <export-name|1-based-index>"
+    );
+    println!("  mhf upk class-defaults <package.upk> <logical-package-name> <1-based-class-index>");
     println!("  mhf upk verify-objects <package.upk>");
     println!(
         "  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]"
@@ -159,11 +162,74 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             }
         }
+        "upk" if args.len() == 5 && args[1] == "class-defaults" => {
+            use marvel_heroes_forever::frontend::{
+                AssetLocation, AssetSet,
+                class_defaults::{self, ClassBody, DefaultBody, PackageName},
+            };
+            let index = text(&args[4])?
+                .parse::<usize>()
+                .ok()
+                .and_then(|number| number.checked_sub(1))
+                .ok_or_else(|| invalid("class export index must be a positive integer"))?;
+            let assets = AssetSet::new(vec![PackageArchive::open(Path::new(&args[2]))?])?;
+            let prepared = class_defaults::prepare(
+                &assets,
+                &[AssetLocation {
+                    package: 0,
+                    export: index,
+                }],
+                &[PackageName {
+                    package: 0,
+                    name: text(&args[3])?.to_owned(),
+                }],
+                &[],
+                class_defaults::Limits::default(),
+            )?;
+            println!(
+                "VERIFIED saved class-default provenance: {} class exports, {} default exports, {} explicit properties, {} serialized bytes",
+                prepared.statistics.class_exports,
+                prepared.statistics.default_exports,
+                prepared.statistics.explicit_properties,
+                prepared.statistics.serialized_bytes,
+            );
+            for record in prepared.records.values() {
+                match &record.body {
+                    ClassBody::Parsed { default, .. } => match &default.body {
+                        DefaultBody::Saved(saved) => println!(
+                            "{}: default +{}, {} saved tags, {} opaque trailing bytes",
+                            record.qualified_name,
+                            saved.location.export + 1,
+                            saved.properties.entries.len(),
+                            saved.unknown_tail.length,
+                        ),
+                        DefaultBody::Unresolved { issue, .. } => {
+                            println!("{}: default unresolved ({issue:?})", record.qualified_name,)
+                        }
+                    },
+                    ClassBody::Unsupported { reason } => println!(
+                        "{}: class body unsupported ({reason})",
+                        record.qualified_name,
+                    ),
+                }
+            }
+            for chain in &prepared.chains {
+                println!(
+                    "Parent chain: {} classes; endpoint {:?}",
+                    chain.classes.len(),
+                    chain.end
+                );
+            }
+            println!(
+                "External imports remain unresolved. No effective defaults, configuration or object execution applied."
+            );
+        }
         "upk"
             if args.len() == 4
                 && (args[1] == "properties"
                     || args[1] == "world"
                     || args[1] == "model"
+                    || args[1] == "model-component"
                     || args[1] == "class"
                     || args[1] == "polys") =>
         {
@@ -197,6 +263,32 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             };
             let bytes = archive.read_export(index)?;
+            if args[1] == "model-component" {
+                let component = marvel_heroes_forever::upk::model_component::ModelComponentObject::parse_export(
+                    package, index, &bytes,
+                )?;
+                println!(
+                    "VERIFIED ModelComponent payload: Model reference {}, ComponentIndex {}, {} elements, {} opaque trailing bytes",
+                    component.model.reference,
+                    component.component_index,
+                    component.elements.len(),
+                    component.unparsed_native_tail.length,
+                );
+                println!("Ordered Model node indices: {:?}", component.nodes.values);
+                for (number, element) in component.elements.iter().enumerate() {
+                    println!(
+                        "Element {number}: references {:?}; nodes {:?}; {} extra references; {} raw records",
+                        element.references.map(|link| link.reference),
+                        element.nodes.values,
+                        element.references_20.links.len(),
+                        element.records_38.records.len(),
+                    );
+                }
+                println!(
+                    "Node ranges require the linked Model. No geometry, material evaluation or runtime execution performed."
+                );
+                return Ok(());
+            }
             if args[1] == "class" {
                 let class = marvel_heroes_forever::upk::class::ClassObject::parse_export(
                     package, index, &bytes,

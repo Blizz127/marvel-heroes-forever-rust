@@ -18,6 +18,8 @@ pub mod world;
 pub mod level;
 #[path = "upk/model.rs"]
 pub mod model;
+#[path = "upk/model_component.rs"]
+pub mod model_component;
 #[path = "upk/polys.rs"]
 pub mod polys;
 #[path = "upk/class.rs"]
