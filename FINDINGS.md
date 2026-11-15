@@ -31,8 +31,15 @@ follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
 `evidence/fresh-target-completion/receipt.json`, SHA-256
 `759da0d7f73102701424b891cd58876f7fe28b8c5cf5c6bafdee9bd841aed602`.
 
-Private dev20 staging follows the successful focused checks. Zero Forever
-upgrades are finished; all service/access holds remain in force.
+**VERIFIED private staging, 13:13 UTC:** `builds/0.1.0-dev.20` contains 403
+original-only selected files. Every manifest size/hash and complete file set
+match; packaged version and Original-preset readback pass. Clean package source
+is `5f083c99a6d46132e2f5fbe5d3e9e34159f05010`, differing from tested code only
+in documentation. Receipt:
+`evidence/build-0.1.0-dev.20-package-validation.json`. Coordinator intake is
+queued and supersedes dev19's Rust diagnostic only. Publication and owner-device
+validation remain unconfirmed. Zero Forever upgrades are finished; all service
+and access holds remain in force.
 
 **VERIFIED native fill-matrix arithmetic:** explicit selected-fill bounds now
 produce the separate whole-fill affine, inverse, native inline composition and

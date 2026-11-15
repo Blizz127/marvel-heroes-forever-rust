@@ -1,25 +1,25 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 13:04 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:14 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.20`.
 
 ## Latest private diagnostic
 
-**VERIFIED:** `0.1.0-dev.19` is staged under
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.19/`.
-The window-enabled offline build, 40 CLI/image checks and isolated two-frame
-Rust-window startup pass. All 397 packaged file sizes/hashes and the complete
+**VERIFIED:** `0.1.0-dev.20` is staged under
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.20/`.
+The window-enabled offline build, 45 CLI/image checks and isolated two-frame
+Rust-window startup pass. All 403 packaged file sizes/hashes and the complete
 file set match; packaged version and Original-preset readback pass. The clean
-package source is `b9943ef77b059b8ea80bf1b01885241eb23c6ad9`; tested code is
-`4bc1827a07e983ecbd724bf26066f249844c7191`, with documentation-only differences.
+package source is `5f083c99a6d46132e2f5fbe5d3e9e34159f05010`; tested code is
+`6ed15b2770d7215c3e2c884c8fbd405c996d706e`, with documentation-only differences.
 Binary SHA-256:
-`da50b5512ecbde1e5a0d84de789253d3971ade5ac5de91d6ee6c46389c4010d7`.
+`354c23a2b7dcba6155ab9e3d1b6a609f95d46bae75a110989c87350031623ead`.
 
-Receipts are `evidence/build-0.1.0-dev.19-smoke.json`,
-`evidence/dev19-native-html/receipt.json` and
-`evidence/build-0.1.0-dev.19-package-validation.json`. Dependency notices cover
+Receipts are `evidence/build-0.1.0-dev.20-smoke.json`,
+`evidence/dev20-native-html/receipt.json` and
+`evidence/build-0.1.0-dev.20-package-validation.json`. Dependency notices cover
 121 selected packages and 231 notice texts. Coordinator intake is queued;
 publication and owner-device validation remain unconfirmed. Staged is not
 published. Earlier private builds remain available.
@@ -38,7 +38,9 @@ notices; no retail executable, game assets, captures or extracted data.
 - **VERIFIED asset increments:** both selected Entry/FrontEnd Model exports
   now have complete serialized framing. Four UClass records match all 4,367
   bytes, including exact terminal default references. Ten ModelComponents and
-  four class/default intakes retain explicit links and tag origins. Typed package, texture,
+  four class/default intakes retain explicit links and tag origins. The checked
+  Model binding joins saved Level/component links to actual Model record spans.
+  Typed package, texture,
   shape/font, Calligraphy, static/skeletal mesh and animation components retain
   their documented unsupported fields and runtime conditions.
 - **OBSERVED controlled original execution:** 452 manager initializers complete.
@@ -58,6 +60,10 @@ notices; no retail executable, game assets, captures or extracted data.
   archive/library associations. Shared saved-call state, initial prototype
   selection and native-backed visibility/property paths retain their explicit
   admission profiles. No complete frontend lifecycle is claimed.
+- **VERIFIED bounded native geometry/paint:** explicit-input rectangle
+  tessellation and whole-fill matrix arithmetic pass independent native-derived
+  comparisons. Runtime provider/options/resource selection and output-coordinate
+  reconstruction remain unbound, so these do not enable a renderer path.
 - **OBSERVED original-client reference:** isolated offline retail runs reached
   splash frames, not a login screen. Their immutable receipts distinguish
   observed output from unproved causes and prerequisites. No new native run is
@@ -70,8 +76,8 @@ and the component ledgers linked from [PROVENANCE.md](docs/PROVENANCE.md).
 
 Continue the actual Mouse user-event handler path, fresh target and root
 construction, default application, ModelComponent linkage and native Scale9
-geometry/resource inputs. Saved class-default provenance and bounded source-path
-staging are included in dev19. Then connect the complete display lifecycle to the
+geometry/resource inputs. Checked Model bindings and bounded native rectangle/
+paint arithmetic are included in dev20. Then connect the complete display lifecycle to the
 persistent renderer and input host. A callback stub, guessed default or synthetic
 check must not be presented as original startup success.
 
