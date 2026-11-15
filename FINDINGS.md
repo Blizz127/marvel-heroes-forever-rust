@@ -5,6 +5,23 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev16 integration in progress
+
+**VERIFIED bounded member admission:** native-evidence-backed ordinary
+underscore names now reach existing storage while standard aliases, reserved
+metadata and unsupported level-name routes remain excluded. Four focused checks
+pass. The unchanged minimal manager fixture completes its 452 initializers and
+advances from 194 to 217 frame instructions, storing `_bMouseOver=false`,
+`_bShowTooltip=true` and `tooltip_mc=null`. It then rejects the missing supplied
+`flash.geom` namespace before constructing Point. This is an explicit-global
+fixture boundary, not evidence that native Flash lacks that namespace.
+
+Receipt: `evidence/avm1-attached-manager-frame-action-increment8/receipt.json`,
+SHA-256 `aa8ab18c6c6160a992df64afe625bf39ea7f3fa3ac40bfa725364666ca2c7b20`.
+The controlled root name remains synthetic and visibility policy remains
+unbound. No original constructor completion or rendered result is claimed.
+Dev15 remains the latest staged diagnostic build.
+
 ## 2026-11-15 dev15 diagnostic increment
 
 **VERIFIED build/startup:** clean tested code

@@ -559,3 +559,8 @@ dependencies and 231 selected licence/notice files. Its private manifest is
 `9a372a0fdc06021ddaab37464e801cd5d5b6b8df126bdfd1d16a5a29579e34c6`.
 The package contains original project deliverables and these notices, without
 retail executable, assets, extracted data or captures.
+
+[Ordinary underscore names](ATTACHED_UNDERSCORE_NAMES.md) records the pinned
+native getter/setter and standard-name lookup evidence used for the bounded
+storage admission. Its private inventory remains outside the repository; the
+added predicate exposes membership only, without embedding native name data.
