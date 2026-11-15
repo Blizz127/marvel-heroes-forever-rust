@@ -2,6 +2,13 @@
 
 Task `a3d58c579542`, 2026-11-15 UTC.
 
+**Later argument reconciliation:** this historical probe used
+`-siteconfigurl=mh.bansheerealm.com:8443/SiteConfig.xml`. The current read-only
+launcher source instead emits `mh.bansheerealm.com/SiteConfig.xml` for HTTP port
+80. These arguments are not verified equivalents. [Service entry evidence](MHSERVEREMU_TEST_ENTRY.md)
+records the source conflict. The original run/receipt is preserved, and its
+offline splash observation does not establish correct service configuration.
+
 The [first full selected-distribution observation](NATIVE_FULL_DISTRIBUTION_PROBE.md)
 stopped conservatively when the ordinary loading splash appeared. After visually
 inspecting that frame and verifying all 16,490 input hashes again, root authorized

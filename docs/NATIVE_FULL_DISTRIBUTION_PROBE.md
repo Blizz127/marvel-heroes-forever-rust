@@ -2,6 +2,12 @@
 
 Task `a3d58c579542`, 2026-11-15 UTC.
 
+**Later argument reconciliation:** this historical run used the inherited
+`:8443/SiteConfig.xml` argument. Current local launcher source selects HTTP
+port 80 instead. [Service entry evidence](MHSERVEREMU_TEST_ENTRY.md) records the
+conflict without changing the sealed run. Its offline observation is not proof
+that the supplied service argument matches the current launcher contract.
+
 The preceding [454-file observation](NATIVE_CONFIG_PRESENT_PROBE.md) reached a
 successful read-only open of the exact owner configuration but left an
 essentially black primary game window. Root authorized one new frozen input set

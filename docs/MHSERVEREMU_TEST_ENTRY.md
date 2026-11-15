@@ -195,3 +195,18 @@ files; the named Marvel status; the Sept28 contract; and the dated coordinator
 notes/Nov14 review. Exact task-ledger reads are separately preserved with query
 time and status/event timestamps. No remote service, installed launcher build
 or live controller identity was verified, and no source repository was edited.
+
+## Root public route observation
+
+**OBSERVED 2026-11-15 11:44:25 UTC:** root made one bounded unauthenticated GET
+to `http://mh.bansheerealm.com/SiteConfig.xml`, the route selected by the current
+local launcher source. Curl completed with HTTP **502**, `text/html`, 150 bytes.
+This does not identify the backend process or establish whether the game server
+is asleep, stopped, held or serving players. No redirects were followed and no
+wake, login or native-client request was made.
+
+The private receipt, response headers and body are under
+`evidence/siteconfig-route-check-20261115T1145Z/`. The response body SHA-256 is
+`61b30d408583991fd69f3dec694e154cb652471e663328ad9c8482c9021ab5db`.
+The concrete route failure and unresolved hold were queued to the coordinator;
+the report does not establish acknowledgement or release of that hold.

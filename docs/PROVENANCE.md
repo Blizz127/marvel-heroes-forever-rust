@@ -524,3 +524,10 @@ runtime state, delivery and constructor scheduling remain separate requirements.
 map comparisons used for ordered package-local links and preserved raw records.
 The parser and inspection command do not load the referenced Level or infer
 meaning for the remaining native fields.
+
+[Attached target initialization](ATTACHED_TARGET_INITIALIZATION.md) separates
+owned-native constructor checkpoints from placement, publication and callback
+state. [Service test entry](MHSERVEREMU_TEST_ENTRY.md) registers the read-only
+launcher/server/coordinator sources used to identify normal routes and the
+unresolved service hold; it does not authorize bypassing that hold. The root's
+single public HTTP SiteConfig read is retained privately and is not a wake call.
