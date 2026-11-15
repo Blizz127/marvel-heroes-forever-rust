@@ -1,6 +1,6 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 13:32 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:52 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.22`; that increment has not been built.
@@ -50,13 +50,13 @@ notices; no retail executable, game assets, captures or extracted data.
   integrated Mouse factory now builds the bounded native graph and reaches an
   explicit default-rejecting user-event host boundary. No cursor effect is
   implemented; the next controlled replay reaches that rejecting boundary.
-- **OBSERVED dev21 typed-global boundary:** with the new opt-in native-global
-  profile and unknown initial extension byte, one initializer completes; the
-  next stops at original numeric1 assignment to gfxExtensions (offset13566).
-  No frame/Mouse call ran in that replay. The numeric conversion extension now
-  passes nineteen focused checks; a corrected original replay is pending.
-  The prior Plain-global run remains a separate controlled profile. Dev21's
-  combined diagnostic build and staging checks pass independently of that replay.
+- **OBSERVED corrected typed-global replay:** manager13 starts with an unknown
+  extension byte and completes all 452 original initializers (49,244 instructions).
+  The frame then runs 290 instructions and stops at the default-rejecting
+  `Mouse.hide` host, Code452 offset6391. Original numeric assignments establish
+  byte1, `gfxVersion` and the marker without substituting the script input.
+  Earlier manager12 and Plain-global runs remain separate retained evidence.
+  This is a controlled Rust replay, not native startup or handler absence.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions

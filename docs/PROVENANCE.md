@@ -810,3 +810,26 @@ The dev21 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev21-linux/manifest.json`, SHA-256
 `a80c24af0fe897a30ad9b0930ae4c36a271a975a355cb3eb3df30e4fb99db15f`.
+
+[Missing Mouse handler diagnostics](REA_MOUSE_MISSING_HANDLER.md) reuses the
+owned proprietary executable and retained constructor/import records to bind
+the diagnostic, target log getter and concrete engine sink. Its source ledger
+distinguishes selected callbacks from actual current handler/logger state.
+No external implementation or live invocation was used.
+
+[Rectangle AA](SCALE9_RECTANGLE_AA.md), [packed positions](SCALE9_PACKED_VERTEX_FORMAT.md),
+[cursor coordinates](CURSOR_COORDINATES.md) and [Model resource records](MODEL_RENDER_RESOURCE.md)
+use the exact owned native/package evidence listed in their individual ledgers.
+Original Rust and independent instruction-derived comparisons cover only the
+admitted supplied inputs. Proprietary SDK/game source was not copied; no new
+dependency, runtime setting or actual device selection was introduced.
+
+[Early binding construction](FRESH_BOOTSTRAP_BINDINGS.md),
+[cursor visibility layout](REA_CURSOR_VISIBILITY_PROPERTY.md),
+[Node consumers](NODE_RENDER_GEOMETRY.md),
+[position reconstruction](SCALE9_POSITION_RECONSTRUCTION.md),
+[cold root registration](FRESH_ROOT_COLD_REGISTRATION.md) and
+[selected default serialization](FRESH_MOVIE_DEFAULT_SERIALIZATION.md) extend
+the same owner-only static compatibility studies. Their ledgers record exact
+paths, ownership/licences, selected raw evidence and conditional limits;
+none establishes complete native startup or an effective default from absence.

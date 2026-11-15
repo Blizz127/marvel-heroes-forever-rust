@@ -5,6 +5,35 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev22 work in progress
+
+**OBSERVED controlled native-global replay:** manager13 completes all 452
+original initializers (49,244 instructions) from an explicitly unknown initial
+extension byte. Original numeric assignments establish byte1 and `gfxVersion`
+`4.2.23`. The frame then executes 290 instructions and stops at Code452/6391,
+`Mouse.hide user-event host is unbound`; its preceding original SetMember6370
+is retained as the last write. No host override, cursor action or retry ran.
+Receipt: `evidence/avm1-attached-manager-frame-action-increment13/receipt.json`,
+SHA-256 `bd873eb0540e90efefbc91fd4751700f43ce7099488d16a20aa44d4682cf379b`.
+The helper build's completion code was not retained (`build_exit: null`);
+the runnable binary and replay exit0 are recorded separately. This is not
+observed native startup, and supplied target/scene state remains explicit.
+
+**VERIFIED static missing-handler diagnostic:** thirteen selected complete
+bodies, 614 distinct instruction rows / 2,429 bytes, literals, table slots and
+six selected imports match the owner executable. A known-null state-4 handler
+can return normally through its selected logging route; that does not prove
+the actual handler is null or authorize a default host bypass. See
+[diagnostic contract](docs/REA_MOUSE_MISSING_HANDLER.md). Private verification:
+`evidence/mouse-missing-handler/verification.json`, SHA-256
+`6504574a80354113a5f2744c299e2d1834f14104fb6ff7a8653adfa26c04b6c0`.
+
+The next diagnostic integrates explicit-input rectangle AA, packed position
+conversion, masked SetMouse coordinate preparation and saved 36-byte Model
+resource inspection. Helper-focused checks and independent comparisons are
+sealed in their component ledgers. The combined dev22 build has not run yet.
+None of these supplies a current native receiver, renderer setting or OS effect.
+
 ## 2026-11-15 dev21 diagnostic increment
 
 **VERIFIED private staging, 13:31 UTC:** all 417 packaged file sizes/hashes and
@@ -36,8 +65,8 @@ and production metadata compilation pass. Nonzero double subnormals and other
 unproved conversion categories remain unsupported. Receipt:
 `evidence/avm1-runtime/global-extensions-numeric-checks/receipt.json`, SHA-256
 `7fc7597b97cdcdee0173fea61eba09b75f515eb6034443de53e6d68c5b2322fd`.
-The corrected original replay is separate and pending; manager12 below remains
-the unchanged earlier failed run.
+The subsequent manager13 replay below completes all original initializers;
+manager12 remains the unchanged earlier failed run.
 
 **VERIFIED selected geometry:** the checked Model reader joins twelve saved
 frontend Nodes to 48 ordered corners and all sixteen referenced position
