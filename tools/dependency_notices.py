@@ -209,12 +209,37 @@ def supplemental_notices(row, package, root, supplement_root):
     for file in row["files"]:
         relative = safe_relative(file["path"])
         kind = file.get("kind", "upstream-notice")
-        if kind not in ("upstream-notice", "upstream-declaration", "official-license-text"):
+        if kind not in ("upstream-notice", "upstream-declaration", "official-license-text", "upstream-component-notice"):
             raise CollectionError(f"unknown supplemental source kind: {kind}")
         source_revision = file.get("source_revision", None if kind == "official-license-text" else row["revision"])
+        component = {}
         if kind == "official-license-text":
             if source_revision is not None:
                 raise CollectionError("official licence text must not claim a crate git revision")
+        elif kind == "upstream-component-notice":
+            if not re.fullmatch(r"[0-9a-fA-F]{40}", source_revision or ""):
+                raise CollectionError("component notice needs its exact source revision")
+            basis = file["revision_basis"]
+            if basis.get("kind") != "gitlink" or basis.get("parent_revision") != row["revision"]:
+                raise CollectionError("component notice needs a gitlink at its package revision")
+            component_repository = urlparse(file["source_repository"])
+            evidence_url = urlparse(basis["evidence_url"])
+            for source in (component_repository, evidence_url):
+                if source.scheme != "https" or not source.netloc or source.username or source.password:
+                    raise CollectionError("component source provenance must use HTTPS without credentials")
+            if row["revision"] not in evidence_url.path.split("/"):
+                raise CollectionError("gitlink evidence URL must select the exact parent revision")
+            gitlink_path = safe_relative(basis["path"]).as_posix()
+            tree, tree_hash = read_json(supplement_root / safe_relative(basis["evidence_path"]))
+            if tree_hash != basis["evidence_sha256"]:
+                raise CollectionError("component gitlink evidence SHA-256 mismatch")
+            matches = [entry for entry in tree["tree"] if entry.get("path") == gitlink_path]
+            if len(matches) != 1 or matches[0].get("mode") != "160000" or matches[0].get("type") != "commit" or matches[0].get("sha") != source_revision:
+                raise CollectionError("component revision does not match the saved gitlink entry")
+            component = {"source_repository": file["source_repository"],
+                         "revision_basis": {"kind": "gitlink", "parent_revision": row["revision"],
+                                            "entry": matches[0], "evidence_url": basis["evidence_url"],
+                                            "evidence_sha256": tree_hash}}
         elif source_revision != row["revision"]:
             raise CollectionError("supplement file revision differs from its package revision")
         parsed = urlparse(file["url"])
@@ -225,6 +250,8 @@ def supplemental_notices(row, package, root, supplement_root):
         data = read_regular(supplement_root / relative, MAX_NOTICE_BYTES)
         if digest(data) != file["sha256"]:
             raise CollectionError("supplement notice SHA-256 mismatch")
+        if "bytes" in file and file["bytes"] != len(data):
+            raise CollectionError("supplement notice byte length mismatch")
         result.append((relative, data, {
             "origin": "official-license-text" if kind == "official-license-text" else "upstream-supplement",
             "kind": kind, "url": file["url"],
@@ -232,6 +259,8 @@ def supplemental_notices(row, package, root, supplement_root):
             "source_revision": source_revision,
             "vcs_metadata_sha256": vcs_hash,
             "vcs_metadata_path": str(root / ".cargo_vcs_info.json"),
+            "supplement_source_record": file,
+            **component,
         }))
     if row.get("upstream_notice_absent"):
         kinds = {entry[2]["kind"] for entry in result}
@@ -277,6 +306,7 @@ def collect(args):
         "declared_filter_platform": args.target,
         "root_package_ids": roots, "excluded_dev_edges": dev_edges,
         "supplements_sha256": supplement_hash, "packages": [],
+        "supplement_exceptions": supplement.get("exceptions", []),
     }
     for package in packages:
         row = {"package_id": package["id"], "name": package["name"],
@@ -303,6 +333,7 @@ def collect(args):
             extra = matching_supplements(supplement, package)
             if extra:
                 row["upstream_notice_absent"] = extra.get("upstream_notice_absent", False)
+                row["supplement_record"] = {key: value for key, value in extra.items() if key != "files"}
                 for relative, data, provenance in supplemental_notices(
                     extra, package, root, Path(args.supplements).parent
                 ):

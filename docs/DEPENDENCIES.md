@@ -82,12 +82,23 @@ The supplement manifest has this shape:
 
 The optional `package_id` narrows a supplement to one Cargo package ID.
 Files may additionally identify `kind` as `upstream-notice` (default),
-`upstream-declaration`, or `official-license-text`. Upstream files may specify
+`upstream-declaration`, `official-license-text`, or
+`upstream-component-notice`. Upstream files may specify
 `source_revision`, which must match the package revision. Official terms must
 use `source_revision=null`; their source remains their own URL. A package with
 `upstream_notice_absent=true` must include both its exact upstream declaration
 and separately identified official terms. The output preserves that absence;
 collection completeness does not invent a missing upstream notice.
+
+A component notice may have a different exact revision when a saved upstream
+Git tree binds it through a gitlink. Its `source_repository` and
+`source_revision` remain separate from the crate repository/revision.
+`revision_basis` supplies `kind="gitlink"`, the exact `parent_revision`,
+component `path`, and the relative `evidence_path`, SHA-256 and primary
+`evidence_url`. The collector checks the saved tree entry mode `160000`,
+type `commit`, path and revision; the evidence URL must select the parent
+revision. This preserves a dependency's bundled-source notice without
+mislabeling it as a file from the parent Git revision.
 
 File paths are relative to the supplement manifest's directory. The collector
 checks their hashes, requires HTTPS provenance URLs without credentials, matches
@@ -202,3 +213,36 @@ with their primary URLs/revisions/hashes retained for every copied file.
 No proprietary client binary, asset, capture or account file is an input.
 
 Metadata SHA-256: `8e5bd9985cc80c58fe7490fe7120e9d255ba2d767c55d10763b0c2a8953de933`.
+
+## Complete dev.3 collection
+
+**VERIFIED, 2026-11-15:** with the supplied source-recovery manifest, the final
+collector returned exit 0, `complete=true`, `issues=[]`, 61 packages and 127
+texts: 108 installed texts and 19 supplemental texts. Readback verified every
+file's length and SHA-256 and confirmed that no unlisted files were present.
+Focused component fixtures accepted the exact saved gitlink and rejected a
+different component revision even when the altered evidence file hash matched.
+
+Ready directory:
+`~/.local/share/marvel-heroes-forever-rust/evidence/dependency-notices-dev3/`.
+Manifest SHA-256:
+`a148a70107840e7143ac45d64645ea5fe5095ed2439d09a718c8d8fa7b73c283`.
+Readback receipt:
+`~/.local/share/marvel-heroes-forever-rust/evidence/dependency-notices-dev3-verification.json`.
+
+The supplement source manifest is
+`~/.local/share/marvel-heroes-forever-rust/evidence/dependency-notice-supplements/manifest.json`,
+SHA-256 `627ad5a84bcd696c6bf2503fedad6e3760575c62c6ae909df3234e550b13bb42`.
+It identifies the exact primary repository URLs and revisions for the four GPU
+allocation/descriptor crates, profiling, hexf-parse and spirv. Its full package
+observations, per-file provenance and exceptions survive in the output manifest.
+
+The seven registry omissions remain explicit. The hexf source had no standalone
+upstream notice: its exact CC0 declaration and the Creative Commons official
+terms are recorded separately, with the standard's own repository/revision.
+The spirv supplement also conservatively retains two Khronos notices from the
+SPIRV-Headers revision named by the upstream gitlink. One supplied notice is the
+copyright string array from the grammar JSON joined with LF; the declared
+transformation, original source SHA-256 and Git blob identity remain attached.
+This is explicit attribution collection, not a finding that a further legal
+obligation exists or a legal-compliance certification.
