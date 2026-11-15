@@ -34,8 +34,8 @@ use applied_super::AttachedSuperCall;
 use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
-    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedWrite,
-    DisplayTargetId, LoadedMovieSourceId,
+    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedTabEnabledInfo,
+    AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
 pub use attached_name_profile::{
@@ -4972,6 +4972,71 @@ mod tests {
                 .unwrap()
                 .last_write
                 .is_none()
+        );
+    }
+    #[test]
+    fn tab_enabled_opcode_keeps_receiver_status_and_focus_provenance_separate() {
+        let (mut vm, root, caller, _) = typed_field_fixture();
+        vm.bind_attached_target_status(root, 0x1234_01e8).unwrap();
+        vm.bind_attached_target_status(caller, 0x5678_01e8).unwrap();
+        let mut bytes = variable_bytes("_root");
+        bytes.extend(push(&[Value::string("_focusrect"), Value::Bool(false)]));
+        let focus_offset = bytes.len();
+        bytes.push(0x4f);
+        bytes.extend(variable_bytes("_root"));
+        bytes.extend(push(&[Value::string("tabEnabled"), Value::Bool(false)]));
+        let tab_offset = bytes.len();
+        bytes.push(0x4f);
+        bytes.extend(variable_bytes("_root"));
+        bytes.extend(push(&[Value::string("tabEnabled")]));
+        bytes.push(0x4e);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let root_event = vm.attached_event_state(root).unwrap();
+        let count = vm.object_count();
+        let result = vm
+            .execute(code, vm.attached_owner(caller).unwrap(), &mut RejectHost)
+            .unwrap();
+        assert_eq!(result.stack, vec![Value::Bool(false)]);
+        assert_eq!(result.host_calls, 0);
+        assert_eq!(vm.object_count(), count);
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        assert_eq!(vm.attached_target_status(root).unwrap(), Some(0x1234_0148));
+        assert_eq!(
+            vm.attached_target_status(caller).unwrap(),
+            Some(0x5678_01e8)
+        );
+        assert_eq!(vm.attached_event_state(root).unwrap(), root_event);
+        assert_eq!(
+            vm.attached_focus_rect(root).unwrap().unwrap().last_write,
+            Some(CodeOrigin {
+                code,
+                source_offset: focus_offset
+            })
+        );
+        assert_eq!(
+            vm.attached_tab_enabled(root).unwrap().unwrap().last_write,
+            Some(CodeOrigin {
+                code,
+                source_offset: tab_offset
+            })
+        );
+        vm.write_attached_member(root, "tabEnabled", Value::Bool(false))
+            .unwrap();
+        assert!(
+            vm.attached_tab_enabled(root)
+                .unwrap()
+                .unwrap()
+                .last_write
+                .is_none()
+        );
+        assert_eq!(
+            vm.attached_focus_rect(root).unwrap().unwrap().last_write,
+            Some(CodeOrigin {
+                code,
+                source_offset: focus_offset
+            })
         );
     }
     #[test]

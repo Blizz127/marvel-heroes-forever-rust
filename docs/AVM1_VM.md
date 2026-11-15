@@ -1545,6 +1545,36 @@ there are no unknown native calls. Private
 `edbe93eefca2f22f283102bcc1596c31fc0dc4dc9bd44034d6ef12cd867cd67e`,
 retains all frozen inputs and build/run exit 0 with that explicit VM stop.
 
+`tabEnabled` now has an exact native getter and Boolean-false setter for admitted
+attached case-3 targets. `REA_ATTACHED_TAB_ENABLED.md` supplies the verified
+native member-29 dispatch, receiver-owned Environment, watch prerequisite,
+shared status masks and absence of post-write callbacks. Getter mask `0x60`
+returns present Undefined for zero, true for `0x60`, and false otherwise. The
+setter changes the existing target+b8 word to `(old & ~0x20) | 0x40`. It does not
+create a member, allocate storage, change target+6a event flags or invoke a host.
+Other inputs remain unsupported even where the native study records their
+branches.
+
+`bind_attached_target_status(id, word)` is an additive spelling of the existing
+explicit raw-word binding. Both APIs use one backing word, and a second binding
+is rejected. `attached_target_status` and `attached_tab_enabled` inspect that
+state; tab and focus retain separate last-write provenance. No native initial
+word is synthesized. Existing owned BoundStorage begins with native watch state
+null through its verified constructor and bounded prototype visitor. Supported
+data/raw/prototype operations preserve that invariant, and watch installers are
+unsupported. Preexisting native storage or untracked watch mutation is not
+admitted by the model.
+
+**OBSERVED focused checks:** all nine relevant checks pass: five pure shared-word
+mask/interleaving checks, two new attached/opcode checks, and two existing focus
+checks. They exercise unbound-state/type/name-profile rejection, local receiver
+selection, ordinary descriptor bypass, no storage allocation or host dispatch,
+unchanged event bits and independent focus/tab provenance. Private
+`avm1-runtime/attached-tab-checks.json`, SHA256
+`ca11f6df895ba10881bff792f9cacd4fd403edd65fae5c5e9675eae6b7c71896`,
+retains source/binary hashes and filtered results. These are synthetic checks;
+subsequent original-frame progress is measured separately.
+
 ## Dedicated saved-action execution
 
 The saved-action APIs and current scope are documented in

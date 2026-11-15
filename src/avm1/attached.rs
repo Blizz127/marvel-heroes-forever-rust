@@ -79,6 +79,13 @@ pub struct AttachedFocusRectInfo {
     /// through the public member API. This is bounded diagnostic metadata.
     pub last_write: Option<CodeOrigin>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachedTabEnabledInfo {
+    /// A copy of the same supplied target+b8 word used by focus rectangle state.
+    pub target_flags_b8: u32,
+    /// Last admitted tabEnabled setter; independent of focus-write provenance.
+    pub last_write: Option<CodeOrigin>,
+}
 #[derive(Debug, Clone)]
 pub struct AttachedInfo {
     pub target: DisplayTargetId,
@@ -120,6 +127,7 @@ pub(super) struct AttachedClip {
     environment_header_version: u8,
     binding: Option<AttachedMovieBinding>,
     focus_rect: Option<AttachedFocusRectInfo>,
+    tab_enabled_last_write: Option<CodeOrigin>,
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
@@ -293,6 +301,7 @@ impl Vm {
             environment_header_version: spec.source.header_version,
             binding,
             focus_rect: None,
+            tab_enabled_last_write: None,
             owner,
             storage: None,
             prototype: Some(prototype),
@@ -381,6 +390,47 @@ impl Vm {
     pub fn attached_focus_rect(&self, id: AttachedClipId) -> Result<Option<AttachedFocusRectInfo>> {
         self.check_attached(id)?;
         Ok(self.attached[id.0].focus_rect)
+    }
+    /// Supply the shared native target+b8 word once. The legacy focus-specific
+    /// binding API and this API address exactly the same backing state.
+    pub fn bind_attached_target_status(&mut self, id: AttachedClipId, word: u32) -> Result<()> {
+        self.bind_attached_focus_rect(
+            id,
+            AttachedFocusRectState {
+                target_flags_b8: word,
+            },
+        )
+    }
+    pub fn attached_target_status(&self, id: AttachedClipId) -> Result<Option<u32>> {
+        self.check_attached(id)?;
+        Ok(self.attached[id.0]
+            .focus_rect
+            .map(|info| info.state.target_flags_b8))
+    }
+    pub fn attached_tab_enabled(
+        &self,
+        id: AttachedClipId,
+    ) -> Result<Option<AttachedTabEnabledInfo>> {
+        self.check_attached(id)?;
+        Ok(self.attached[id.0]
+            .focus_rect
+            .map(|info| AttachedTabEnabledInfo {
+                target_flags_b8: info.state.target_flags_b8,
+                last_write: self.attached[id.0].tab_enabled_last_write,
+            }))
+    }
+    fn attached_tab_enabled_name(&self, key: &Text) -> Result<bool> {
+        if key.as_ref() != text("tabEnabled").as_ref() {
+            return Ok(false);
+        }
+        if self.attached_name_profile.as_ref().is_some_and(|profile| {
+            profile.classify_attached_name(key) != AttachedNameClass::Standard(29)
+        }) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached tabEnabled native ID profile",
+            ));
+        }
+        Ok(true)
     }
     fn attached_focus_rect_name(&self, key: &Text) -> Result<bool> {
         if key.as_ref() != text("_focusrect").as_ref() {
@@ -750,6 +800,16 @@ impl Vm {
                 info.state.read().map_or(Value::Null, Value::Bool),
             ));
         }
+        if self.attached_tab_enabled_name(key)? {
+            let Some(info) = self.attached[id.0].focus_rect else {
+                return self.fail(ErrorKind::Unsupported("attached target status is unbound"));
+            };
+            return Ok(AttachedMember::Present(
+                info.state
+                    .read_tab_enabled()
+                    .map_or(Value::Undefined, Value::Bool),
+            ));
+        }
         self.attached_member_name(key)?;
         let clip = &self.attached[id.0];
         if let Some(storage) = clip.storage {
@@ -836,6 +896,36 @@ impl Vm {
             info.state.clear();
             info.last_write = origin;
             self.attached[id.0].focus_rect = Some(info);
+            return Ok(AttachedWrite::NativeUpdated);
+        }
+        if self.attached_tab_enabled_name(&key)? {
+            if value != Value::Bool(false) {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached tabEnabled exact false profile",
+                ));
+            }
+            // Native derived dispatch can run storage watches before the base
+            // setter. This model admits only its freshly constructed storage:
+            // native +58 starts null; supported raw/data/prototype operations
+            // preserve it, and every watch installer remains unsupported.
+            // There is no API for adopting preexisting or untracked storage.
+            if let Some(storage) = self.attached[id.0].storage {
+                self.check_object(storage)?;
+                if !matches!(self.objects[storage.0].kind, Kind::BoundStorage(owner) if owner == id)
+                {
+                    return self.fail(ErrorKind::Unsupported(
+                        "attached tabEnabled no-watch storage profile",
+                    ));
+                }
+            }
+            let Some(mut info) = self.attached[id.0].focus_rect else {
+                return self.fail(ErrorKind::Unsupported("attached target status is unbound"));
+            };
+            info.state.disable_tab();
+            // Focus provenance stays unchanged: only the shared word and this
+            // member's independent diagnostic provenance are updated.
+            self.attached[id.0].focus_rect = Some(info);
+            self.attached[id.0].tab_enabled_last_write = origin;
             return Ok(AttachedWrite::NativeUpdated);
         }
         self.attached_member_name(&key)?;
@@ -1175,6 +1265,114 @@ mod tests {
         vm.install_attached_name_profile(synthetic_profile())
             .unwrap();
         assert!(vm.read_attached_member(child, "_visible").is_err());
+    }
+
+    #[test]
+    fn tab_enabled_uses_shared_supplied_status_without_storage_or_normal_descriptors() {
+        let mut vm = vm();
+        let parent = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let child = vm
+            .create_attached_movie_clip(spec(2, Some(parent)))
+            .unwrap();
+        assert!(vm.read_attached_member(child, "tabEnabled").is_err());
+        assert!(
+            vm.write_attached_member(child, "tabEnabled", Value::Bool(false))
+                .is_err()
+        );
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        vm.bind_attached_target_status(parent, 0x1234_01e8).unwrap();
+        vm.bind_attached_target_status(child, 0x5678_0188).unwrap();
+        assert!(
+            vm.bind_attached_focus_rect(child, AttachedFocusRectState { target_flags_b8: 0 })
+                .is_err()
+        );
+        assert_eq!(
+            vm.read_attached_member(parent, "tabEnabled").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "tabEnabled").unwrap(),
+            AttachedMember::Present(Value::Undefined)
+        );
+        let events = vm.attached_event_state(child).unwrap();
+        let count = vm.object_count();
+        assert_eq!(
+            vm.write_attached_member(child, "tabEnabled", Value::Bool(false))
+                .unwrap(),
+            AttachedWrite::NativeUpdated
+        );
+        assert_eq!(vm.object_count(), count);
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        assert_eq!(vm.attached_target_status(child).unwrap(), Some(0x5678_01c8));
+        assert_eq!(
+            vm.attached_target_status(parent).unwrap(),
+            Some(0x1234_01e8)
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "_focusrect").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        vm.write_attached_member(child, "_focusrect", Value::Bool(false))
+            .unwrap();
+        assert_eq!(vm.attached_target_status(child).unwrap(), Some(0x5678_0148));
+        assert_eq!(
+            vm.read_attached_member(child, "tabEnabled").unwrap(),
+            AttachedMember::Present(Value::Bool(false))
+        );
+        vm.write_attached_member(child, "disabled", Value::Bool(false))
+            .unwrap();
+        let storage = ObjectId(vm.attached_info(child).unwrap().storage.unwrap().0);
+        vm.raw_member(
+            storage,
+            text("tabEnabled"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: None,
+            },
+            7,
+        )
+        .unwrap();
+        let count = vm.object_count();
+        assert_eq!(
+            vm.write_attached_member(child, "tabEnabled", Value::Bool(false))
+                .unwrap(),
+            AttachedWrite::NativeUpdated
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "tabEnabled").unwrap(),
+            AttachedMember::Present(Value::Bool(false))
+        );
+        assert!(matches!(
+            vm.objects[storage.0].properties.get(&text("tabEnabled")),
+            Some(Property::Accessor { .. })
+        ));
+        assert_eq!(vm.own_flags(storage, &text("tabEnabled")), 7);
+        assert_eq!(vm.object_count(), count);
+        assert_eq!(vm.attached_event_state(child).unwrap(), events);
+        for value in [
+            Value::Bool(true),
+            Value::Number(0.0),
+            Value::Null,
+            Value::Undefined,
+        ] {
+            assert!(
+                vm.write_attached_member(child, "tabEnabled", value)
+                    .is_err()
+            );
+            assert_eq!(vm.attached_target_status(child).unwrap(), Some(0x5678_0148));
+        }
+        assert!(
+            vm.read_attached_member(AttachedClipId(999), "tabEnabled")
+                .is_err()
+        );
+        // Deliberately inconsistent synthetic standard-name table is rejected.
+        vm.install_attached_name_profile(synthetic_profile())
+            .unwrap();
+        assert!(vm.read_attached_member(child, "tabEnabled").is_err());
+        assert!(
+            vm.write_attached_member(child, "tabEnabled", Value::Bool(false))
+                .is_err()
+        );
     }
 
     #[test]
