@@ -136,6 +136,71 @@ Private evidence is under
 These are static CPU geometry checks. No native screenshot comparison, shader
 paint-policy verification or complete 9-sliced retail border claim is made.
 
+## Focused native follow-up: paint bounds still unresolved
+
+**VERIFIED (REA static inspection):** Two selected-command calls completed with
+exit code zero, complete untruncated output and unchanged executable SHA-256
+`8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`.
+The inspected target is the private Win64 build 1.52.0.1700 executable identified
+in FINDINGS.md. It was never launched. REA's active target was initially closed;
+target-free Rizin commands used explicit byte ranges, without automatic
+whole-image analysis, debugger attachment or shared configuration changes.
+
+**OBSERVED (REA):** The complete decoded loader range
+`0x14006dc90..0x14006de9c` directly references the `Scale9GridLoader` diagnostic.
+It reads a 16-bit resource ID, obtains four floating-point rectangle values,
+compares each lower coordinate against its upper coordinate, and leaves without
+storing the grid when either dimension is nonpositive. It then looks up the
+resource and dispatches masked resource-kind values `0x8400` and `0x8100` to two
+storage helpers. C++ class names for those raw kinds are not recovered here.
+
+**OBSERVED (REA):** Complete helpers `0x14006c190..0x14006c212` and
+`0x14006c220..0x14006c2cc` allocate a 16-byte rectangle when needed and copy its
+four 32-bit coordinate words through pointers at resource offsets `+0x50` and
+`+0x58`, respectively. The decoded storage paths contain no outer-shape-bound
+comparison or coordinate clipping. This narrows a useful question: loader storage
+does not explain away the two observed out-of-bounds scrollbar splitters. Their
+later rendering, especially under nonunit scale, remains unverified.
+
+Evidence IDs:
+
+- `ev_661492f76f10ff2863fb3c5b5deef4a0c714fe5e5529890ad6e110a88be3cefb`:
+  loader, selected mesh-output ranges and initial property-wrapper candidates.
+- `ev_e13ab07788d7163c302122383de4417ef64b8b2f76158c0a1862b756b5c37304`:
+  both storage helpers, corrected property-table bytes, the property name and a
+  selected getter-wrapper fragment.
+
+The read-only candidate scan's initial loose association of a nearby wrapper
+with `scale9Grid` was corrected. REA table bytes establish the two named records
+at `0x142520b38` and `0x142520b60`, referencing `0x14027a9c0` and `0x14026def0`.
+The nearby numeric wrapper `0x1402686b0` belongs to `scaleX`. The selected
+64-byte getter range is only a fragment, not a complete getter implementation.
+The setter wrapper's selected indirect-call location lies beyond the file-backed
+extent of `.data` and reads as zero in Rizin's static mapping; its runtime
+initialization and eventual target were not recovered.
+
+**Stopped search boundary:** The `ShapeMeshProvider` diagnostic led to generic
+vertex-output code at `0x1400bff70`, not a demonstrated paint-bounds selector.
+The candidate scan followed its two direct-call sites and searched aligned
+64-bit pointers in `.rdata` to four exact entries: `0x1400bff70`, `0x1400bdc50`,
+`0x1400c4dd0`, and `0x1400c56d0`. None matched. This bounded negative result does
+not establish absence of virtual tables or paint transforms elsewhere. The
+branch was stopped without broadening into whole-program analysis.
+
+**UNRESOLVED:** No native averaging formula, whole-shape/fill-region/enclosing
+bounds selector, or runtime-version proof was recovered. A nearby compatibility
+version string does not identify the Scaleform SDK version. The renderer's
+paint policy and the explicitly inferred `bounds_linear_sources` status remain
+unchanged. Ordinary candidate byte scans are inference/discovery evidence;
+only the selected decoded instructions/data above are attributed to REA.
+
+Complete private records, derived selected disassemblies and candidate scripts
+are in `evidence/rea-scale9-native/`. `native-summary.json` indexes findings,
+coverage and receipt hashes; `final.bundle.json` contains both immutable REA
+records. REA's transient investigation was checkpointed and reset afterward,
+retaining no active target. The automatic string-inventory warnings about large
+skipped regions remain in the records; no complete string inventory is claimed.
+
 ## Sources and licences
 
 All implementation is original. No SDK or runtime implementation was copied.
@@ -147,3 +212,11 @@ The integrator mirrors these entries into the global PROVENANCE.md ledger.
 | Adobe [DisplayObject.scale9Grid](https://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/display/DisplayObject.html#scale9Grid) | Adobe documentation; no open-source licence established | Local coordinate model and distinctions for text/fill scaling. |
 | Autodesk [Scale9Grid guide](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/scale9grid.html), [bitmap processing](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/scale9grid/bitmap_processing.html), [transformations](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/scale9grid/transformations.html), [interactive windows](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/scale9grid/interactive_windows.html), [CLIK component scaling](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/clik/clik_user_guide/component_scaling.html), [legal notice](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/welcome/legal.html) | ©2015 Autodesk, all rights reserved; document study only | GFx versus Flash behavior and unsupported/ambiguous cases. No sample implementation copied. |
 | Owner's pinned frontend/MarvelGame/fonts packages, existing original library and scene APIs | Proprietary game data for owner-authorized interoperability study; project code original | Actual instantiated grid/transform measurements and CPU geometry validation. No derived data enters git or builds. |
+
+Additional native follow-up sources:
+
+| Source read | Licence / notice | Use |
+| --- | --- | --- |
+| Owner's private `pins/alienware-candidate/UnrealEngine3/Binaries/Win64/MarvelHeroesOmega.exe`, identity above | Proprietary Gazillion client; owner-authorized interoperability study | Selected static loader/storage instructions, property table and bounded candidate searches. No client code or bytes copied into implementation. |
+| Installed `~/.agents/skills/reverse-engineer-anything/SKILL.md`, `references/native-and-artifacts.md`, `references/evidence-workflows.md`; REA MCP schemas/results | REA guidance version 62; installed toolkit 6.9.0 MIT, no copied implementation | Supported static routing, complete Evidence handling and checkpoint cleanup. |
+| Installed Rizin through REA, as documented in REA_NATIVE_ALTERNATIVE.md | Installed tool identified there as 0.9.1, LGPL-3.0-only headers; not linked or redistributed | Selected instruction/data decoding only. REA records themselves leave provider version unknown. |
