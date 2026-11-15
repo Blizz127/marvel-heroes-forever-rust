@@ -5,7 +5,24 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev16 integration in progress
+## 2026-11-15 dev16 diagnostic increment
+
+**VERIFIED combined build/startup:** clean tested code
+`288e74e25bc15a03369ee9078541501354307865` builds with the window feature and
+no warnings. All 18 CLI/image checks pass, including four original Model/Polys
+exports and both wrong-class rejections. The isolated two-frame startup passes
+with empty stderr; saved-login and cursor pixels retain their prior identities.
+Binary SHA-256:
+`73a1b08452fcc066a3e674c702367ab3791f651e7d8e6e599fe676642070274d`.
+Receipts: `evidence/dev16-build-result.json`,
+`evidence/build-0.1.0-dev.16-smoke.json`, and
+`evidence/dev16-native-html/receipt.json`.
+
+This build includes shared saved-call state, post-saved dynamic lookup, checked
+current display projection and native Model/Polys prefixes. The complete
+current-frame TextField composition adapter is reserved for the next increment.
+No new original constructor, native frontend, login or gameplay success is
+claimed; there are still zero finished Forever upgrades.
 
 **VERIFIED integration:** the window-feature type check after underscore
 admission and the test-only import correction passes without warnings at
@@ -34,8 +51,8 @@ Receipt: `evidence/avm1-runtime/shared-call-checks.json`.
 The Model/Polys prefix readers are integrated. Six focused tests and four owned
 export comparisons pass, covering 34 Model records and preserving the remaining
 tails. Model suffixes and polygon records remain undecoded; no world geometry
-or runtime parity follows from these checks. The combined dev16 build remains
-pending.
+or runtime parity follows from these checks. The combined build above includes
+these readers and their diagnostic inspection commands.
 
 **VERIFIED bounded member admission:** native-evidence-backed ordinary
 underscore names now reach existing storage while standard aliases, reserved
@@ -50,7 +67,7 @@ Receipt: `evidence/avm1-attached-manager-frame-action-increment8/receipt.json`,
 SHA-256 `aa8ab18c6c6160a992df64afe625bf39ea7f3fa3ac40bfa725364666ca2c7b20`.
 The controlled root name remains synthetic and visibility policy remains
 unbound. No original constructor completion or rendered result is claimed.
-Dev15 remains the latest staged diagnostic build.
+Dev15 remains preserved as the preceding staged diagnostic build.
 
 ## 2026-11-15 dev15 diagnostic increment
 

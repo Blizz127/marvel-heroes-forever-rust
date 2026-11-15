@@ -203,3 +203,17 @@ third-party implementation source was read or copied for this increment.
 | Existing original project object/World/Level readers and private PE helpers/evidence | Original project source/findings | Admission, span API, byte mapping, prior helper proof and fixtures |
 | REA 6.9.0 and installed skill, native/evidence/recovery guides and tool schemas | REA MIT; analysis tooling, as registered in [PROVENANCE.md](PROVENANCE.md) | Target-free observations, retained evidence and deadline recovery |
 | Rizin, GNU objdump, Python and Rust tooling | Installed analysis/build tools; no implementation copied or linked | Native inspection, byte oracle and focused checks |
+
+## Diagnostic CLI integration
+
+`mhf upk model <package.upk> <export-name|1-based-index>` reports raw array
+counts/strides/spans, seven retained words, the native +0xd8 reference and opaque
+tail length. `mhf upk polys` uses the same selector form and reports only the
+validated header and remaining bytes. It does not validate polygon records
+against the stored count or prepare geometry.
+
+**VERIFIED dev16 CLI smoke:** Model exports 2/13 and Polys exports 3/26 from
+Entry/FrontEnd pass through their respective public commands. Selecting the
+opposite class rejects with the correct error. Receipt:
+`evidence/build-0.1.0-dev.16-smoke.json`. Original inputs remain private; no object
+execution, service access or geometry interpretation was performed.

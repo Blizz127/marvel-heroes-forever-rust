@@ -592,3 +592,10 @@ later owner/publication boundaries. [Point construction](REA_POINT_CONSTRUCTION.
 records native deferred registration, namespace/constructor graph and the
 zero-argument allocation path. These are static interoperability findings;
 neither supplies current adopted-instance state or a native execution result.
+
+The dev16 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files, with no collection issues. Private manifest:
+`evidence/dependency-notices-dev16-linux/manifest.json`, SHA-256
+`2c9eaee7e1cda2c5a10ac8b66bd3287f716639e18fd71af33511331505620c4a`.
+The original-only private package excludes retail binaries, assets, extracted
+data and captures.
