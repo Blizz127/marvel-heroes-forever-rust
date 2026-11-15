@@ -8,7 +8,7 @@
 //! equivalence is outside the explicitly named projection profile.
 
 use super::super::{
-    AttachedNameClass, AttachedVisibilityRequest, CodeOrigin, ErrorKind, Host, Kind, ObjectId,
+    AttachedNameClass, AttachedVisibilityRequest, CodeOrigin, ErrorKind, Host, Kind,
     Result, Text, Value, Vm, text,
 };
 use super::{AttachedClipId, AttachedTarget};
@@ -272,7 +272,7 @@ impl Vm {
 mod tests {
     use super::super::super::{
         AttachedEventState, CodeId, ExpectedProfile, HostCall, HostCommand, Limits,
-        NativeNameProfile, Property, RejectHost,
+        NativeNameProfile, ObjectId, Property, RejectHost,
     };
     use super::super::{
         AttachedChild, AttachedClipSource, AttachedClipSpec, AttachedMember, AttachedMovieBinding,
