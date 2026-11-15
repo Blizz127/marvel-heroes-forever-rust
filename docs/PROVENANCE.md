@@ -252,6 +252,10 @@ recovered retail defaults. Animation evaluation and runtime binding are separate
 [Native animation contracts](ANIMATION_RUNTIME.md) records the saved Loki scene
 binding, class/default evidence and conditional codec timing/cache behavior;
 unresolved final defaults and runtime masks are not supplied by inference.
+[Constant-key timing](ANIMATION_TIMING.md) implements the observed conditional
+index/alpha calculation with explicit inputs and cache knowledge, preserving the
+native cache's omitted frame-count/sequence keys. It adds no playback clock,
+interpolation, implicit cache initialization or scene-loop policy.
 [Saved HTML layout](HTML_TEXT_LAYOUT.md) records exact imported-font selection,
 original glyph/kerning geometry comparisons, and bounded REA evidence for FONT
 color, spacing and kerning attributes. Its unsupported wrapping and alpha cases

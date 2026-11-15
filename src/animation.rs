@@ -11,6 +11,9 @@ use crate::upk::{MAX_EXPORT_BYTES, NameRef, Package};
 use std::collections::{HashMap, HashSet};
 use std::io;
 
+#[path = "animation/timing.rs"]
+pub mod timing;
+
 const MAX_TRACKS: usize = 4096;
 const MAX_SEQUENCES: usize = 65_536;
 const MAX_FRAMES: usize = 1_000_000;
