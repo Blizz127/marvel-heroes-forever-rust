@@ -333,3 +333,90 @@ contract sources. Component source ledgers record each read and licence/use;
 `analysis/profile-sources.json` pins the additional `640e4d1`/`eed5e65` files.
 No website, new third-party implementation, REA/native process, event delivery,
 VM reexecution or product-code change was used for this static audit.
+
+## Controlled full-scene saved Construct phases
+
+A separate private execution stage uses the complete saved 147-node login Scene,
+all 75 adopted Clips and 33 fields, the original 34-record installer, and
+`saved_dispatch::execute_saved_phase`. Every target, prototype, Environment,
+current text/format state and one-context association remains an explicit
+controlled fixture. Selected phases are requested in saved Scene selection order;
+that is a test input, not a recovered native queue or event-production order.
+
+The source is a clean, owner-authorized private composite
+`f251a7e44c30c31beada860f116c0140a1f0043c`: full root `c860b1a` plus native-name
+proof `db8ce34` and its finite case-3 implementation `f2b2a5f`. Their local
+cherry-picks are `77ebcc3` and `f251a7e`. Only the three documented files differ
+from the clean base; root's separate in-progress visibility-host work is excluded.
+`evidence/construct-saved-phases/composite.json` records the exact construction
+and source hashes (SHA-256
+`cd8e39ad08224a47e15e6a619b3576f515da2f2b4027b5a881c660871abd5005`).
+An earlier 32-record preparation at `c860b1a`, excluding actions 84/86, remains
+preserved as **unrun**. It was superseded before any harness build or execution
+when the exact three-name implementation became ready.
+
+The complete input selection installs all 34 records, retaining the 89 unselected
+Scene bindings and 889 unbound tags. It supplies distinct nonempty saved stacks
+and four-register banks, then requests each owner's immutable Construct vector
+once. The harness stops the entire batch on the first unexpected body error,
+without retrying or continuing a partial VM. All nine Host entry points count
+attempts and reject; no interface, property, text, class-registration, command or
+visibility callback is silently accepted.
+
+An independent read-only oracle was prepared without seeing runtime output. It
+retains all 556 source-derived target writes, 118 exact String writes to 34 fresh
+soundMap objects, all original pool entries/references, and each source's expected
+instruction count and relative stack behavior. Duplicate target or soundMap
+names and repeated selected owners are absent. Under the explicitly untouched
+fixture, source inspection predicts 68 new VM objects; this accounting is a
+conditional product expectation, not a recovered native allocation count.
+
+A returned `DynamicLookupPending` means only that the selected saved vector
+returned. Dynamic `onConstruct` lookup remains pending. No component constructor,
+initializer, dynamic handler, complete event delivery, UI behavior, native startup
+state or game parity follows from that outcome.
+
+**VERIFIED controlled saved-phase run:** all 34 requested phases return
+`DynamicLookupPending`, each with one completed handler and no skipped handler.
+Their completed bodies account for exactly 1,686 original instructions. All 556
+target assignments and 118 soundMap member assignments match the independently
+prepared source oracle, including both previously excluded component records.
+The 34 soundMap Objects are distinct. VM object count rises from 126 to 194,
+exactly the predicted 34 attached storage objects plus 34 fresh plain maps.
+
+All 34 supplied nonempty Environment stacks and four-register banks retain their
+exact values. Owner/target, source/header, parent, prototype and saved action/code
+identities remain unchanged. Each wrapper's first pool marker becomes `Some(0)`;
+constant-derived names and values match the original source. The public API has
+no retained-pool byte getter, so this does not claim direct internal pool-buffer
+inspection. The source pool bytes and indices remain independently checked by
+the static audit.
+
+There are zero attempted calls across all nine rejecting Host routes. Observed
+own enumerable global data/flags, the display and text hosts, all current field
+snapshots, complete saved Scene/actions and original asset buffers remain
+unchanged. Attached Clips gain only the expected storage association and data;
+other owner identity/state checks remain exact. No visibility/text host mutation,
+ExternalInterface installation/call, native process, UI rendering or server
+operation is involved.
+
+The private harness's initial compile exposed duplicate wrapper imports; the
+failed source/log were retained and corrected before any saved body ran. The
+successful frozen harness makes one all-34 execution pass. Its complete 233-file
+tracked source manifest, harness/dependency inputs and owner asset hashes remain
+unchanged. Neither the unrun 32-record preparation nor any partial VM is replayed.
+
+| Private artifact under `evidence/construct-saved-phases/` | SHA-256 |
+| --- | --- |
+| `composite.json` | `cd8e39ad08224a47e15e6a619b3576f515da2f2b4027b5a881c660871abd5005` |
+| `oracle-all34/expected.json` | `8a7d9cc730438451c96e222148dde03e6e6795cd8106f33bf179de74da1eb3b0` |
+| `oracle-all34/receipt.json` | `c1693db99652492db270dbae5bb525c976367f187d00483905549b6c52ac1242` |
+| `oracle-all34/MANIFEST.json` | `7499145e8f7f6b0fbf53890d27968cedbc91ca64b4e336525e99af03637f5b5e` |
+| `all34/execution.json` | `429752f76235bc1dabf1a2a21d73a20c886300acd07592122beaa1bd6252890e` |
+
+The successful private binary has SHA-256
+`1d2063d7fcdfa9bbc9d982f3aee7d59562cba30b00fc7deb4e8443e11dba33e6`.
+The execution receipt binds complete frozen sources, dependency lock, controlled
+fixture inputs, original package hashes and the single run's output. The oracle
+has its own source/data ledger and was prepared without runtime-output access.
+No asset, captured state or private executable is added to the repository.
