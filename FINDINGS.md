@@ -369,3 +369,28 @@ The queue has no runtime executor; the localization helper does not infer
 effective prototype references or install an ExternalInterface callback.
 See `evidence/dev7-integration/focused-tests.json` and
 `evidence/localized-data-check/receipt.json` for scope and corrections.
+
+**VERIFIED (final dev.7 focused checks):** All eight final CLI checks pass at
+clean source `b5bfdf04044e5142820a3779f534ad2f414902c5`. The cursor remains
+byte-identical to dev.6, and the login image remains byte-identical to the
+independent HTML adapter after the additional native Object metadata change.
+The final binary SHA-256 is
+`9ae7285b644d4c80779bfb3844e8ce08833e8b0e33ae5e45960ba01908ecd3c6`.
+The earlier native-window check used the same window/HTML implementation before
+subsequent unrelated VM metadata, animation arithmetic and ledger additions;
+its exact binary hash is retained separately. No owner-device test is implied.
+
+The Float96 decoder now follows REA-observed sequential binary32 subtraction.
+All 7,002 sampled W values match independent Python/scalar-SSE checks; precisely
+1,468 changed from grouped arithmetic, while XYZ, frames, spans and bindings
+remain unchanged. Five decoder tests and eight per-instance initializer-ledger
+tests pass. The ledger submits ordered tags and marks before execution; partial
+or unwinding submission failures quarantine the instance without replay.
+Neither queue nor ledger is yet connected to the runtime executor.
+
+Receipts: `evidence/build-0.1.0-dev.7-smoke.json`,
+`evidence/dev7-integration/final-focused-tests.json`, and
+`evidence/animation-runtime/w-fix/validation.json`. The window-feature executable
+and standard-library test targets compile. Dependency notices cover 114 crates
+and 217 texts, with no collection issues. Packaging and delivery status are
+recorded separately; these checks do not establish full startup or game parity.
