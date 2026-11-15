@@ -1225,12 +1225,38 @@ impl Vm {
                 "ASSetPropFlags argument-count profile",
             ));
         }
-        let target = self.object_id(args[0].clone())?;
+        let attached = matches!(args[0], Value::DisplayClip(_));
+        let target = if let Value::DisplayClip(clip) = args[0] {
+            let [_, Value::String(key), Value::Number(mask)] = args else {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached ASSetPropFlags requires one name and set mask one",
+                ));
+            };
+            if *mask != 1.0 {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached ASSetPropFlags set mask profile",
+                ));
+            }
+            if key.is_empty()
+                || !key.iter().all(|unit| {
+                    u8::try_from(*unit).is_ok_and(|unit| {
+                        unit.is_ascii_alphanumeric() || matches!(unit, b'_' | b'$')
+                    })
+                })
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached ASSetPropFlags exact ASCII name",
+                ));
+            }
+            self.attached_property_flags_storage(clip, key)?
+        } else {
+            self.object_id(args[0].clone())?
+        };
         let prototype = matches!(
             self.objects[target.0].kind,
             Kind::MovieClip(MovieClipRole::UnboundPrototype)
         );
-        if !matches!(self.objects[target.0].kind, Kind::Plain) && !prototype {
+        if !matches!(self.objects[target.0].kind, Kind::Plain) && !prototype && !attached {
             return self.fail(ErrorKind::Unsupported("ASSetPropFlags object class"));
         }
         let keys: Vec<Text> = match &args[1] {
@@ -2902,7 +2928,7 @@ impl Vm {
     ) -> Result<()> {
         let Some(caller) = self.current_target else {
             return self.fail(ErrorKind::Unsupported(
-                "attached Function.apply requires active attached Environment",
+                "attached invocation requires active attached Environment",
             ));
         };
         let (Kind::AttachedOwner(root), Kind::AttachedOwner(caller), Kind::AttachedOwner(captured)) = (
@@ -2911,14 +2937,14 @@ impl Vm {
             &self.objects[captured.0].kind,
         ) else {
             return self.fail(ErrorKind::Unsupported(
-                "attached Function.apply requires one adopted attached root context",
+                "attached invocation requires one adopted attached root context",
             ));
         };
         for clip in [receiver, *caller, *captured] {
             self.check_attached(clip)?;
             if self.attached_event_state(clip)?.target_flags & 0x80 == 0 {
                 return self.fail(ErrorKind::Unsupported(
-                    "attached Function.apply requires live eligible targets",
+                    "attached invocation requires live eligible targets",
                 ));
             }
             let mut next = Some(clip);
@@ -2933,7 +2959,7 @@ impl Vm {
             }
             if !found {
                 return self.fail(ErrorKind::Unsupported(
-                    "attached Function.apply crosses adopted root context",
+                    "attached invocation crosses adopted root context",
                 ));
             }
         }
@@ -7017,6 +7043,164 @@ mod tests {
             host.requests[0].constructor_origin.unwrap().code,
             definitions
         );
+    }
+    fn attached_flags_program(name: &str) -> Vec<u8> {
+        let mut bytes = push(&[Value::Number(1.0), Value::string(name)]);
+        bytes.extend(variable_bytes("_global"));
+        bytes.extend(push(&[Value::string("fixtureFlagsTarget")]));
+        bytes.push(0x4e);
+        bytes.extend(push(&[Value::Number(3.0)]));
+        bytes.extend(variable_bytes("_global"));
+        bytes.extend(push(&[Value::string("ASSetPropFlags")]));
+        bytes.push(0x52);
+        bytes
+    }
+    #[test]
+    fn attached_property_flags_change_only_existing_own_storage_flags() {
+        let (mut vm, root, _, _) = typed_field_fixture();
+        vm.install_property_flags().unwrap();
+        let owner = vm.attached_owner(root).unwrap();
+        let prototype = vm.object().unwrap();
+        let getter = vm.native(99).unwrap();
+        vm.raw_member(
+            prototype,
+            text("dispatchQueue"),
+            Property::Accessor {
+                getter: Value::Object(getter),
+                setter: None,
+            },
+            3,
+        )
+        .unwrap();
+        vm.set_attached_prototype(root, Some(prototype)).unwrap();
+        let storage = ObjectId(vm.attached_info(root).unwrap().storage.unwrap().0);
+        vm.raw_member(
+            storage,
+            text("dispatchQueue"),
+            Property::Data(Value::Undefined),
+            4,
+        )
+        .unwrap();
+        vm.set(
+            vm.global(),
+            "fixtureFlagsTarget",
+            vm.attached_value(root).unwrap(),
+        )
+        .unwrap();
+        let bytes = attached_flags_program("dispatchQueue");
+        let code = vm
+            .register(Arc::new(Program::parse_at(&bytes, 800).unwrap()))
+            .unwrap();
+        let before_objects = vm.object_count();
+        let before_flags = vm.attached_event_state(root).unwrap();
+        let result = vm.execute(code, owner, &mut RejectHost).unwrap();
+        assert_eq!(result.stack, vec![Value::Undefined]);
+        assert_eq!(result.host_calls, 0);
+        assert_eq!(vm.own_flags(storage, &text("dispatchQueue")), 5);
+        assert!(matches!(
+            vm.objects[storage.0].properties.get(&text("dispatchQueue")),
+            Some(Property::Data(Value::Undefined))
+        ));
+        assert_eq!(vm.own_flags(prototype, &text("dispatchQueue")), 3);
+        assert!(matches!(
+            vm.objects[prototype.0]
+                .properties
+                .get(&text("dispatchQueue")),
+            Some(Property::Accessor { .. })
+        ));
+        assert_eq!(vm.object_count(), before_objects);
+        assert_eq!(
+            vm.attached_info(root).unwrap().storage.unwrap().0,
+            storage.0
+        );
+        assert_eq!(vm.attached_event_state(root).unwrap(), before_flags);
+    }
+    #[test]
+    fn attached_property_flags_gate_missing_storage_inherited_and_accessor_profiles() {
+        let (mut vm, root, caller, field) = typed_field_fixture();
+        let intrinsic = vm.install_property_flags().unwrap();
+        let owner = vm.attached_owner(root).unwrap();
+        vm.set(
+            vm.global(),
+            "fixtureFlagsTarget",
+            vm.attached_value(caller).unwrap(),
+        )
+        .unwrap();
+        let bytes = attached_flags_program("dispatchQueue");
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let before_objects = vm.object_count();
+        assert!(vm.execute(code, owner, &mut RejectHost).is_err());
+        assert!(vm.attached_info(caller).unwrap().storage.is_none());
+        assert_eq!(vm.object_count(), before_objects);
+        let prototype = vm.object().unwrap();
+        vm.raw_member(
+            prototype,
+            text("dispatchQueue"),
+            Property::Data(Value::Number(8.0)),
+            4,
+        )
+        .unwrap();
+        vm.set_attached_prototype(caller, Some(prototype)).unwrap();
+        let storage = ObjectId(vm.attached_info(caller).unwrap().storage.unwrap().0);
+        assert!(vm.execute(code, owner, &mut RejectHost).is_err());
+        assert_eq!(vm.own_flags(prototype, &text("dispatchQueue")), 4);
+        vm.raw_member(
+            storage,
+            text("dispatchQueue"),
+            Property::Accessor {
+                getter: Value::Object(intrinsic),
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        assert!(vm.execute(code, owner, &mut RejectHost).is_err());
+        assert_eq!(vm.own_flags(storage, &text("dispatchQueue")), 0);
+        vm.raw_member(
+            storage,
+            text("dispatchQueue"),
+            Property::Data(Value::Bool(true)),
+            0,
+        )
+        .unwrap();
+        for name in [
+            "dispatchQueue,other",
+            "",
+            "dispatch.Queue",
+            "__proto__",
+            "__constructor__",
+            "constructor",
+        ] {
+            let bytes = attached_flags_program(name);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            assert!(vm.execute(code, owner, &mut RejectHost).is_err());
+            assert_eq!(vm.own_flags(storage, &text("dispatchQueue")), 0);
+        }
+        assert!(
+            vm.call(
+                Value::Object(intrinsic),
+                Value::Object(vm.global()),
+                &[
+                    vm.attached_value(caller).unwrap(),
+                    Value::string("dispatchQueue"),
+                    Value::Number(1.0),
+                ],
+                &mut RejectHost
+            )
+            .is_err()
+        );
+        vm.set(
+            vm.global(),
+            "fixtureFlagsTarget",
+            vm.attached_text_field_value(field).unwrap(),
+        )
+        .unwrap();
+        assert!(vm.execute(code, owner, &mut RejectHost).is_err());
+        assert_eq!(vm.host_calls, 0);
     }
     #[test]
     fn property_flags_visit_own_hidden_members_without_getters_or_parent_mutation() {

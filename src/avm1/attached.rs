@@ -150,6 +150,57 @@ impl Vm {
             self.fail(ErrorKind::InvalidAttachedClip(id))
         }
     }
+    /// Exact ASSetPropFlags own-storage path; this is not a normal member
+    /// lookup or an Object coercion. Missing storage would invoke native lazy
+    /// construction and stays outside this existing-storage profile.
+    pub(super) fn attached_property_flags_storage(
+        &self,
+        id: AttachedClipId,
+        key: &Text,
+    ) -> Result<ObjectId> {
+        self.check_attached(id)?;
+        // These modeled data descriptors stand in for special native metadata;
+        // the ordinary stored-value proof does not cover rewriting their flags.
+        if ["__proto__", "__constructor__", "constructor"]
+            .iter()
+            .any(|name| key.as_ref() == text(name).as_ref())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached property flags special metadata",
+            ));
+        }
+        let Some(context) = self.current_target else {
+            return self.fail(ErrorKind::Unsupported(
+                "attached property flags require active Environment",
+            ));
+        };
+        self.attached_invocation_context(id, context)?;
+        if !self
+            .loaded_movie_targets
+            .get(&context)
+            .is_some_and(|v| (7..=19).contains(v))
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached property flags require known loaded target version",
+            ));
+        }
+        let Some(storage) = self.attached[id.0].storage else {
+            return self.fail(ErrorKind::Unsupported(
+                "attached property flags without existing storage",
+            ));
+        };
+        if !matches!(self.objects[storage.0].kind, Kind::BoundStorage(clip) if clip == id)
+            || !matches!(
+                self.objects[storage.0].properties.get(key),
+                Some(Property::Data(_))
+            )
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached property flags require existing own data member",
+            ));
+        }
+        Ok(storage)
+    }
     /// The host must establish the live source case-3 construction route and
     /// loaded movie identity. This never upgrades a preexisting VM object.
     pub fn create_attached_movie_clip(&mut self, spec: AttachedClipSpec) -> Result<AttachedClipId> {

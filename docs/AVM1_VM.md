@@ -1489,6 +1489,49 @@ typed MovieClip allocation checks also pass: eight focused checks total.
 retains final source/binary hashes and filtered output. Original frame progression
 is measured separately; these checks do not establish native lifecycle parity.
 
+## Attached own-property flags after applied startup
+
+**OBSERVED original-script diagnostic:** frozen `e41ceea` again completed the
+452 selected manager initializers, then executed 154 instructions of the original
+containing-frame action. The first stop moved to CodeId 2, CallMethod at source
+17373, inside `gfx.events.EventDispatcher.initialize`. Its retained source builds
+`_global.ASSetPropFlags(target, "dispatchQueue", 1)` after assigning target methods
+and `dispatchQueue`. The previous primitive-receiver gate rejected the typed
+display reference. The argument flow is source-derived; that run did not capture
+the property's actual value or previous flags, so neither is assumed to be zero.
+Private `avm1-attached-manager-frame-action-increment3/receipt.json`, SHA256
+`d0affcefd6b9255b5534603938dae30c061ffcd6e920ba4353fc2966fc1a04e0`,
+retains the unchanged fixture/action selection, frozen inputs and exact failure.
+The controlled raw target flags, complete saved child snapshot, selected
+initializer order and minimal globals still limit this result; it is not retail
+startup or event-delivery evidence.
+
+The VM now admits this bounded attached flags route: an active live same-root
+Environment with a known loaded version 7..19, an existing separate bound storage
+object, exactly one ASCII identifier naming an existing own ordinary data slot,
+and the three arguments with set mask 1. `REA_ATTACHED_PROPERTY_FLAGS.md` grounds
+the **VERIFIED static** owner-interface-to-storage raw lookup and flag update.
+This path does not read named children or inherited members and does not invoke
+normal getters, setters or event hooks. The property's value remains unchanged;
+the resulting flags are the previous byte OR 1. The loaded active Environment
+determines the omitted clear mask. The named CallMethod result remains Undefined.
+
+Missing storage remains unsupported because the native hook can allocate it.
+Missing/inherited slots, accessors, special metadata, TextField receivers, broad
+selectors, other masks and direct calls without an active target remain explicit
+boundaries. Bound storage is never exposed as an ordinary script object. The
+same-root admission is an implementation restriction, not a native root-equality
+test inferred from the call path.
+
+**OBSERVED focused checks:** two new checks cover existing own Undefined data
+with prior ReadOnly flags, inherited accessor isolation, retained value/identity,
+no storage creation on rejection, special-metadata/selector/context/type gates
+and zero host calls. Two existing flag checks and both attached Apply checks also
+pass. Final source/binary hashes and all six results are in
+`avm1-runtime/attached-flags-final-checks.json`, SHA256
+`80c7d3630f1c88a9424eb087830bba27a86d91238db283936a07cd0dc04f1b5e`.
+These synthetic checks do not establish original-frame completion.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established
