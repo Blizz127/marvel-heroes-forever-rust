@@ -303,3 +303,39 @@ source commit: `477f2bb29cae43fc5e22cf69e1a11317e20736ac`. Binary SHA-256:
 Receipts: `evidence/build-0.1.0-dev.5-smoke.json` and
 `evidence/build-0.1.0-dev.5-package-validation.json`. No original game data is
 packaged. Private staging remains distinct from publisher-channel delivery.
+
+**VERIFIED (private dev.6 staging, 2026-11-15 08:58 UTC):** Seven final focused
+CLI checks pass. The persistent controller reproduces the prior original cursor
+RGBA bytes, while the native `window-pointer --seconds 10` check passes eleven
+assertions on a fresh isolated Xvfb/llvmpipe session. Four original handler
+invocations execute 56 instructions/24 host calls; six frames present with one
+GPU generation and one retained 16,384-byte texture. Resizing to 1000x1000 maps
+surface point (250,500) to cursor (9600,12000) twips within f64 tolerance; moving
+into the margin preserves it. The default standard-library build also checks.
+
+An initial synthetic Escape injection did not close bare-Xvfb's window; its
+timeout remains recorded. The final check uses the explicit native QA deadline.
+Neither synthetic-key failure nor timed success establishes physical-keyboard,
+owner-device or native-retail parity. A separate original-handler failure check
+confirms that a partly executed action is halted without publishing its partial
+snapshot or permitting retry. Fractional assertion corrections are retained.
+
+**OBSERVED:** Constructor-super support advances the original initializer to its
+actual native MovieClip call at source322430. The final CLI completes 52
+initializers and 8,671 instructions, retains one Selection listener, then rejects
+the unbound native callback. It does not run remaining initializers, full startup,
+login or gameplay. Native allocation/category/Super proof is documented, while
+additional prototype-assignment side effects remain under study before enabling
+the typed receiver path.
+
+All 278 packaged files and packaged version/Original checks pass; notices cover
+114 crates/217 texts. Packaged clean source:
+`db63270a727ab505237dd043692c07d3482f0239`. Binary SHA-256:
+`2352a87cd90a6b11be8e009e63cbea63e2140585ba597d37c3aae674093006be`.
+The tested source was `69e6327`; the only subsequent packaged change was native
+validation prose, independently checked by the package receipt.
+Records: `evidence/build-0.1.0-dev.6-smoke.json`,
+`evidence/dev6-native-pointer-attempt2/receipt.json`,
+`evidence/persistent-pointer/verification.json`, and
+`evidence/build-0.1.0-dev.6-package-validation.json`. No game assets are bundled.
+Private staging remains distinct from publisher-channel delivery.

@@ -5,18 +5,20 @@ in progress. Login, world and combat remain incomplete; no retail parity is clai
 
 ## Private build
 
-`0.1.0-dev.5` is staged at
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.5/`.
-Nine focused checks passed, including saved text, original cursor-script movement,
-pixel identity after the GPU cache refactor, the bounded initializer stop and two
-native window frames. All 271 packaged files match
+`0.1.0-dev.6` is staged at
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.6/`.
+Seven focused CLI checks passed, including unchanged cursor pixels and the bounded
+initializer stop. A separate native check passes all 11 assertions: the original
+cursor handler runs on window input, resize maps coordinates correctly, margin
+movement preserves geometry, and GPU assets remain resident across six frames.
+All 278 packaged files match
 manifest hashes; notices cover 114 selected crates with 217 texts. The clean
-source commit is `477f2bb`; earlier private builds remain available.
+packaged source commit is `db63270`; earlier private builds remain available.
 No Rust-client owner launcher channel is configured here. Staged is not published.
 
 The current diagnostic includes original saved-movie imports, static scenes,
 shape/glyph geometry, plain editable-text layout, triangle rendering, native
-preview windows, bounded AVM1 execution, localization and StaticMesh readers.
+preview windows, bounded AVM1 execution, localization and static/skeletal mesh readers.
 These are compatibility foundations, not a playable client or completed upgrades.
 Forever remains the default preset; unfinished upgrades remain unavailable.
 
@@ -41,8 +43,14 @@ Forever remains the default preset; unfinished upgrades remain unavailable.
   explicit host bindings. The persistent initializer driver separates saved
   initializer order from ordinary frame scripts and halts after partial failure.
   The final CLI completes 52 of 452 manager initializers and retains one Selection
-  listener, then stops at unsupported superclass preload (source323687).
+  listener, then stops at the unbound native MovieClip call (source322430).
   Full movie initialization is incomplete.
+- **VERIFIED:** Four successive original cursor-handler invocations execute
+  56 instructions and 24 property calls in the native window check. The integrated
+  CLI presents six frames with one retained texture/GPU generation on isolated
+  Xvfb/llvmpipe. Separate checks preserve the last complete render state after
+  partial-action failure and reject retry. Native retail input timing and owner
+  device behavior remain unverified.
 - **VERIFIED by static REA evidence:** Native empty Pop behavior and selected
   ASSetPropFlags own-member/flag/return contracts and loaded-header version chain
   are recovered. The explicitly bound version15 target uses clear mask zero.
@@ -50,6 +58,9 @@ Forever remains the default preset; unfinished upgrades remain unavailable.
 - **OBSERVED:** Saved locale strings and UI keys resolve through original IDs.
   Nineteen Vista meshes yield 94,385 vertices and 73,737 triangles; material and
   world integration remain separate work.
+- **OBSERVED:** The actual Loki vista skeletal mesh exposes 73 reference bones,
+  5,687 vertices and 9,440 triangles. Animation, skinning and runtime binding are
+  separate work; the reader preserves the opaque trailer and source coordinates.
 - **VERIFIED:** Complete Icons, Lighting and CharTextures cache files match their
   source inventory hashes. Three actual external mips reproduce the independent
   decoder's 731,056 bytes; all 110 studied CharacterSelect texture bindings resolve.
