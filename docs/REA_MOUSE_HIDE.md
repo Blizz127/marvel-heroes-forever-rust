@@ -111,8 +111,11 @@ is **6**, with a true prototype predicate at interface +0x80. Shared metadata
 reference begins null; no own P.`__constructor__` is installed by that join.
 C/P have `__proto__` markers, flags 3, backed by their actual cached parent links.
 
-P installs four descriptors—`addListener`, `removeListener`, `show`, `hide`—
-with flags **1**, all bound to **0x14018d3a0**. That complete callback only
+P constructor **0x1401e7a90** installs its parent at **0x1401e7add**, then
+calls the shared constructor/prototype join at **0x1401e7b2e**. Only after
+that constructor returns does the factory install four descriptors—
+`addListener`, `removeListener`, `show`, `hide`—at **0x14020004a**, with
+flags **1**, all bound to **0x14018d3a0**. That complete callback only
 clears its result and writes Undefined. **P.hide is not C.hide.** The actual
 C.hide descriptor binds **0x1401b6fe0** with flags **7**. Dispatch by text alone
 would confuse two different native operations.
@@ -144,6 +147,71 @@ setter **0x1401ffd70** is specialized and remains outside this read/call proof.
 P uses the shared normal/raw prototype getters **0x1401e8670/0x1401e7c40**.
 Current descriptor replacement, inherited lookups, accessors, resolvers and
 changed parent links must retain explicit implementation guards.
+
+## Finite own-member read contract
+
+**VERIFIED retained-evidence follow-up:** the eight exact fresh C keys listed
+above all miss the seven canonical interned extension aliases and all three
+literal comparisons in **0x1401f38d0**. The literal comparisons include their
+terminating NUL, and each admitted spelling differs before that terminator.
+Whether context byte +0x68 equals 1 or not, these exact keys reach
+**0x1401f3972**, preserve the original key at **0x1401f3979**, and invoke raw
++0x58 at **0x1401f3982**. No extension callback or function-allocation branch
+is entered for these names. This does not license other names or aliases.
+
+The finite read profile uses source versions **7..19**, the active canonical
+string context, and the unchanged successful Mouse graph. In generic raw
+**0x140197000**, exact own-key identity at **0x1401970cf** reaches the
+stored Value copy through **0x14018d9d0 at 0x1401971b6**. Thus C's three
+broadcaster methods, `_listeners`, `show`, `hide` and `prototype` return their
+actual stored own values. Reading a function identity does not implement its
+callback, and reading `_listeners` does not implement Array access or mutation.
+A missing or changed own descriptor cannot be replaced with guessed absence.
+
+`__proto__` is an explicit exception to ordinary stored-value reading. Raw
+getter **0x14019705f..0x140197066** recognizes its builtin key before any
+own hash lookup, then reads the **actual internal parent at object+0x30** at
+**0x1401971d4**. A nonnull parent is converted through **0x1401936f0**; a
+null parent produces found=true with **Undefined**, not Null. Its own metadata
+Value, accessor and flags do not choose that result. Canonical C/P reads can
+therefore expose cached Function.prototype/Object.prototype respectively only
+under their actual internal-parent guards. An implementation that also freezes
+the metadata descriptor is imposing a narrower admission profile.
+
+P's normal getter **0x1401e8670..0x1401e867e** is a complete thunk which
+passes Environment+0xe8 to raw +0x58. P's raw **0x1401e7c40** first selects
+public/hidden constructor names; its four exact own method names miss those
+tests and reach **0x140197000 at 0x1401e7cfa**. Their own tag-8 values take
+the same direct copy path. No callback invocation or parent lookup occurs on
+those own hits. P.`__proto__` uses the internal-parent rule above.
+
+P.`constructor` is a special saved-reference read, not a generic marker Value.
+The route **0x1401e7d1b → 0x1401a16c0** first honors an own non-marker
+override. For the fresh marker, it selects P's saved public constructor
+FunctionRef at **P+0x70** and produces tag-8 C. This route does not reread
+GLOBAL.Mouse or C.prototype. Representing it as canonical C is sound under
+guards preserving that marker, saved reference and canonical graph; it does not
+assert that a changed public C.prototype would itself change this native read.
+Null saved references, deletion, alternate descriptors and inherited/resolver
+fallbacks remain unsupported in this bounded profile.
+
+The observed construction sequence is C: `__proto__`, three broadcaster
+methods, `_listeners`, `show`, `hide`, `prototype`; P: `__proto__`,
+`constructor`, `addListener`, `removeListener`, `show`, `hide`. In particular,
+P's constructor marker is installed inside its constructor **before** the
+factory installs its methods. This is an installation sequence, not proof of
+native enumeration order.
+
+Private `rea-mouse-hide/callable-member-review.json` is sealed with SHA-256
+`16f5cd9a93a9a8d785781e2d8b3b9749d4245472eedc1acd66fb1c5a2ce6bb86`.
+Its original checker rechecks **701 retained instruction spans**, exact branch
+anchors, finite alias/literal mismatches, metadata bindings and factory order
+against the owned PE; no new REA request or native/script execution was made.
+The separate `rea-mouse-hide/prototype-member-review.json` binds 11 retained
+canonical source records and has SHA-256
+`660ccfd4e980692a1e018d2513108cd85017ebe0390e7d815ba7f32470d9eac6`.
+It preserves the constructor/parent special cases and explicit fallback limits.
+Neither follow-up establishes a concrete cursor-handler effect.
 
 ## Exact zero-argument callback
 
