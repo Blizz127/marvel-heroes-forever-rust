@@ -226,3 +226,85 @@ receipts; the local `reverse-engineer-anything` skill and native guide
 (REA MIT toolkit); Rizin via those REA records (LGPL-3.0-only); Python's
 standard library (PSF licence). No outside VM or SDK implementation was
 read or reused. Native bytes, movie data and extracts remain private.
+
+## Finite extension: `wordWrap`, `maxChars`, and `password`
+
+**VERIFIED static extension:** three further exact standard names take the
+same ordinary fallback on this concrete attached case-3 MovieClip. This is
+an independently checked finite set, not a rule inferred from their names,
+their apparent TextField relevance, or an unexamined default-table range.
+
+| Exact name | ID | Name-table row | Literal pointer | Selector |
+| --- | --- | --- | --- | --- |
+| `wordWrap` | 49 | `0x142adcdb0` | `0x14250d1e8` | 0 |
+| `maxChars` | 65 | `0x142adceb0` | `0x14250d110` | 0 |
+| `password` | 68 | `0x142adcee0` | `0x14247e8a8` | 0 |
+
+The separate 34-record source audit identifies these assignments on Sprite
+owners in login movie13/header15. The private checker independently matches
+each original action hash, pool index, Push operands and SetVariable byte:
+
+| Scene action / owner / source span | `maxChars` | `password` | `wordWrap` |
+| --- | --- | --- | --- |
+| 84 / 66 / 36365+370 | 36629: Number(0) | 36637: Bool(false) | 36733: Bool(false) |
+| 86 / 68 / 36780+370 | 37044: Number(0) | 37052: Bool(true) | 37148: Bool(false) |
+
+These are source-derived assignments to the saved current MovieClip target,
+not direct writes to a TextField. Source provenance comes from private
+`construct-opcode-audit/analysis/records.json` and its frozen parser receipt;
+`extra-text-names/source-audit-selected.json` retains the exact consumed
+digest and six selected observations. This is no claim of current property
+absence, writability, reached instructions, or completed handler execution.
+
+The initializer requests flag29 and does not request flag28 for each row,
+with the same existing-node OR caveat described above. With bit29 present,
+the initialized exact map returns the corresponding ID. If that flag is
+clear, their nonempty ASCII spellings begin with `w`, `m`, or `p`, so they
+do not enter the underscore-name route. The authenticated loaded-name
+profile remains required; bit31 need not be assumed absent.
+
+Every ID is greater than 32, so the already verified base setter and getter
+range checks return false before any base property body. Each derived table
+and the normal getter table were checked independently:
+
+| Route | Selector-byte addresses for IDs 49 / 65 / 68 | Selector | Jump entry and destination |
+| --- | --- | --- | --- |
+| Derived setter | `0x1401c4439` / `0x1401c4449` / `0x1401c444c` | 8 | `0x1401c4408 -> 0x1401c43ba`, temporary cleanup then false |
+| Derived getter | `0x1401ddcb9` / `0x1401ddcc9` / `0x1401ddccc` | 10 | `0x1401ddc88 -> 0x1401dd9c3`, false without a successful native result |
+| Normal getter | `0x1401de401` / `0x1401de411` / `0x1401de414` | 8 | `0x1401de3f0 -> 0x1401dddc6`, separate `__proto__` check then ordinary read |
+
+For each ID the normal setter's unsigned `(ID-89) <= 26` test is false.
+Each name differs from `__proto__`, so the path reaches `0x1401aa728` and
+forwards through the existing lazy storage **normal** setter. The ordinary
+read order and successful own-Undefined shadowing remain unchanged. There
+is no TextField text wrapping, maximum-character enforcement, password
+masking, or native Boolean result established on these MovieClip paths.
+
+All three IDs exceed 21: the derived existing-storage watch can still run
+before native false, followed by the separate generic watch opportunity.
+The proved no-watch invariant remains necessary. Exact initial bytes `w`,
+`m`, and `p` exclude the pre-write `on` event classifier. None of the three
+names equals a renderer-extension identity, regardless of bit31. This
+excludes those selected effects only; target-token/refcount housekeeping,
+possible repeated pre-write hooks, live identity, flags, and selected
+accessor/resolver requirements remain in force.
+
+**INFERRED bounded admission:** the exact case-3 fallback set is now
+`autoSize48`, `wordWrap49`, `maxChars65`, and `password68`, each with selector
+zero and its authenticated name identity. Retain Standard classification and
+admit these specific proven routes. This adds no new RHS-value category or
+coercion rule: supported Number/Object/other Values continue through the
+existing normal setter's value, copying/lifetime and callback guards. Do not
+convert an assigned value according to a same-named TextField property or
+silently admit an otherwise unsupported value. Case4 and other standard IDs
+remain outside this proof.
+
+Private `rea-attached-autosize-fallthrough/extra-text-names/verification.json`
+records every additional name row, literal and all nine selector calculations.
+Its checker revalidates the same **1,506 instruction spans / 5,491 instruction
+bytes and 2,629 table bytes**, plus **91 literal bytes** including all three
+new NUL-terminated names, against the pinned digest. The canonical name,
+derived-dispatch and normal-getter Evidence IDs are those listed above.
+The previous sealed autoSize-only receipt is unchanged. This extension uses
+only retained REA observations: zero new native calls and no native or Rust
+handler execution. It does not claim success for additional Construct bodies.
