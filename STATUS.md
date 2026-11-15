@@ -1,88 +1,86 @@
 # Work status
 
-Task `a3d58c579542` remains **working**. Asset and frontend milestones are
-in progress. Login, world and combat remain incomplete; no retail parity is claimed.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 12:50 UTC.
+The full 1:1 client objective is not achieved. Asset and frontend milestones
+remain in progress; Rust login, world entry and combat are not implemented to
+retail parity. The current source version is `0.1.0-dev.19`.
 
-## Private build
+## Latest private diagnostic
 
-`0.1.0-dev.6` is staged at
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.6/`.
-Seven focused CLI checks passed, including unchanged cursor pixels and the bounded
-initializer stop. A separate native check passes all 11 assertions: the original
-cursor handler runs on window input, resize maps coordinates correctly, margin
-movement preserves geometry, and GPU assets remain resident across six frames.
-All 278 packaged files match
-manifest hashes; notices cover 114 selected crates with 217 texts. The clean
-packaged source commit is `db63270`; earlier private builds remain available.
-No Rust-client owner launcher channel is configured here. Staged is not published.
+**VERIFIED:** `0.1.0-dev.18` is staged under
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.18/`.
+The window-enabled offline build, 23 CLI/image checks and isolated two-frame
+Rust-window startup pass. All 389 packaged file sizes/hashes and the complete
+file set match; packaged version and Original-preset readback pass. The clean
+package source is `ae9dae0323e40a92d17b59827b0b923197bfc884`; tested code is
+`e9388f34c5a7a5ed4e2fa324abc846a301ab175e`, with documentation-only differences.
+Binary SHA-256:
+`4e8e589a1ee9b8a957a58dd8e62055796127e0b6f603db63594929880f4f01cb`.
 
-The current diagnostic includes original saved-movie imports, static scenes,
-shape/glyph geometry, plain editable-text layout, triangle rendering, native
-preview windows, bounded AVM1 execution, localization and static/skeletal mesh readers.
-These are compatibility foundations, not a playable client or completed upgrades.
-Forever remains the default preset; unfinished upgrades remain unavailable.
+Receipts are `evidence/build-0.1.0-dev.18-smoke.json`,
+`evidence/dev18-native-html/receipt.json` and
+`evidence/build-0.1.0-dev.18-package-validation.json`. Dependency notices cover
+121 selected packages and 231 notice texts. Coordinator intake is queued;
+publication and owner-device validation remain unconfirmed. Staged is not
+published. Earlier private builds remain available.
 
-## Evidence-backed progress
+Forever is the default preset, Original is selectable, and there are **zero
+finished upgrades**. These builds contain original diagnostic tooling and
+notices; no retail executable, game assets, captures or extracted data.
 
-- **OBSERVED:** An explicit English font route resolves 69/71 imported symbols
-  across 26 movies. The two absent Strat2Regular exports remain unresolved.
-  Login and character-select scenes have 147/264 nodes and no missing definitions.
-- **OBSERVED:** Original GPU scene composition produces saved login artwork and
-  232 glyph fills from supported original text. Authored placeholders remain.
-  Character-select and manager base snapshots remain uniform black/white under the
-  recorded policy. Scripts, filters, scale9 paint behavior and runtime visibility
-  are unfinished; static pixels are not evidence of native visual parity.
-- **VERIFIED:** The original manager MouseMove handler executes 14 instructions
-  and six host calls. An explicit pointer at (100,200) pixels moves the actual
-  cursor geometry there and produces nonempty original cursor pixels. Constructors
-  and normal input dispatch were not run by this separate probe.
-- **VERIFIED:** An isolated Xvfb native preview presents two frames using llvmpipe.
-  Private Ubuntu runtime libraries support that test only; owner-device behavior
-  and portability have not been established.
-- **OBSERVED:** The VM executes owned snippets and class registrations with
-  explicit host bindings. The persistent initializer driver separates saved
-  initializer order from ordinary frame scripts and halts after partial failure.
-  The final CLI completes 52 of 452 manager initializers and retains one Selection
-  listener, then stops at the unbound native MovieClip call (source322430).
-  Full movie initialization is incomplete.
-- **VERIFIED:** Four successive original cursor-handler invocations execute
-  56 instructions and 24 property calls in the native window check. The integrated
-  CLI presents six frames with one retained texture/GPU generation on isolated
-  Xvfb/llvmpipe. Separate checks preserve the last complete render state after
-  partial-action failure and reject retry. Native retail input timing and owner
-  device behavior remain unverified.
-- **VERIFIED by static REA evidence:** Native empty Pop behavior and selected
-  ASSetPropFlags own-member/flag/return contracts and loaded-header version chain
-  are recovered. The explicitly bound version15 target uses clear mask zero.
-  Native root-context class registry ownership is also recovered.
-- **OBSERVED:** Saved locale strings and UI keys resolve through original IDs.
-  Nineteen Vista meshes yield 94,385 vertices and 73,737 triangles; material and
-  world integration remain separate work.
-- **OBSERVED:** The actual Loki vista skeletal mesh exposes 73 reference bones,
-  5,687 vertices and 9,440 triangles. Animation, skinning and runtime binding are
-  separate work; the reader preserves the opaque trailer and source coordinates.
-- **VERIFIED:** Complete Icons, Lighting and CharTextures cache files match their
-  source inventory hashes. Three actual external mips reproduce the independent
-  decoder's 731,056 bytes; all 110 studied CharacterSelect texture bindings resolve.
+## Current evidence-backed state
 
-The selected Alienware distribution transfer still writes
-`pins/alienware-candidate`; all-file hash verification must follow completion.
-Do not rename or modify this destination during transfer. Independently pinned
-frontend, font, locale and mesh subsets already have source hash receipts.
+- **VERIFIED retained pin:** the selected Alienware distribution completed
+  transfer and all 16,489 files matched source sizes and SHA-256 at 10:48 UTC
+  (21,193,180,456 bytes). The unchanged destination name is
+  `pins/alienware-candidate`. Receipt:
+  `evidence/alienware-full-pin-verification-20261115T1050Z.json`.
+- **VERIFIED asset increments:** both selected Entry/FrontEnd Model exports
+  now have complete serialized framing. Four UClass records match all 4,367
+  bytes, including exact terminal default references. Typed package, texture,
+  shape/font, Calligraphy, static/skeletal mesh and animation components retain
+  their documented unsupported fields and runtime conditions.
+- **OBSERVED controlled original execution:** 452 manager initializers complete.
+  The manager frame reaches 290 instructions with successful Rectangle and three
+  Point constructions, then stops at `Mouse.hide()`. Raw target state and root
+  name in that replay remain explicitly supplied diagnostic inputs. The newly
+  added default-rejecting Mouse host interface installs no Mouse object and
+  does not hide a cursor.
+- **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
+  initializers and the original MouseMove handler through the same host, then
+  prepares and renders the current scene. The handler executes 14 instructions
+  and six property calls. All 9,216,000 rendered RGBA bytes match the retained
+  cursor reference. This is not native startup, event-order or lifecycle parity.
+- **VERIFIED component behavior:** current-frame preparation includes every
+  bound TextField, preserves immutable earlier frames and rejects mismatched
+  archive/library associations. Shared saved-call state, initial prototype
+  selection and native-backed visibility/property paths retain their explicit
+  admission profiles. No complete frontend lifecycle is claimed.
+- **OBSERVED original-client reference:** isolated offline retail runs reached
+  splash frames, not a login screen. Their immutable receipts distinguish
+  observed output from unproved causes and prerequisites. No new native run is
+  justified merely by a static finding.
 
-## Next work and boundaries
+Detailed scopes, source hashes and historical results are in [FINDINGS.md](FINDINGS.md)
+and the component ledgers linked from [PROVENANCE.md](docs/PROVENANCE.md).
 
-Complete the remaining initialization and native superclass/allocation contracts,
-then connect persistent scene rendering to actual input and display lifecycle.
-HTML layout, localization through the original callbacks and character animation
-remain separate active work. Continue
-login/character/world/combat milestones after those dependencies are established.
-A fresh private build will include original code and dependency notices only.
+## Next work and operational boundaries
 
-REA Rizin is supplying bounded native evidence. The separate Ghidra Java
-ownership-preparation timeout remains documented; no shared setup/config/toolkit
-changes were made. See `docs/REA_NATIVE_ALTERNATIVE.md`.
+Continue the actual Mouse factory/user-event handler path, fresh target and root
+construction, class-default provenance, ModelComponent linkage and native Scale9
+geometry/resource inputs. Then connect the complete display lifecycle to the
+persistent renderer and input host. A callback stub, guessed default or synthetic
+check must not be presented as original startup success.
 
-Server/backup and Alienware Calligraphy variants differ in three design-state
-fields of one Carnival prototype; both remain preserved. No account access,
-server wake/login, source-install edit, push or launcher-worktree edit occurred.
+The newest retained r63-successor controller binding still marks Marvel
+`native_hold`, with no accepted native health/human/lifecycle pins. Saved
+SiteConfig HTTP502 is not asleep or zero humans. No live probe, wake, start,
+stop, access change, alternate controller route or native-worker redispatch is
+authorized by that evidence. All Marvel and FFXI no-restart holds remain intact.
+The normal authenticated wake/status source contract requires explicit ready;
+SiteConfig HTTP80 is separate. See [service prerequisites](docs/MHSERVEREMU_TEST_ENTRY.md).
+
+REA supplies bounded owner-binary compatibility evidence. Do not run setup or
+edit shared client configuration. Assets and raw evidence remain private;
+other project repositories and launcher worktrees remain read-only. Continue
+independent Rust work without waiting for a coordinator acknowledgement.
