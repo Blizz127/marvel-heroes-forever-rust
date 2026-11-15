@@ -843,3 +843,10 @@ The dev22 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev22-linux/manifest.json`, SHA-256
 `f3094c061eab878708c774bd82c0f810e749a4a9e3661c820aaf597c0ce01de0`.
+
+[Fresh Mouse state construction](REA_FRESH_MOUSE_STATE.md) and
+[later state preservation](REA_MOUSE_STATE_PRESERVATION.md) join exact owner
+executable, state-map and adapter evidence. The private ledgers distinguish
+conditional constructor absence from the later live parent-bag chain and cache.
+These original static studies add no outside game implementation, host override
+or current-state assumption.
