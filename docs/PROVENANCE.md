@@ -388,3 +388,11 @@ original file against its preceding absence while preserving the unsuccessful
 frontend result. [Source and Environment versions](TEXTFIELD_SOURCE_ENV_VERSION.md)
 distinguishes imported definition, selected MovieDef, field ancestor and captured
 function identities through owned-binary REA evidence.
+
+[Saved movie binding](SAVED_MOVIE_BINDING.md) validates exact saved Scene/library
+relationships while requiring an explicit ordinary-binding runtime profile; its
+facts do not observe a retail loader decision. [Complete snapshot plan](NATIVE_FULL_SNAPSHOT_PLAN.md)
+records private preservation checks and the installed GNU coreutils 9.7
+(GPLv3-or-later) reflink capability probe. The native String implementation uses
+the existing [owned executable study](STRING_NATIVE_METHODS.md); its synthetic
+checks remain distinct from execution of original login methods.

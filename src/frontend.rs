@@ -40,6 +40,8 @@ pub mod localized_data;
 pub mod localized_label;
 #[path = "frontend/localized_prototype.rs"]
 pub mod localized_prototype;
+#[path = "frontend/movie_binding.rs"]
+pub mod movie_binding;
 #[path = "frontend/pointer.rs"]
 pub mod pointer;
 #[cfg(feature = "renderer")]
