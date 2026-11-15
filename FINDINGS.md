@@ -5,7 +5,16 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev13 startup work in progress
+## 2026-11-15 dev13 diagnostic increment
+
+**VERIFIED Rust build/startup:** source
+`caa22506990eaffea350d70bfe6206ee08e1b19c` builds with the window feature.
+Binary SHA-256 `d963ba5138f2c7310ff4761a20fa8553acdcedbc55b4238d6520d38725f704cf`
+passes nine focused CLI/image checks and an isolated two-frame native-window
+smoke with empty stderr. Saved login/cursor pixels remain identical to the
+retained diagnostic outputs. Receipts: `evidence/build-0.1.0-dev.13-smoke.json`
+and `evidence/dev13-native-html/receipt.json`. These checks do not execute full
+native startup or establish playable login.
 
 **VERIFIED Rust checks:** typed attached `Function.apply` and bounded ordinary
 `super` calls are integrated. The latter retains receiver identity separately
@@ -18,6 +27,9 @@ the native contract and admitted runtime profile.
 per-installation constant pools and per-owner operand/register storage. Three
 focused standalone state tests pass. Central saved-mode frame, activation and
 dispatch integration remains outstanding; generic execution is still diagnostic.
+[Saved handler bindings](docs/SAVED_HANDLER_TABLE.md) retain per-key insertion
+order and shared installation identity across native Construct/Load keys. Both
+focused table tests pass; table presence does not imply successful delivery.
 [Native text-format mapping](docs/TEXTFIELD_FORMAT_MAPPING.md) closes the scalar
 style derivation for the qualified fresh HTML path while retaining explicit
 font-selection and effective runtime-state requirements.
@@ -39,9 +51,12 @@ completed post-run check, no UI input was sent and owned cleanup finished.
 [Continuation evidence](docs/NATIVE_SPLASH_CONTINUATION.md) preserves the exact
 scope; loading artwork does not establish a rendered login frontend.
 
-Dev13 is source work, not a staged or published release. The latest verified
-private package remains dev12 below. Gate 1 retail behavior/visual parity is
-not yet verified; Gate 2 exposes no finished upgrades yet.
+Linux notices cover 121 dependencies and 231 notice files, manifest SHA-256
+`c9525bcb587bf3326061e74d7c59bdac0f56a5e79c361a35acf61b42888ac0bb`.
+This diagnostic contains no game assets and exposes zero finished upgrades.
+No Rust launcher publication route has been confirmed. Gate 1 retail
+behavior/visual parity is not yet verified; Gate 2 exposes no finished upgrades
+yet. Private staging/readback is recorded separately below when complete.
 
 ## 2026-11-15 dev12 diagnostic increment
 
