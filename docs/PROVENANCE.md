@@ -564,3 +564,12 @@ retail executable, assets, extracted data or captures.
 native getter/setter and standard-name lookup evidence used for the bounded
 storage admission. Its private inventory remains outside the repository; the
 added predicate exposes membership only, without embedding native name data.
+
+The scoped DIT operational handback
+`/home/blizz/scratch/dit-marvel-retained-contract-20261115/HANDBACK.txt`
+(SHA-256 `008746dd02eea46c6e657543ba4d89d53b7e4f90ef96cff4968e0ab82ecd60d8`)
+updates [service prerequisites](MHSERVEREMU_TEST_ENTRY.md). It is owner-provided
+operational evidence; no separate publication licence was established and no
+implementation was copied. Root verified the handback hash, retaining its exact
+copy privately. Its underlying controller/runtime claims are attributed to
+DIT's retained review; this read did not query a service or clear any hold.

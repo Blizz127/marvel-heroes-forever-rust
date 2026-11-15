@@ -2,12 +2,14 @@
 
 Task `a3d58c579542`, read-only investigation on 2026-11-15 UTC.
 
-**OBSERVED local evidence:** The normal launcher control route is the shared
-authenticated stackd API with game ID `marvel-heroes`. A usable current native
-Banshee binding is **not established**: the exact coordinator tasks retain the
-staged r62 report with Marvel held for missing native start/stop/human-count
-evidence. No wake, status request, server command, credential-store read,
-Account.db access, native client launch or other-lane message was performed.
+**OBSERVED retained evidence:** The normal launcher control route is the shared
+authenticated stackd API with game ID `marvel-heroes`. The later DIT handback
+identifies a retained Nov14 r63-successor binding; Marvel remains `native_hold`
+without health, human-count or lifecycle command pins. A usable current native
+Banshee contract is **not established**. The original r62 investigation below
+is historical and is supplemented by the later handback section. No wake,
+status request, server command, credential-store read, Account.db access or
+native client launch was performed for either read-only reconciliation.
 
 The owner's standing permission for normal wake does not turn an unresolved
 held binding into permission to start individual containers or activate a
@@ -36,10 +38,12 @@ particular installed Forever tile already has the same binding.
 
 Wake responses distinguish ready, starting, forbidden, signed-out, rate-limited,
 failed and unreachable states. A response naming another game cannot establish
-Marvel readiness. The current launch flow allows a 404/not-on-demand result to
-continue its ordinary launch path; **404 is not a successful wake or verified
-readiness result**. An HTTP error, unreachable service or historical `asleep`
-note is not permission to restart an already-running game.
+Marvel readiness. The later scoped DIT source review confirms that mapped
+Marvel requires explicit `ready` after normal authenticated wake/status.
+The generic 404/not-on-demand continuation previously noted here is not a
+Marvel readiness exemption. Held/error responses are neither asleep nor ready.
+An HTTP error, unreachable service or historical `asleep` note is not permission
+to restart an already-running game.
 
 The complete PLAY flow also contains provisioning/login behavior outside this
 prelogin study. It must not be invoked merely as a convenient wake test. The
@@ -210,3 +214,45 @@ The private receipt, response headers and body are under
 `61b30d408583991fd69f3dec694e154cb652471e663328ad9c8482c9021ab5db`.
 The concrete route failure and unresolved hold were queued to the coordinator;
 the report does not establish acknowledgement or release of that hold.
+
+## Later scoped DIT handback: retained r63 successor
+
+**VERIFIED document identity, 2026-11-15:** the supplied
+`/home/blizz/scratch/dit-marvel-retained-contract-20261115/HANDBACK.txt` matches
+SHA-256 `008746dd02eea46c6e657543ba4d89d53b7e4f90ef96cff4968e0ab82ecd60d8`.
+Its exact private copy and root read-only receipt are retained under
+`evidence/dit-contract-handback-20261115/`. The facts below are attributed to
+that scoped DIT review, not new live observations by this client lane.
+
+The newer retained release is
+`release-20261114-forever-oplock-a71c-candidate`, still using unit name
+`dit-stackd-r60.service`. The handback pins `bindings.stage.json` to SHA-256
+`7887fecae5169e5249a2eb4061677e485c7208a39d0cee93d8f85b1d37aadb9b`
+and `banshee_service.py` to
+`e32231cb0371cbdbe3f6ea2462ef195fb655881a853a0750de8f9f83b04673eb`.
+Its saved Nov14 paired-cutover and boundary-check receipts concern controller
+identity. They do not establish Marvel readiness, stopped state, completed save
+or zero humans. This lane has not independently re-read those underlying files
+or queried their current runtime.
+
+The Marvel row remains `mode=held`, `held_reason=native_hold`, identical to the
+retained r62/r63 rows, without health, human, start, stop, wake or sleep pins.
+The endpoint hint is metadata, not a probe. Source-derived controller behavior
+skips probes for held rows, keeps counts unknown, reports held status and refuses
+sleep. No endpoint was called to reconfirm those source-derived results.
+
+The owner's Nov9 **sleep** choice is settled. `native_hold` records the missing
+native lifecycle implementation; it does not reopen sleep versus off. Existing
+native task `af7322ea1487` remains queued with its current lead unverified. Its
+missing deliverable is a current Banshee contract with exact service/artifact/
+command pins, reliable health and fresh human/in-flight counts, graceful
+drain/save and recoverable stop, normal demand wake, and observed
+progress-preserving stop/wake/reconnect evidence. Historical AX41 acceptance
+and the saved HTTP80 502 do not supply that contract.
+
+No alternate route, access change, hold release, controller activation or worker
+redispatch follows from this handback. All live/access and FFXI no-restart holds
+remain in force. Independent Rust work continues without an acknowledgement
+gate. Publication bookkeeping in the handback concerns an earlier intake;
+dev15's separate staged artifact and queued intake remain as recorded in
+`FINDINGS.md`.
