@@ -18,6 +18,11 @@ The continuations below extend that conditional proof across the actual
 E+0x100 container's 135 addition attempts and a local stack initializer,
 stopping before the global-receiver call **0x141272764 → 0x1406f4870**.
 
+The subsequent configuration study closes selected cached/disabled branches
+and identifies a real virtual-call boundary on a miss. Current configuration
+state remains unknown, so it provides no unconditional extension through that
+global-receiver call.
+
 Target: owner's Win64 build 1.52.0.1700 PE, SHA-256
 `8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`.
 All evidence is static. No native process, original script, diagnostic, host
@@ -550,3 +555,175 @@ leaf ranges. The complete reply is exit-zero, untruncated and unchanged-target;
 initializer reuses `ev_df97bcfd…` in the preservation sealed bundle. All other
 source/tooling provenance remains as above. No native process, AVM1 replay,
 VM implementation or frontend behavior changed.
+
+## Continuation: configuration lookup and its real external boundary
+
+**VERIFIED:** complete **0x1406f4870..0x1406f4af1** first clears its supplied
+output array through `0x1406ef710`. In the actual caller the output was just
+zeroed, so that helper skips element destruction, free and reallocation and
+only retains a zero count. It then calls **0x1406f1400** with the original
+global receiver G, the address **0x142af1a00** as a UTF-16 source, and flag 0.
+That address is passed directly; it is not a pointer loaded from the global.
+Its current string contents and length were not captured.
+
+This is **not** an unconditionally read-only lookup. A missing entry can invoke
+a different global object's virtual function and proceed to insertion/loading/
+logging. The selected flag 0 does not suppress that route. Consequently the
+previous unconditional-before-call preservation frontier becomes a set of
+conditional branch frontiers below; no actual branch is selected from guessed
+configuration contents.
+
+### Concrete receiver producer, without a current-state assumption
+
+The native bootstrap caller at **0x1413330f8** supplies factory
+**0x1406f1160** in its ninth argument slot, stored at RSP+0x40 before calling
+`0x14078c980` at **0x14133313e**. The callee's prologue maps that slot to
+RBP+0x350, loads it at **0x14078c9d4**, and saves it at RBP-0x28. It invokes
+that function pointer at **0x14078defd** and immediately publishes the returned
+RAX to **global 0x142ae68d0 at 0x14078df00**. This is a checked native caller
+and publication path, not a runtime observation of the owner's current client.
+
+Complete factory **0x1406f1160..0x1406f11b2** requests **0x54 / 84 bytes**, with
+alignment 8, through `0x140721150`. Allocation failure returns null. On the
+successful branch it installs primary table **0x141de8360**, clears the
+selected map fields at G+8/+0x10/+0x28/+0x30/+0x38/+0x44/+0x4c, and returns
+the object. The last QWORD clear includes **DWORD G+0x50=0**. As with the
+previous container, inline storage holes are not assigned invented zeros.
+
+These are fresh producer facts only. Startup makes additional configuration
+setup/load calls immediately after publication, beginning at **0x14078df21**.
+The study does not close that entire bootstrap or later receiver lifetime.
+An original limited REX MOV/LEA candidate scan also found another possible
+store; it is not a complete cross-reference inventory or a sole-writer proof.
+No current G pointer, G+0x50, map contents, filename or file availability is
+inferred from the constructor or on-disk image.
+
+### Initial lookup, selected writes and the external miss path
+
+Complete **0x1406f1400..0x1406f1644** copies the supplied filename into a
+bounded temporary string, searches the map at **G+8** through
+`0x1406f20e0`, and releases the temporary. Complete
+**0x1406f20e0..0x1406f21cf** follows bucket/next-index chains of **108-byte**
+entries and writes only the caller's local index. A found value is selected
+at entry+0x10. For valid maps and strings this read path has no object virtual
+call or cache mutation; its temporary allocation/free and string comparison
+still require the stated ordinary primitive profile.
+
+If the entry is absent, the branches are exact:
+
+- **G+0x50 != 0:** return null without the subsequent external check.
+- **G+0x50 == 0 and actual flag 0:** load **[0x142ae68e8]**, select its primary
+  table, and call **virtual +0xc0 at 0x1406f14fb**, passing the filename source.
+  A negative EAX returns null. A nonnegative result proceeds to unclosed
+  insertion/loading/logging calls, including `0x1406e6ee0`, `0x1406fc150` and
+  `0x14077f590`.
+
+The concrete second global receiver and its current implementation are not
+proved here. This virtual dispatch is a real effect boundary, even if an
+apparent role suggests a filesystem query. A miss cannot be converted into a
+no-op or a preserving failure without that additional evidence. The factory's
+fresh zero field actually permits this route; it does not exclude it.
+If all fresh factory map fields survive unchanged, the empty initial map and
+actual flag 0 necessarily select this virtual path. That fresh checkpoint is
+not assigned to the owner's current engine.
+
+### Cached entry: section lookup, empty success and output construction
+
+When the first map supplies an existing entry, `0x1406f4870` copies the fixed
+owned-image source at **0x1421bc9a0**. Its checked length is 16 UTF-16 units,
+so the temporary requires **34 bytes including NUL**. It searches a second
+map through complete **0x1406f22d0..0x1406f23c3**, whose entries have stride
+**96 bytes**, then releases that temporary. This lookup likewise changes
+only its local result index under valid read-only map conditions.
+
+Both lookup helpers call the retained wide hash and complete comparison
+**0x1406d57c0..0x1406d5856**. The comparison's concrete import is
+**MSVCR120 `_wcsicmp` at IAT 0x141dbbef0**. Negative string lengths reach
+assertion helpers and are outside the valid-input profile. The wide hash's
+202 bytes of jump/selector data were independently matched to retained raw
+bytes and the PE: every destination remains within its checked no-call code.
+Its CRC reads are bounded to 256 DWORDs. The table is not decoded as code, and
+no hidden external dispatch is assumed away.
+
+A missing second-map entry returns **EAX=0** with the output still empty.
+A found section selects its entry+0x10 and initializes the retained bit
+iterator. If its bit count is zero, the iterator produces a nonnegative index
+and the caller immediately skips output construction, even though a readable
+first bitmap word can have unspecified contents. No invented zero bitmap
+padding is needed for this zero-count branch. The selected local cleanup
+flags remain zero and **0x1406f4acb returns EAX=1**, with the output unchanged.
+
+For a nonempty section, preservation is closed only up to the first output
+append **0x1406f49b8 → 0x140828b20**. Later calls include key/string preparation
+`0x1407b85c0`, formatting `0x140775830`, iterator advancement `0x140a7aa00` and
+conditional cleanup `0x14098f570`. Those effects are not declared ordinary
+merely because their apparent purpose is string construction. No nonempty
+result, bounded output count, formatting result or normal completion is
+fabricated. This lane did not enter the separate root diagnostic/Environment
+investigation.
+
+### Preservation consequences and caller frontiers
+
+In addition to the preceding E/L/O/C_L premises, the closed lookup branches
+require a valid live G, bounded terminated filename, valid finite maps and
+readable string/bitmap storage. All temporary allocations and graph storage
+must remain disjoint from protected engine/loader state. The ordinary
+allocation/free, `_wcsicmp`, memory-copy, cookie/ABI and no-reentry conditions
+remain explicit. They do not cover the new virtual/load/format boundaries.
+
+| Supplied branch state | Closed result and next unresolved frontier |
+| --- | --- |
+| Initial map miss, G+0x50 != 0 | Outer result 0; original caller reaches `0x141272aff → 0x141260940(E+0x148, E+0x100)` |
+| Initial map miss, G+0x50 == 0 | Before `0x1406f14fb`, primary virtual +0xc0 of `[0x142ae68e8]`; no return/effects assumed |
+| Cached first entry, missing section | Outer result 0; same E+0x148 fallback at `0x141272aff` |
+| Cached section, zero bit count | Outer result 1, zero output count; caller reaches `0x141272b09 → 0x141269560(E+0x100, 0)` without the fallback |
+| Cached section, nonempty iterator | Before output append `0x1406f49b8 → 0x140828b20`; later caller behavior remains unproved |
+
+The caller tests EAX for **zero**, not positivity. Any hypothetical nonzero
+return with signed output count <=0 skips the configured loop and the fallback;
+that observation does not license new return values beyond this callee's proved
+branches. With positive output count the first later unclosed row helper is
+`0x1412727dc → 0x1406dacc0`. Dynamic row-name sources are outside the earlier
+fixed ASCII bounds. Later cleanup/helper calls are also not closed by this
+branch map.
+
+Thus conditional preservation extends through the stated no-external branches
+to their exact caller frontiers. It does not extend unconditionally through the
+lookup, select the owner's current branch, prove whole-engine preservation,
+or establish current state-4 absence or Mouse.hide acceptance.
+
+### Configuration evidence
+
+Private evidence is under `evidence/rea-engine-name-state/config-lookup/`.
+The original verifier matches **3,020 instruction spans / 12,300 bytes**,
+actual factory forwarding, import binding, fixed-source bounds and 202 bytes
+of hash dispatch data. `verification.json` SHA-256:
+`a7d4b7e4dc0197aa9d32486365f42d9dac6c9502b4b1cecf72074682af08e073`.
+Full producer-body byte coverage is not a claim that every bootstrap callee's
+effects have been analyzed.
+
+The independent caller review checks **298 spans / 1,143 instruction bytes**
+and **132 fixed literal bytes**. `caller-review.json` SHA-256:
+`63a57a0bad17ee4cb63df8a336edc506507880b90aa72733b30a88b3f0a1527d`.
+It distinguishes return-zero fallback, empty success, positive-count loops,
+dynamic sources and later cleanup instead of assigning them one shared effect.
+
+Independent `global-producer-review.json` checks the 2,007 producer
+instructions / 8,563 bytes, 82-byte factory and 75-byte caller join; SHA-256
+`202d6fd69d37a243e1dad7d58016e7ab301f428d98b3c3a0d7162478c21dfc4d`.
+The saved factory slot is later exposed and rewritten elsewhere in the
+bootstrap; the forwarding claim ends at its immediate publication.
+
+Joined `preservation-receipt.json` binds these checks to the separate branch
+frontiers and inherited conditions; SHA-256
+`1303beb65712b3af18df4ace67d8b9a978245689452833ded19bfe9aa89e03da`.
+It explicitly declines an unconditional extension through the lookup.
+
+Five new target-free REA records are sealed in `entry`, `lookup-helpers`,
+`find-helpers`, `producer` and `factory` bundles. All are complete, exit-zero,
+untruncated, unchanged-target and exported/reset with identical paired files.
+Full IDs and hashes are in the verification receipt. The original candidate
+scanner and independent retained-source review add no target execution or
+current-state capture. Source/licence provenance remains the owner's private
+PE and prior original project evidence with the tooling recorded above; no
+config contents, native bytes, VM implementation or host behavior entered git.
