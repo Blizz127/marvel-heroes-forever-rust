@@ -20,6 +20,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
+#[path = "window/scene.rs"]
+pub mod scene;
+pub use scene::{SceneController, ScenePreviewOptions, ScenePreviewReport, run_scene_preview};
+
 const MAX_IMAGE_BYTES: u64 = 256 * 1024 * 1024;
 const RETRY_DELAY: Duration = Duration::from_millis(50);
 
