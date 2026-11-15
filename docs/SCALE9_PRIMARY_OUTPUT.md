@@ -103,3 +103,11 @@ Oracle SHA-256:
 All six frozen source hashes and the oracle remain unchanged. These are
 synthetic instruction-derived witnesses, not a native execution or live draw.
 The later dev25 production build and startup are recorded in `FINDINGS.md`.
+
+The joined private `evidence/native-primary-output/oracle-comparison-handback.json`
+rechecks 49 bound file hashes and includes the separate retained-byte audits,
+oracle and comparison receipts. SHA-256:
+`4c88facbe5fd3fa0463e73aa673bcfa297e9b36d79f0ccac314e0f3c2601be4e`.
+It also binds the corrected index-receiver width evidence documented in
+[output receiver](SCALE9_OUTPUT_RECEIVER.md). Those static widths do not change
+the small explicit composition fixture or add a receiver implementation.
