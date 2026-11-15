@@ -582,3 +582,57 @@ instruction byte spans matched the original PE section bytes. This mapping was
 used only for `.text` instructions, not for data-section reads. Sessions were
 exported/reset; no configuration, original asset or executable was modified.
 No additional external implementation source was read for this proof.
+
+**OBSERVED (independent file-header check):** The existing private extraction
+`evidence/frontend-startup/MarvelGame-frontend_manager.gfx` has signature GFX,
+version byte `15`, and matching stored/declared length 2,055,748 bytes. Its
+SHA-256 is `04d6748bc4ed845a7692a180d57b0fcd327fbbde9d84afacc461d55ca6ab8da4`.
+The private `evidence/rea-native-alternative/manager-header-observation.json`
+records this check. This added provenance is the owner's proprietary Gazillion
+movie extraction, read only for its header and digest; no asset contents were
+added to the repository and no runtime state is implied by the file check.
+
+## Existing single-name `ASSetPropFlags` selector
+
+**VERIFIED (static generic-object path):** For a single exact existing own
+property name and the already bound loaded-target versions `7..19`, the generic
+object implementation changes that property's flags without resolving its
+value through a getter or traversing the prototype chain. This supports the
+next observed ASCII names `dispatchQueue` and `_listeners` when the VM has
+already established them as own members on a supported generic script object.
+It does not expand support to arbitrary native display-object overrides.
+
+The earlier native body establishes string selection followed by virtual
+lookup slot `0x28`, then flags-setter slot `0x38` only after lookup succeeds.
+On the recovered generic vtables these resolve as follows:
+
+1. Wrapper `0x1401a1540` supplies only the object's own hash at interface offset
+   `0x18`. For context version greater than six, it calls getter `0x1401938a0`.
+2. That getter's leaf finder `0x140181fd0` compares the interned key and follows
+   hash-bucket links. It has no prototype access or callbacks. On a match, the
+   getter copies the stored raw value through `0x14018d9d0`, then explicitly
+   copies the stored flags into result byte `1` at `0x1401938f2`.
+3. Flags setter `0x1401e3ef0` performs the own lookup, replaces the temporary
+   copy's flags, and invokes hash writeback `0x1401cffd0`. Its existing-entry
+   path uses leaf finder `0x140181f40`, copies the raw value back, then writes
+   the requested flags at `0x1401d004e`. This bypasses the ordinary assignment
+   method's read-only rejection; the operation is explicitly a flags update.
+
+Neither this raw value copy nor the flags update invokes an ActionScript getter.
+The first-call mask/return proof still applies, including `Undefined` return and
+the loaded-target default clear mask. This bounded implementation allowance is
+for an already validated single existing own name. Comma lists, empty names,
+whitespace and coercion details, unsupported native receiver classes, and
+general inherited/absent-member policy remain separate work; they should not
+be inferred from this narrow allowance.
+
+The exact getter/writeback instructions are REA record
+`ev_19d408316178b7dcc24c60b429e309996f8d216766ad88186d234ead3f9d1e71`;
+the leaf finders are
+`ev_71a378961e9d11da94a98bcf5980a7fa3504288afe69b9f6c3e18cadf5493b45`.
+Both are preserved in
+`evidence/rea-asflags-selected-name/hash-finders.bundle.json`, with the initial
+getter record also in `getters-and-setter.bundle.json`. Both calls completed
+with exit zero, no output truncation and the unchanged executable hash. This
+study uses only the previously registered private executable and REA tooling;
+no additional outside implementation source was read.
