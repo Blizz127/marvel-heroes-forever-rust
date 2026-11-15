@@ -171,6 +171,11 @@ struct ScriptFunction {
     scopes: Vec<ObjectId>,
     pool: Arc<Vec<Value>>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionMethod {
+    Call,
+    Apply,
+}
 #[derive(Debug, Clone)]
 enum Kind {
     Plain,
@@ -179,6 +184,7 @@ enum Kind {
     Native(u32),
     ObjectConstructor,
     AddProperty,
+    FunctionMethod(FunctionMethod),
 }
 #[derive(Debug, Clone)]
 enum Property {
@@ -307,6 +313,12 @@ impl Vm {
     pub fn native(&mut self, binding: u32) -> Result<ObjectId> {
         self.alloc(Kind::Native(binding), None)
     }
+    /// Create a standard method value for an explicitly installed function
+    /// prototype. Does not fabricate a global Function constructor/cast binding.
+    pub fn function_method(&mut self, method: FunctionMethod) -> Result<ObjectId> {
+        self.alloc(Kind::FunctionMethod(method), None)
+    }
+
     /// Install only the documented Object constructor/prototype. Optional native
     /// methods and unrelated namespace objects are not fabricated.
     pub fn install_object_constructor(&mut self) -> Result<ObjectId> {
@@ -455,7 +467,11 @@ impl Vm {
             self.objects.get(id.0).is_some_and(|object| {
                 matches!(
                     object.kind,
-                    Kind::Script(_) | Kind::Native(_) | Kind::ObjectConstructor | Kind::AddProperty
+                    Kind::Script(_)
+                        | Kind::Native(_)
+                        | Kind::ObjectConstructor
+                        | Kind::AddProperty
+                        | Kind::FunctionMethod(_)
                 )
             })
         } else {
@@ -823,6 +839,21 @@ impl Vm {
         args: &[Value],
         host: &mut impl Host,
     ) -> Result<Value> {
+        if self.depth >= self.limits.call_depth {
+            return self.fail(ErrorKind::Budget("function call depth"));
+        }
+        self.depth += 1;
+        let result = self.invoke_inner(callable, this, args, host);
+        self.depth -= 1;
+        result
+    }
+    fn invoke_inner(
+        &mut self,
+        callable: Value,
+        this: Value,
+        args: &[Value],
+        host: &mut impl Host,
+    ) -> Result<Value> {
         if args.len() > self.limits.arguments {
             return self.fail(ErrorKind::Budget("arguments"));
         }
@@ -849,6 +880,53 @@ impl Vm {
                 return Ok(value);
             }
             Kind::Script(function) => function,
+            Kind::FunctionMethod(method) => {
+                if !self.callable(&this) {
+                    return self.fail(ErrorKind::UnboundCall);
+                }
+                let Some(Value::Object(receiver)) = args.first() else {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Function method null/primitive thisObject",
+                    ));
+                };
+                let forwarded = match method {
+                    FunctionMethod::Call => args[1..].to_vec(),
+                    FunctionMethod::Apply => {
+                        if args.len() > 2 {
+                            return self
+                                .fail(ErrorKind::Unsupported("Function.apply extra arguments"));
+                        }
+                        match args.get(1) {
+                            None => Vec::new(),
+                            Some(Value::Object(array)) => {
+                                let Kind::Array(length) = self.objects[array.0].kind else {
+                                    return self.fail(ErrorKind::Unsupported(
+                                        "Function.apply non-Array arguments",
+                                    ));
+                                };
+                                if length as usize > self.limits.arguments {
+                                    return self.fail(ErrorKind::Budget("arguments"));
+                                }
+                                let mut forwarded = Vec::new();
+                                for i in 0..length {
+                                    forwarded.push(self.read_member(
+                                        *array,
+                                        &text(&i.to_string()),
+                                        host,
+                                    )?);
+                                }
+                                forwarded
+                            }
+                            _ => {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "Function.apply null/undefined argument-array profile",
+                                ));
+                            }
+                        }
+                    }
+                };
+                return self.invoke(this, Value::Object(*receiver), &forwarded, host);
+            }
             Kind::AddProperty => {
                 if args.len() != 3 {
                     return self.fail(ErrorKind::Unsupported("addProperty argument count"));
@@ -899,9 +977,6 @@ impl Vm {
             }
             _ => return self.fail(ErrorKind::UnboundCall),
         };
-        if self.depth >= self.limits.call_depth {
-            return self.fail(ErrorKind::Budget("function call depth"));
-        }
         let program = self.code[function.code.0].clone();
         let Some(instruction) = program.instruction_at(function.offset) else {
             return self.fail(ErrorKind::InvalidCode(function.code));
@@ -973,9 +1048,7 @@ impl Vm {
                 register += 1;
             }
         }
-        self.depth += 1;
         let result = self.run(function.code, &definition.body, &mut frame, host);
-        self.depth -= 1;
         match result? {
             Flow::Return(v) => Ok(v),
             Flow::End => Ok(Value::Undefined),
@@ -1374,6 +1447,7 @@ impl Vm {
                                     | Kind::Native(_)
                                     | Kind::ObjectConstructor
                                     | Kind::AddProperty
+                                    | Kind::FunctionMethod(_)
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
                             }
@@ -1508,6 +1582,7 @@ impl Vm {
                                         | Kind::Native(_)
                                         | Kind::ObjectConstructor
                                         | Kind::AddProperty
+                                        | Kind::FunctionMethod(_)
                                 ) {
                                     "function"
                                 } else {
@@ -1992,5 +2067,65 @@ mod tests {
             .unwrap();
         assert_eq!(result.value, Value::Bool(false));
         assert!(!vm.has_key(prototype, &text("bad")).unwrap());
+    }
+    #[test]
+    fn call_apply_forward_explicit_receiver_and_arrays_with_bounded_recursion() {
+        let mut vm = setup();
+        let mut body = push(&[Value::string("this")]);
+        body.extend([0x1c, 0x3e]);
+        execute(&mut vm, &function("f", &body)).unwrap();
+        let function = vm.get(vm.root(), "f").unwrap();
+        let receiver = vm.object().unwrap();
+        let call = vm.function_method(FunctionMethod::Call).unwrap();
+        let apply = vm.function_method(FunctionMethod::Apply).unwrap();
+        let result = vm
+            .call(
+                Value::Object(call),
+                function.clone(),
+                &[Value::Object(receiver)],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Object(receiver));
+        let empty = vm.array(&[]).unwrap();
+        let result = vm
+            .call(
+                Value::Object(apply),
+                function.clone(),
+                &[Value::Object(receiver), Value::Object(empty)],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Object(receiver));
+        assert!(
+            vm.call(
+                Value::Object(apply),
+                function,
+                &[Value::Object(receiver), Value::Null],
+                &mut RejectHost
+            )
+            .is_err()
+        );
+        let mut vm = Vm::new(
+            15,
+            Limits {
+                call_depth: 3,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        let apply = vm.function_method(FunctionMethod::Apply).unwrap();
+        let arguments = vm.array(&[]).unwrap();
+        vm.set(arguments, "0", Value::Object(apply)).unwrap();
+        vm.set(arguments, "1", Value::Object(arguments)).unwrap();
+        let error = vm
+            .call(
+                Value::Object(apply),
+                Value::Object(apply),
+                &[Value::Object(apply), Value::Object(arguments)],
+                &mut RejectHost,
+            )
+            .unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Budget("function call depth"));
     }
 }

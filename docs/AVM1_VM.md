@@ -118,7 +118,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Eleven focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twelve focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -187,6 +187,23 @@ retain that evidence and eleven passing focused tests. The synthetic accessor te
 also verifies a real script setter mutates the instance, not the prototype, and
 invalid registration leaves no property behind. Ordered initialization still has
 the separately reported empty-Pop question; no instruction is silently skipped.
+
+## Explicit function method values
+
+`function_method(FunctionMethod::Call/Apply)` creates standard callable method
+values for an explicitly installed function prototype. It does not invent a
+global Function constructor or assume a Function-cast contract. Both methods
+support an explicit object receiver; Call forwards trailing arguments, and Apply
+reads a supplied array in index order or accepts an omitted argument list.
+
+Null/primitive receivers and explicit null/undefined array lists remain named
+unsupported cases: Adobe's AS2 documentation does not settle every interaction
+with timeline scope, despite ECMAScript specifying broader cases. The actual
+`Function(cls).apply(mc,null)` bootstrap chain therefore remains unfinished.
+All invocations, including recursive builtin Call/Apply chains, consume nesting
+budget. A cyclic Apply argument array reaches a bounded error rather than Rust
+stack exhaustion. These method paths currently have focused synthetic validation;
+they have not been compared with the native retail runtime.
 
 ## Source and licence ledger
 
