@@ -2544,7 +2544,7 @@ impl Vm {
                                 return self
                                     .fail(ErrorKind::Unsupported("InitObject ASCII name profile"));
                             }
-                            self.set_key(object, key, value)?;
+                            self.write_member(object, key, value, host)?;
                         }
                         self.push(frame, Value::Object(object))?;
                     }
@@ -3230,6 +3230,64 @@ mod tests {
             ErrorKind::Unsupported(_)
         ));
         assert_eq!(vm.object_count(), count);
+    }
+    #[test]
+    fn init_object_uses_inherited_setter_and_ignores_its_return_value() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let Value::Object(prototype) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        let mut getter = push(&[Value::Number(0.0)]);
+        getter.push(0x3e);
+        let mut setter = push(&[Value::string("this")]);
+        setter.push(0x1c);
+        setter.extend(push(&[Value::string("seen"), Value::string("arguments")]));
+        setter.push(0x1c);
+        setter.extend(push(&[Value::string("0")]));
+        setter.extend([0x4e, 0x4f]);
+        setter.extend(push(&[Value::Bool(false)]));
+        setter.push(0x3e);
+        let mut definitions = function("getter", &getter);
+        definitions.extend(function("setter", &setter));
+        execute(&mut vm, &definitions).unwrap();
+        let getter = vm.get(vm.root(), "getter").unwrap();
+        let setter = vm.get(vm.root(), "setter").unwrap();
+        let add = vm.get(prototype, "addProperty").unwrap();
+        vm.call(
+            add,
+            Value::Object(prototype),
+            &[Value::string("watched"), getter.clone(), setter.clone()],
+            &mut RejectHost,
+        )
+        .unwrap();
+        let mut literal = push(&[
+            Value::string("watched"),
+            Value::Number(7.0),
+            Value::Number(1.0),
+        ]);
+        literal.push(0x43);
+        let result = execute(&mut vm, &literal).unwrap();
+        assert_eq!(result.host_calls, 0);
+        let Value::Object(instance) = result.stack[0] else {
+            panic!()
+        };
+        assert_eq!(vm.get(instance, "seen").unwrap(), Value::Number(7.0));
+        assert_eq!(vm.own_property_flags(instance, "watched").unwrap(), None);
+        vm.raw_member(
+            prototype,
+            text("watched"),
+            Property::Accessor {
+                getter,
+                setter: Some(setter),
+            },
+            4,
+        )
+        .unwrap();
+        assert!(matches!(
+            execute(&mut vm, &literal).unwrap_err().kind,
+            ErrorKind::Unsupported("flagged accessor assignment native ordering")
+        ));
     }
     #[test]
     fn native_ascii_hash_and_literal_enumeration_match_static_retail_derivation() {

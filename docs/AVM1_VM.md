@@ -569,8 +569,17 @@ through its zero-argument New path before consuming literal pairs. For the suppo
 unchanged binding, the allocator first stores `__proto__`, shared construction
 stores `__constructor__`, and the Object callback stores public `constructor`.
 All three own entries have flags 3; both constructor values refer to global Object.
-Literal value/name pairs are then popped in reverse push-pair order. New ordinary
-fields have flags 0; replacing an existing data value retains its flags.
+Literal value/name pairs are then popped in reverse push-pair order and passed
+through the ordinary member setter. New ordinary fields have flags 0; replacing
+an existing data value retains its flags. Inherited supported accessors receive
+the newly allocated literal as `this`; their return values do not replace the
+literal or determine success. Flagged accessor ordering remains unsupported,
+and fresh native watch state is zero; native watch installation is not implemented.
+
+**OBSERVED:** The focused inherited-setter test records a write on the fresh
+literal, confirms no own data field shadows the accessor, and ignores the setter
+returning false. Its flagged-accessor variant still stops explicitly. The private
+`avm1-runtime/vm-tests-initobject-setter.txt` retains the passing check.
 
 `object_literal()` implements that path separately. It checks the installed global
 Object, original prototype/constructor links and null parent before allocation.
