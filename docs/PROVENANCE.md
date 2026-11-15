@@ -213,8 +213,9 @@ in an original bounded registry for one VM/root context. Call/definition origins
 remain provenance; registration does not instantiate a class.
 [Native Function calls](REA_FUNCTION_CALLS.md) records the exact owned-binary
 REA Function/apply registration, receiver and empty-argument evidence, with
-closure/frame boundaries kept explicit. It supplies evidence for future VM work;
-documentation alone does not claim those paths are implemented.
+closure/frame boundaries kept explicit. Its selected callable-conversion and
+empty-apply-list profiles now support the original bounded VM; other contracts
+remain gated as recorded in `AVM1_VM.md`.
 
 [Native Array prototype](REA_ARRAY.md), [display action lifecycle](REA_DISPLAY_LIFECYCLE.md)
 and [MovieClip callback](REA_MOVIECLIP_CONSTRUCTOR.md) register additional bounded
@@ -231,3 +232,7 @@ original VM and display bridge, with the same Adobe/private-script provenance.
 [Native scene host](NATIVE_WINDOW.md) registers the pinned winit/wgpu contracts
 for persistent surface rendering, physical pointer coordinates and lifecycle.
 It adds no dependency and retains the explicit native-platform validation limits.
+[Saved animation data](ANIMATION.md) records the exact read-only MIT UEViewer
+format study and independent original-byte comparisons for Loki's 72 sequences.
+Omitted codec defaults remain explicitly caller-supplied and are not presented as
+recovered retail defaults. Animation evaluation and runtime binding are separate.
