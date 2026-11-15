@@ -2509,3 +2509,29 @@ Mouse host and all saved-state/lifecycle gates are unchanged. Private build,
 test logs and frozen sources are indexed under
 `avm1-runtime/function-primitives-checks/receipt.json`, SHA-256
 `f9868721dcc0e7ddecb985e41a88f1d54d19b91d024960f3fa4460003d5b084d`.
+
+### Original replay after Function primitive callbacks
+
+OBSERVED controlled increment15 on frozen `712abf1`: all 452 original
+initializers complete in 49,244 instructions. The original frame5967+518
+again stops after 290 instructions at CodeId452/CallMethod6391 with
+`Host("Mouse.hide user-event host is unbound")`. Pop6392 and later cursor
+operations remain unexecuted. Every recorded count, error, public state and
+heap identity matches increment14 after normalizing only private evidence
+paths and its final comparison label. This comparison is not a trace of which
+new callback bodies executed or a comparison of unobserved native behavior.
+
+The initial native-global byte remains unknown (`None`); original writes at
+13566 and6370 establish byte1 and markertrue. The original parser, movie,
+setup and diagnostic initializer/frame order are unchanged. Selection and
+ClassRegistry remain exact committed4fe0a806 sources, checked byte-identical
+to rootfc530e2. There is no state-bag absence profile, logger bridge, extra
+global, accepting Mouse host, lifecycle default or cursor operation.
+
+One build and one run exited zero, with empty diagnostic logs and no retries.
+The31 frozen dependency entries differ from14 only in the Function callback
+implementation and its tests. Private
+`avm1-attached-manager-frame-action-increment15/receipt.json` SHA-256:
+`fcdef8f5a8e074af49f50b6cafbe99ee2c89f6a3a195f5adb7e33f66c3b6334d`.
+The 53-file seal and all earlier receipts remain retained. No further unchanged
+replay or native execution was performed.
