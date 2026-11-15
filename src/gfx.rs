@@ -30,6 +30,8 @@ pub mod native_scale9_tessellation;
 pub mod native_scale9_antialias;
 #[path = "gfx/native_vertex_format.rs"]
 pub mod native_vertex_format;
+#[path = "gfx/native_primary_export.rs"]
+pub mod native_primary_export;
 #[path = "gfx/scene.rs"]
 pub mod scene;
 #[path = "gfx/shapes.rs"]

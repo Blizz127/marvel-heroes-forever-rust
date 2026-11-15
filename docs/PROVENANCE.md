@@ -923,3 +923,9 @@ saved-field inventories. All 96 selected coordinate fields equal the rational
 source expression, while source bits and finite-sample scope remain explicit.
 No external graphics enum was assigned from memory, shader arithmetic copied,
 codec transferred from another mesh class or renderer conversion added.
+
+[Primary vertex export](SCALE9_PRIMARY_VERTEX_EXPORT.md) reuses the registered
+owned descriptor-copy and generated-record scan bodies. Original Rust preserves
+all record fields and cursor order, with explicit bounded admission. The focused
+private composite retains its unchanged-support warning and makes no runtime
+source, normalization or renderer-selection claim.
