@@ -320,3 +320,59 @@ a wrong final font, missing final-selection assertion, changed bounds and
 unknown wrapper state. Field, snapshot and input files remain unchanged.
 `LOG IN` is supplied post-replacement state in this probe; no saved script or
 VM is executed. The earlier original-script evidence remains a separate check.
+
+## Original-script to helper to CPU composition
+
+**VERIFIED controlled composition:** a separate private run on frozen root
+`466c18f3e377abd2a63f1831fb989b8f99e24189` replaces the previous manual
+`RuntimeTextStyle`/`FormatBinding` construction with `derive_fresh_html` applied
+to the **live post-script host snapshot**. The original selected caller,
+declarations, constant pools, wrappers, source files and scene recipe remain
+unchanged. The previous `7041d19` fixture and its sealed results were preserved.
+
+The unchanged `updateLocaleTextFromLabel` route executes original
+`updateLabelText` body `94114+178`, including the true uppercase branch through
+the native-derived String method at source offset 94251. The actual
+ConfiguredLabels/English LocaleCatalog backend and controller cache retain
+`Log In`; the original HTML setter at 94201 and htmlText setter at 94252 produce
+the live document `LOG IN`. This run executes **142 instructions and 3 host
+calls**. The controller's supplied vertical-center flag remains false, so the
+unchanged recenter method takes its existing supported branch. No additional
+class initialization or native lifecycle claim is introduced.
+
+The bridge passes the live snapshot and its admitted side-path profile into
+the helper. The run pair differs from current defaults and remains the selected
+pair. The helper derives the source's 320-twip size, RGBA, paragraph values and
+inactive effects; the fixture no longer builds those style fields manually.
+Font import routing is checked through the actual library, while final font
+`22:5`, retained wrapper, effective flags `0xad31`, bounds, absent content
+provider and fresh/no-later-mutation conditions remain **explicit conditional
+inputs**. Neither the alias nor this successful composition observes native
+font, locale, wrapper or effective-state selection.
+
+The resulting override produces **six CPU glyph placements** for node 89.
+All **32 other text instances**, including shared-definition neighbor 136,
+retain their prior prepared fields, layouts, issues and glyph geometry. Host
+snapshots, statistics, traces, storage and pending invalidation remain unchanged
+by helper/CPU preparation. All saved Scene nodes, action metadata and movie
+bytes are preserved. The original post-call checks also preserve the nonempty
+Selection listener and class-registry controls. No visibility setup, GPU draw,
+native process or server operation was added to this run.
+
+Private evidence is under `textfield-format-post-vm/`. Its source archive has
+209 files matching the exact commit. The four copied caller/script/scene files
+are byte-identical; only the private `vm_bridge.rs` imports, format construction,
+output destination and diagnostics change. The execution receipt checks 217
+source/harness/lock/metadata files before and after. The separate audit checks
+the prior sealed files and original declaration/pool dependencies, and requires
+the final case-completion marker after the CPU success marker.
+
+The CPU build uses `nice -n 19 cargo build --offline --locked -j2`. All ten
+external dependency records exactly match the frozen root lockfile. Copying
+the complete root lock plus the private package initially caused a preserved
+`--locked` rejection; the accepted fixture lock contains the exact recursive
+CPU dependency subset, with no unlocked resolution or version/checksum update.
+The earlier GPU attempt and its dependency-drift records remain untouched.
+`run-receipt.json`, `audit.json`, `receipt.json` and `MANIFEST.json` retain the
+commands, exit codes, outputs, assertions, source hashes and limits. Both the
+build and the complete fixture exited zero; no full test suite was run.
