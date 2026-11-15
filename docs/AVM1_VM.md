@@ -534,6 +534,33 @@ the private original-script probe and 28 passing focused implementation checks.
 Earlier `movieclip-runtime-evidence.json` preserves the superseded 52-initializer
 gated foundation measurement.
 
+## Native Object prototype inventory
+
+The native inventory proves exactly nine initial own stored Object.prototype keys,
+a null parent and no stored `__proto__` entry. Its special `constructor` entry has
+flags 3; all eight native method entries have flags 1. The VM now preserves that
+inventory: implemented `addProperty` and the seven remaining method identities
+(`hasOwnProperty`, `watch`, `unwatch`, `isPropertyEnumerable`, `isPrototypeOf`,
+`toString`, `valueOf`) are present and callable. Invoking an unimplemented method
+fails with `UnsupportedNativeFunction` at the original call origin. It does not
+return success or invent native behavior. Both the Object constructor's `prototype`
+link and the prototype's `constructor` link retain their proved flags 3.
+
+This corrects the previous ordinary-set flags on `constructor` and `addProperty`;
+those inherited members must not appear in enumeration of a plain object. Native
+method presence must not silently become undefined in original existence checks.
+The closed receipt is
+`rea-object-prototype-inventory/object-prototype-inventory.json`. Focused tests
+verify all nine entries, inherited presence, hidden flags, no stored parent key,
+and explicit invocation failures. The ordered original startup still completes
+118 initializers and stops at the same multi-name Enumerate2 gate.
+
+`vm-tests-object-inventory.txt`, `run-init-order-object-inventory.rs`,
+`init-order-object-inventory.tsv` and `object-inventory-runtime-evidence.json`
+retain 29 passing focused checks and the private startup observation. Generic
+literal construction metadata and native hash layout remain separate evidence
+requirements; this inventory does not establish every ordinary-object factory.
+
 ## Exact own-name property flags
 
 ASSetPropFlags now accepts existing own ASCII identifiers, including nonempty

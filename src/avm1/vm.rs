@@ -81,6 +81,7 @@ pub enum ErrorKind {
     Budget(&'static str),
     Unsupported(&'static str),
     UnsupportedOpcode(u8),
+    UnsupportedNativeFunction(&'static str),
     StackUnderflow,
     InvalidObject(ObjectId),
     InvalidCode(CodeId),
@@ -269,6 +270,7 @@ enum Kind {
     Array(u32),
     Script(ScriptFunction),
     Native(u32),
+    UnsupportedNative(&'static str),
     ObjectConstructor,
     ArrayConstructor,
     FunctionConversion,
@@ -289,6 +291,7 @@ impl Kind {
         matches!(
             self,
             Self::Native(_)
+                | Self::UnsupportedNative(_)
                 | Self::Script(_)
                 | Self::ObjectConstructor
                 | Self::ArrayConstructor
@@ -552,10 +555,47 @@ impl Vm {
         let apply = self.function_method(FunctionMethod::Apply)?;
         self.set(function_prototype, "call", Value::Object(call))?;
         self.set(function_prototype, "apply", Value::Object(apply))?;
-        self.set(constructor, "prototype", Value::Object(prototype))?;
-        self.set(prototype, "constructor", Value::Object(constructor))?;
+        self.raw_member(
+            constructor,
+            text("prototype"),
+            Property::Data(Value::Object(prototype)),
+            3,
+        )?;
+        self.raw_member(
+            prototype,
+            text("constructor"),
+            Property::Data(Value::Object(constructor)),
+            3,
+        )?;
         let add_property = self.alloc(Kind::AddProperty, None)?;
-        self.set(prototype, "addProperty", Value::Object(add_property))?;
+        self.raw_member(
+            prototype,
+            text("addProperty"),
+            Property::Data(Value::Object(add_property)),
+            1,
+        )?;
+        // Complete native Object.prototype inventory: preserve function identity and
+        // flags without pretending these callbacks are implemented.
+        for (key, name) in [
+            ("hasOwnProperty", "Object.prototype.hasOwnProperty"),
+            ("watch", "Object.prototype.watch"),
+            ("unwatch", "Object.prototype.unwatch"),
+            (
+                "isPropertyEnumerable",
+                "Object.prototype.isPropertyEnumerable",
+            ),
+            ("isPrototypeOf", "Object.prototype.isPrototypeOf"),
+            ("toString", "Object.prototype.toString"),
+            ("valueOf", "Object.prototype.valueOf"),
+        ] {
+            let method = self.alloc(Kind::UnsupportedNative(name), None)?;
+            self.raw_member(
+                prototype,
+                text(key),
+                Property::Data(Value::Object(method)),
+                1,
+            )?;
+        }
         let register_class = self.alloc(Kind::RegisterClass, None)?;
         self.set(constructor, "registerClass", Value::Object(register_class))?;
         self.set(self.global, "Object", Value::Object(constructor))?;
@@ -1220,6 +1260,7 @@ impl Vm {
                     object.kind,
                     Kind::Script(_)
                         | Kind::Native(_)
+                        | Kind::UnsupportedNative(_)
                         | Kind::ObjectConstructor
                         | Kind::ArrayConstructor
                         | Kind::FunctionConversion
@@ -1758,6 +1799,9 @@ impl Vm {
                     .map_err(|s| self.error(ErrorKind::Host(s)))?;
                 self.check_value(&value)?;
                 return Ok(value);
+            }
+            Kind::UnsupportedNative(name) => {
+                return self.fail(ErrorKind::UnsupportedNativeFunction(name));
             }
             Kind::Script(function) => function,
             Kind::FunctionMethod(method) => {
@@ -2530,6 +2574,7 @@ impl Vm {
                                 self.objects[class.0].kind,
                                 Kind::Script(_)
                                     | Kind::Native(_)
+                                    | Kind::UnsupportedNative(_)
                                     | Kind::ObjectConstructor
                                     | Kind::ArrayConstructor
                                     | Kind::FunctionConversion
@@ -2759,6 +2804,7 @@ impl Vm {
                                     self.objects[id.0].kind,
                                     Kind::Script(_)
                                         | Kind::Native(_)
+                                        | Kind::UnsupportedNative(_)
                                         | Kind::ObjectConstructor
                                         | Kind::ArrayConstructor
                                         | Kind::FunctionConversion
@@ -2908,6 +2954,49 @@ mod tests {
         out
     }
 
+    #[test]
+    fn object_native_inventory_has_exact_flags_and_explicit_callback_gates() {
+        let mut vm = setup();
+        let constructor = vm.install_object_constructor().unwrap();
+        let Value::Object(prototype) = vm.get(constructor, "prototype").unwrap() else {
+            panic!()
+        };
+        assert_eq!(vm.objects[prototype.0].properties.len(), 9);
+        assert_eq!(vm.get(prototype, "__proto__").unwrap(), Value::Null);
+        assert_eq!(vm.own_property_flags(prototype, "__proto__").unwrap(), None);
+        assert_eq!(
+            vm.own_property_flags(prototype, "constructor").unwrap(),
+            Some(3)
+        );
+        assert_eq!(
+            vm.own_property_flags(prototype, "addProperty").unwrap(),
+            Some(1)
+        );
+        assert!(vm.enumerate_names(prototype).unwrap().is_empty());
+        let instance = vm.ordinary_object().unwrap();
+        assert!(vm.enumerate_names(instance).unwrap().is_empty());
+        for key in [
+            "hasOwnProperty",
+            "watch",
+            "unwatch",
+            "isPropertyEnumerable",
+            "isPrototypeOf",
+            "toString",
+            "valueOf",
+        ] {
+            let method = vm.get(instance, key).unwrap();
+            assert!(vm.callable(&method));
+            assert_eq!(vm.own_property_flags(prototype, key).unwrap(), Some(1));
+            assert!(vm.has_key(instance, &text(key)).unwrap());
+            assert!(matches!(
+                vm.call(method, Value::Object(instance), &[], &mut RejectHost)
+                    .unwrap_err()
+                    .kind,
+                ErrorKind::UnsupportedNativeFunction(_)
+            ));
+            assert_eq!(vm.host_calls, 0);
+        }
+    }
     #[test]
     fn primitive_values_and_conservative_coercions() {
         let mut vm = setup();
