@@ -18,6 +18,8 @@ pub mod html_text;
 pub mod html_layout;
 #[path = "gfx/scale9.rs"]
 pub mod scale9;
+#[path = "gfx/native_scale9.rs"]
+pub mod native_scale9;
 #[path = "gfx/scene.rs"]
 pub mod scene;
 #[path = "gfx/shapes.rs"]

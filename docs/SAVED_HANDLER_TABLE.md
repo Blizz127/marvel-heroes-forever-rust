@@ -20,8 +20,12 @@ with distinct action handles creates two ordered entries and preserves their
 separate VM source-wrapper state. Reusing an installation handle is rejected
 by this fresh-installation API.
 
-The caller must obtain owner/mask facts from the same VM arena before installing
-a handle. The table checks the supplied owner, duplicate identity, supported
+`SavedHandlers<SavedActionId>::install_from_vm` reads owner/mask facts from the
+selected VM's actual installed action arena before installing a handle. It
+rejects invalid/borrowed action handles and retains the same wrapper identity;
+no source is installed a second time. The caller retains one VM/table lifetime
+association. The lower-level generic `install` requires supplied owner/mask
+facts. The table checks the owner, duplicate identity, supported
 mask and installation/reference budgets before publishing entries. Failure
 leaves logical entries and order unchanged; vector reservation can change
 capacity. Successful allocation is the supported profile, not a model of
@@ -36,8 +40,9 @@ static vectors and arbitrary noncallable saved Values are outside this
 source-wrapper installation profile.
 
 The table is compiled into the frontend module, but startup does not yet use
-it to deliver events. Central VM saved-mode execution, original source loading,
-raw target/descriptor gates and lifecycle scheduling remain separate work.
+it to deliver events. The VM now has a dedicated bounded saved-mode executor;
+source/target/descriptor admission and complete lifecycle scheduling remain
+separate requirements. A binding operation never invokes that executor.
 
 ## Validation and provenance
 
@@ -51,6 +56,13 @@ under `evidence/saved-handler-table-*` in the private project directory.
 compiler warnings (373 unrelated tests filtered out). The private
 `saved-handler-table-test-result.json` retains terminal output;
 `saved-handler-table-verification.json` binds the module/hook hashes and command.
+
+**VERIFIED VM binding check:** a further focused test installs actual VM source
+wrappers, binds a combined mask and a separate same-source installation, and
+rejects another owner's handle, a duplicate and an invalid ID without changing
+existing order. Source pools remain untouched and owner storage is not created.
+This test passes with no warnings; terminal output is retained in
+`evidence/saved-handler-vm-binding-test-result.json`. It does not execute actions.
 
 There are no new external dependencies or implementation sources. The native
 evidence/source ledger is inherited from the two owned-executable studies linked

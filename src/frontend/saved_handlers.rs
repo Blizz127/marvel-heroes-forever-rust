@@ -6,7 +6,7 @@
 //! keys retain the same handle; distinct installations need distinct handles.
 //! It neither invokes a handler nor resolves a dynamic event member.
 
-use crate::avm1::vm::{AttachedClipId, AttachedEventKind};
+use crate::avm1::vm::{self, AttachedClipId, AttachedEventKind, SavedActionId, Vm};
 use std::{collections::BTreeMap, fmt};
 
 const LOAD: u32 = 1;
@@ -44,6 +44,28 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+#[derive(Debug)]
+pub enum BindingError {
+    Action(vm::Error),
+    Table(Error),
+}
+impl fmt::Display for BindingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Action(error) => write!(f, "saved action binding: {error}"),
+            Self::Table(error) => error.fmt(f),
+        }
+    }
+}
+impl std::error::Error for BindingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Action(error) => error,
+            Self::Table(error) => error,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Statistics {
     pub installations: usize,
@@ -64,6 +86,17 @@ pub struct SavedHandlers<I> {
     load: Vec<I>,
     construct: Vec<I>,
     limits: Limits,
+}
+
+impl SavedHandlers<SavedActionId> {
+    /// Bind owner/mask facts read from this VM's actual installed action arena.
+    /// The caller retains the same VM/table lifetime association for all uses.
+    /// No source wrapper is allocated again and no handler is executed here.
+    pub fn install_from_vm(&mut self, vm: &Vm, action: SavedActionId) -> Result<(), BindingError> {
+        let info = vm.saved_action_info(action).map_err(BindingError::Action)?;
+        self.install(info.owner, action, info.original_mask)
+            .map_err(BindingError::Table)
+    }
 }
 
 impl<I: Copy + Ord> SavedHandlers<I> {
@@ -166,6 +199,81 @@ impl<I: Copy + Ord> SavedHandlers<I> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vm_binding_uses_actual_installed_owner_mask_and_distinct_wrapper_handles() {
+        use crate::avm1::{
+            Program,
+            vm::{
+                AttachedClipSource, AttachedClipSpec, AttachedEventState, DisplayTargetId,
+                LoadedMovieSourceId, SavedActionSource,
+            },
+        };
+        use std::sync::Arc;
+        let mut vm = Vm::new(15, Default::default()).unwrap();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        let spec = |target, parent| AttachedClipSpec {
+            target: DisplayTargetId(target),
+            source: AttachedClipSource {
+                movie: LoadedMovieSourceId(3),
+                sprite_id: 1,
+                header_version: 15,
+            },
+            parent,
+            event_state: AttachedEventState {
+                target_flags: 0x5200_0180,
+                load_flags: 0,
+                source_flags: 0,
+            },
+        };
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.adopt_attached_root(root).unwrap();
+        let child = vm.create_attached_movie_clip(spec(2, Some(root))).unwrap();
+        let program = Arc::new(Program::parse_at(&[0x17, 0], 100).unwrap());
+        let span = program.span;
+        let source = SavedActionSource {
+            code: vm.register(program).unwrap(),
+            span,
+        };
+        let first = vm
+            .install_saved_action(root, source, LOAD | CONSTRUCT)
+            .unwrap();
+        let second = vm.install_saved_action(root, source, CONSTRUCT).unwrap();
+        let other_owner = vm.install_saved_action(child, source, CONSTRUCT).unwrap();
+        let mut table = SavedHandlers::new(root, Limits::default());
+        table.install_from_vm(&vm, first).unwrap();
+        table.install_from_vm(&vm, second).unwrap();
+        assert_eq!(
+            table.handlers(AttachedEventKind::Load),
+            Some([first].as_slice())
+        );
+        assert_eq!(
+            table.handlers(AttachedEventKind::Construct),
+            Some([first, second].as_slice())
+        );
+        assert_eq!(table.original_mask(first), Some(LOAD | CONSTRUCT));
+        assert!(matches!(
+            table.install_from_vm(&vm, other_owner),
+            Err(BindingError::Table(Error::WrongOwner))
+        ));
+        assert!(matches!(
+            table.install_from_vm(&vm, first),
+            Err(BindingError::Table(Error::DuplicateInstallation))
+        ));
+        assert!(matches!(
+            table.install_from_vm(&vm, SavedActionId(999)),
+            Err(BindingError::Action(_))
+        ));
+        assert_eq!(table.statistics().installations, 2);
+        assert_eq!(table.statistics().references, 3);
+        assert_eq!(vm.saved_action_info(first).unwrap().first_pool_offset, None);
+        assert_eq!(
+            vm.saved_action_info(second).unwrap().first_pool_offset,
+            None
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+    }
 
     #[test]
     fn split_keys_retain_shared_handles_and_original_per_key_order() {

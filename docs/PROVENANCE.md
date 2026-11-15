@@ -484,3 +484,11 @@ handoff requirement. [Native frontend startup stages](NATIVE_FRONTEND_STARTUP_ST
 records the bitmap splash, initialization ordering and conditional request wait;
 it also registers the exact Microsoft API/bitmap pages, X11 headers and private
 comparison tools used. Its bitmap mismatch and observation limits remain intact.
+
+The [native Scale9 math module](SCALE9_RENDERING.md) implements recovered point
+and matrix operations in original Rust with an explicit finite IEEE arithmetic
+profile. Loaded CRT/MXCSR equivalence and final renderer binding remain
+unverified; the native rendering profile is not enabled by numeric checks.
+The [saved-handler VM adapter](SAVED_HANDLER_TABLE.md) now reads installation
+identity from the retained VM arena. Neither successful binding nor the new
+bounded saved-mode executor alone proves native event eligibility or timing.
