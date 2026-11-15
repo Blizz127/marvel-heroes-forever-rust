@@ -272,13 +272,13 @@ fn saved_set_variable_writes_current_target_not_existing_global_and_keeps_prior_
 }
 
 #[test]
-fn saved_set_variable_unsupported_names_values_and_members_keep_assignment_operands() {
+fn saved_set_variable_unsupported_names_and_members_keep_assignment_operands() {
     for (key, value) in [
         (Value::string("a.b"), Value::Bool(false)),
         (Value::string(""), Value::Bool(false)),
         (Value::string("a\0b"), Value::Bool(false)),
         (Value::Number(4.0), Value::Bool(false)),
-        (Value::string("autoSize"), Value::Number(4.0)),
+        (Value::string("_focusrect"), Value::Number(4.0)),
         (Value::string("_x"), Value::Bool(false)),
     ] {
         let (mut vm, owner) = fixture();
@@ -294,6 +294,46 @@ fn saved_set_variable_unsupported_names_values_and_members_keep_assignment_opera
         assert!(vm.saved_environment_halted(env).unwrap());
         assert!(vm.attached_info(owner).unwrap().storage.is_none());
     }
+}
+
+#[test]
+fn saved_set_variable_preserves_raw_values_and_fresh_object_identity() {
+    for value in [Value::Number(4.0), Value::Null, Value::Undefined] {
+        let (mut vm, owner) = fixture();
+        let env = environment(
+            &mut vm,
+            owner,
+            vec![Value::Number(17.0), Value::string("ordinaryValue"), value.clone()],
+            8,
+        );
+        let (id, _) = install(&mut vm, owner, &[0x1d]);
+        completed(vm.execute_saved_action(id, env, &mut RejectHost).unwrap());
+        assert_eq!(vm.read_attached_member(owner, "ordinaryValue").unwrap(),
+            AttachedMember::Present(value));
+        assert_eq!(vm.saved_environment_state(env).unwrap().stack(), &[Value::Number(17.0)]);
+        assert_eq!(vm.saved_environment_state(env).unwrap().registers(), &supplied_registers());
+    }
+
+    let (mut vm, owner) = fixture();
+    let env = environment(&mut vm, owner, vec![Value::Number(17.0)], 8);
+    let mut bytes = push(&[Value::string("soundMap"), Value::Number(0.0)]);
+    bytes.extend([0x43, 0x1d]); // Native-backed fresh Object literal, then target assignment.
+    let (id, _) = install(&mut vm, owner, &bytes);
+    let before = vm.object_count();
+    completed(vm.execute_saved_action(id, env, &mut RejectHost).unwrap());
+    let AttachedMember::Present(Value::Object(object)) =
+        vm.read_attached_member(owner, "soundMap").unwrap() else { panic!("stored object") };
+    assert_eq!(object, ObjectId(before));
+    assert_eq!(vm.object_count(), before + 2); // Literal and lazy target storage only.
+    for key in ["__proto__", "__constructor__", "constructor"] {
+        assert_eq!(vm.own_flags(object, &text(key)), 3);
+    }
+    vm.set(object, "proofOfIdentity", Value::Bool(true)).unwrap();
+    assert_eq!(vm.read_attached_member(owner, "soundMap").unwrap(),
+        AttachedMember::Present(Value::Object(object)));
+    assert_eq!(vm.get(object, "proofOfIdentity").unwrap(), Value::Bool(true));
+    assert_eq!(vm.saved_environment_state(env).unwrap().stack(), &[Value::Number(17.0)]);
+    assert_eq!(vm.saved_environment_state(env).unwrap().registers(), &supplied_registers());
 }
 
 #[test]

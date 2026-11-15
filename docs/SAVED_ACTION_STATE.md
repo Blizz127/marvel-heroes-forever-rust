@@ -96,7 +96,7 @@ failures are explicit Rust behavior, not claims about native exception recovery.
 ### Simple saved assignment
 
 ActionSetVariable now admits a nonempty NUL-free ASCII String name without path
-delimiters, and a String or Boolean right-hand value. The independent native
+delimiters and forwards the original right-hand Value unchanged. The independent native
 opcode proof in [SAVED_VARIABLE_ASSIGNMENT.md](SAVED_VARIABLE_ASSIGNMENT.md)
 routes this null-activation/empty-With profile directly through the current
 target's normal setter. A same-named global binding does not select the write
@@ -196,3 +196,24 @@ retains exact inputs, final build/run exit0 and that explicit VM stop. An initia
 private harness compilation failure from an incorrect Result alias is preserved;
 only the harness was corrected before the single runtime attempt. The failed
 source and diagnostics are not represented as a successful build.
+
+The next frozen run (`640e4d1`, root adapters `2d9b798`) uses the same record,
+receiver and supplied state through the retained handler table and actual
+`execute_saved_phase` wrapper. It reaches 24 instructions and stops at
+SetVariable39601, assigning the newly allocated Object from InitObject39600 to
+`soundMap`. Ten earlier writes survive, including `autoSize="none"`; the stack
+retains `[17,"soundMap",Object23]`, registers remain unchanged and the Environment
+halts. No host request occurs. The table stays at one installation/reference/key.
+The failure reports handler0/action0 and partial effects; completed-body progress
+correctly excludes the failed body's 24 instructions. Private increment2 receipt
+SHA256: `53835d46b0710def78badf9376bc9e9beff35889a2bb0bce1caf1a270ff14101`.
+
+That scalar-only gate was an implementation restriction, not a native RHS
+conversion. The native opcode and simple assignment helper pass the original
+Value pointer to the normal setter. The VM now does the same, retaining existing
+identity, native-member coercion, accessor/watch and read-only guards in
+`write_member`; it does not coerce an Object into a display owner. Three focused
+checks pass for existing assignment behavior, rejected names/native properties,
+Number/Null/Undefined values and fresh literal Object identity/metadata. The
+private receipt is `avm1-runtime/saved-value-checks.json`. These checks do not
+establish full original Construct completion or dynamic event delivery.

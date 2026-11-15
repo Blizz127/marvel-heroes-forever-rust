@@ -2245,14 +2245,10 @@ impl Vm {
             ));
         }
         self.simple_name(key)?;
-        let value = &frame.stack[len - 1];
-        if !matches!(value, Value::String(_) | Value::Bool(_)) {
-            return self.fail(ErrorKind::Unsupported(
-                "saved SetVariable String/Boolean value profile",
-            ));
-        }
         let key = Arc::clone(key);
-        let value = value.clone();
+        // Native routing forwards the original Value without RHS coercion.
+        // The selected member setter retains its own type/identity guards.
+        let value = frame.stack[len - 1].clone();
         // Empty captured/With scope and the saved null activation fence route
         // directly to the current target. Reads' global fallback does not apply.
         // Keep both operands during normal setter dispatch; unsupported writes
