@@ -1,7 +1,7 @@
 //! Checked Engine.Model native prefix for the observed UE3 868/3 profile.
 //!
 //! Raw bulk records and fields are retained without geometry interpretation.
-//! Bytes after the +0x19c container remain opaque. See docs/UPK_MODEL_POLYS.md.
+//! Bytes beyond the final +0x110 array remain opaque. See docs/UPK_MODEL_POLYS.md.
 
 use crate::upk::Package;
 use crate::upk::objects::{ObjectProperties, Span};
@@ -134,6 +134,23 @@ pub struct ModelNativeFields {
     pub polys_link: ModelLink,
 }
 
+/// Final array record: 36 serialized bytes, 28 bytes in native memory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Model110Record {
+    pub span: Span,
+    /// Wire order: flag bit 0 word, flag bit 1 word, native +0x18 word,
+    /// flag bit 2 word, then native +0x04/+0x08/+0x0c/+0x10/+0x14 words.
+    /// All bits are retained; native flag masking is not applied.
+    pub words: [u32; 9],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelFinalFields {
+    /// Native +0x4d4/+0x4d8/+0x4dc/+0x4e0, without an inferred type name.
+    pub words: [ModelWord; 4],
+    pub records_110: ModelRecordArray<Model110Record>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelObject {
     pub object: ObjectProperties,
@@ -143,7 +160,9 @@ pub struct ModelObject {
     /// This is not an inventory of every Model dependency.
     pub link_d8: ModelLink,
     pub native_fields: ModelNativeFields,
-    /// Starts after the +0x19c container; its completeness is not checked.
+    pub final_fields: ModelFinalFields,
+    /// Bytes beyond the established ordinary-file serialization, if any.
+    /// These are retained without meaning or completeness validation.
     pub unparsed_native_tail: Span,
 }
 
@@ -241,6 +260,17 @@ impl ModelObject {
             records_55c,
             polys_link,
         };
+        // The intervening native helper can change in-memory +0x4d0; this
+        // reader preserves its saved word and does not execute that helper.
+        let final_fields = ModelFinalFields {
+            words: [
+                input.field_word(0x4d4)?,
+                input.field_word(0x4d8)?,
+                input.field_word(0x4dc)?,
+                input.field_word(0x4e0)?,
+            ],
+            records_110: input.records_110()?,
+        };
         let unparsed_native_tail = Span {
             offset: input.position,
             length: bytes.len() - input.position,
@@ -251,6 +281,7 @@ impl ModelObject {
             arrays,
             link_d8,
             native_fields,
+            final_fields,
             unparsed_native_tail,
         })
     }
@@ -398,6 +429,31 @@ impl Reader<'_> {
         }
         Ok(ModelRecordArray {
             native_offset: 0x55c,
+            count_span,
+            records_span,
+            records,
+        })
+    }
+    fn records_110(&mut self) -> io::Result<ModelRecordArray<Model110Record>> {
+        let (count, count_span, records_span) =
+            self.structured_header(36, MAX_MODEL_STRUCTURED_RECORDS, io::ErrorKind::Unsupported)?;
+        let mut records = Vec::with_capacity(count);
+        for _ in 0..count {
+            let start = self.position;
+            let mut words = [0; 9];
+            for word in &mut words {
+                *word = self.word()?.0;
+            }
+            records.push(Model110Record {
+                span: Span {
+                    offset: start,
+                    length: 36,
+                },
+                words,
+            });
+        }
+        Ok(ModelRecordArray {
+            native_offset: 0x110,
             count_span,
             records_span,
             records,
@@ -553,6 +609,25 @@ mod tests {
         bulk_fixture(&mut b, 4, 1);
         b.extend(0xffffffffu32.to_le_bytes());
         bulk_fixture(&mut b, 36, 1);
+        for word in [0x80000000u32, 0x7fc00001, 0xffffffff, 0x01234567] {
+            b.extend(word.to_le_bytes());
+        }
+        b.extend(2i32.to_le_bytes());
+        for _ in 0..2 {
+            for word in [
+                0xfffffffeu32,
+                0xffffffff,
+                0x7fc00001,
+                2,
+                0x80000000,
+                5,
+                6,
+                7,
+                8,
+            ] {
+                b.extend(word.to_le_bytes());
+            }
+        }
         b
     }
     fn bulk_fixture(bytes: &mut Vec<u8>, stride: u32, count: u32) {
@@ -615,6 +690,27 @@ mod tests {
         );
         assert_eq!(records.records[1].word_08, 0x7fc00001);
         assert_eq!(m.native_fields.polys_link.reference, 1);
+        assert_eq!(
+            m.final_fields.words.map(|w| w.native_offset),
+            [0x4d4, 0x4d8, 0x4dc, 0x4e0]
+        );
+        assert_eq!(
+            m.final_fields.words.map(|w| w.bits),
+            [0x80000000, 0x7fc00001, 0xffffffff, 0x01234567]
+        );
+        let last = &m.final_fields.records_110;
+        assert_eq!(last.records_span.length, 72);
+        assert_eq!(last.records.len(), 2);
+        assert_eq!(
+            last.records[1].span.offset,
+            last.records[0].span.offset + 36
+        );
+        assert_eq!(
+            last.records[0].words,
+            [
+                0xfffffffe, 0xffffffff, 0x7fc00001, 2, 0x80000000, 5, 6, 7, 8
+            ]
+        );
         assert_eq!(
             m.unparsed_native_tail,
             Span {
@@ -764,6 +860,36 @@ mod tests {
                 kind
             );
         }
+        for (count, kind) in [
+            (-1i32, io::ErrorKind::InvalidData),
+            (65_537, io::ErrorKind::Unsupported),
+            (65_536, io::ErrorKind::InvalidData),
+        ] {
+            let mut changed = b.clone();
+            let at = m.final_fields.records_110.count_span.offset;
+            changed[at..at + 4].copy_from_slice(&count.to_le_bytes());
+            assert_eq!(
+                ModelObject::parse_export(&package(changed.len()), 0, &changed)
+                    .unwrap_err()
+                    .kind(),
+                kind
+            );
+        }
+        let mut empty_final_array = b.clone();
+        let at = m.final_fields.records_110.count_span.offset;
+        empty_final_array[at..at + 4].copy_from_slice(&0i32.to_le_bytes());
+        let empty =
+            ModelObject::parse_export(&package(empty_final_array.len()), 0, &empty_final_array)
+                .unwrap();
+        assert!(empty.final_fields.records_110.records.is_empty());
+        assert_eq!(empty.unparsed_native_tail.offset, at + 4);
+        assert_eq!(
+            empty
+                .unparsed_native_tail
+                .bytes(&empty_final_array)
+                .unwrap(),
+            &b[at + 4..]
+        );
         let full = fixture_with_inline_count(64);
         assert_eq!(
             ModelObject::parse_export(&package(full.len()), 0, &full)

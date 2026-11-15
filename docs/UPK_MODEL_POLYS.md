@@ -26,7 +26,8 @@ serializer, then emits the following native prefix in this order:
 | `+0x68` (Nodes) | Encoded stride, signed count, raw records | `arrays[2]` |
 | `+0xd8` | Signed object reference | `link_d8` |
 | `+0xc8` through `+0x19c` containers/fields | Extended prefix below | `native_fields` |
-| Fields after `+0x19c` | Undecoded | `unparsed_native_tail` |
+| `+0x4d4..+0x4e0`, then `+0x110` | Final words and counted records below | `final_fields` |
+| Bytes beyond the established file layout | Undecoded, if present | `unparsed_native_tail` |
 
 Each stride and count occupies four little-endian bytes. The established
 strides are respectively **12, 12 and 64**. The vector-array helper is
@@ -86,9 +87,9 @@ fields. Native offsets identify slots; they do not invent member names.
 | `+0x4d0` | Raw 32-bit word | `words[3]` |
 | `+0x19c` | Bulk stride 36 | `arrays[4]` |
 
-The opaque remainder now begins immediately after the `+0x19c` container,
-before the conditional call at `0x140c0e49b` and later serialized
-fields. The additional legacy container below archive version 686 is absent
+The `native_fields` substructure ends immediately after the `+0x19c` container,
+before the conditional call at `0x140c0e49b` and final serialized
+fields described below. The additional legacy container below archive version 686 is absent
 from this admitted profile. These raw arrays are not asserted to contain object
 references, float vectors, vertices, indices or renderer-ready geometry.
 
@@ -138,6 +139,49 @@ typed allocator and registered constructor, then stores it at Model `+0x60`
 at `0x140bfc5c2`; the alternate path stores null. This supports the Polys link
 role. The reader checks the serialized reference range without imposing an
 unproved nonnull or referent-class invariant.
+
+### Final Model fields
+
+`final_fields` retains four `ModelWord` values at native offsets
+`+0x4d4/+0x4d8/+0x4dc/+0x4e0`, followed by `records_110`, a counted array of
+`Model110Record`. The four words are serialized for archive version 600 and
+newer. The older initialization path is excluded by the admitted 868 profile.
+
+**VERIFIED (static):** array helper `0x140bf0220..0x140bf03a0` reads a signed
+four-byte count and calls `0x140b41560..0x140b41762` for each record. Native
+records occupy 28 bytes, but the 868 file path stores **36 bytes**, comprising
+nine four-byte words in this exact order:
+
+| Wire word | Native role |
+| ---: | --- |
+| 0 | Input to bit 0 of the native record's first word |
+| 1 | Input to bit 1 of that word |
+| 2 | Raw field at record `+0x18` |
+| 3 | Input to bit 2 of the first word |
+| 4–8 | Raw fields at `+0x04/+0x08/+0x0c/+0x10/+0x14` |
+
+The first three stored words are included from version 652; bit 2 and the
+`+0x04` field from version 600; the `+0x08` field from version 636. All apply
+at 868. The last three scalar words are unconditional. There are no object
+references in this record serializer. It uses the established exact-width
+scalar helper, without additional field framing.
+
+Native loading masks each flag input with `& 1` before inserting its respective
+bit. The reader preserves all nine raw word patterns in `Model110Record.words`
+and does not normalize or reject nonbinary flag inputs. It retains count and
+record spans, rejects negative counts, applies the 65,536-record inspection
+limit, and validates the entire `count × 36` payload before allocating records.
+Zero records are allowed. Any bytes after the last known record remain in
+`unparsed_native_tail`; an empty suffix is not required for admission.
+
+**VERIFIED (bounded static):** the intervening conditional helper at
+`0x140bf7290..0x140bf762f` modifies the in-memory Model `+0x4d0` value and
+temporary storage. Its body has no direct archive or indirect calls. Its direct
+dependencies include diagnostic and allocator wrappers; those wrappers reach
+global logging/allocation backends. Whole-transitive-graph absence of I/O was
+not proved. The reader does not execute that helper or replace the saved
+`+0x4d0` word with a derived runtime value. The known serialization sequence
+resumes with the four words above and ends after the `+0x110` array.
 
 ## Polys
 
@@ -194,9 +238,9 @@ has NetIndex -1 and an empty property stream terminating at export offset 12.
 
 | Package/object | One-based export | Logical offset | Export bytes | Native prefix bytes | Opaque bytes |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Entry Model | 2 | 1,785 | 228 | 124 | 92 |
+| Entry Model | 2 | 1,785 | 228 | 216 | 0 |
 | Entry Polys | 3 | 2,013 | 24 | 12 | 0 |
-| FrontEnd Model | 13 | 27,705 | 7,540 | 7,472 | 56 |
+| FrontEnd Model | 13 | 27,705 | 7,540 | 7,528 | 0 |
 | FrontEnd Polys | 26 | 37,011 | 24 | 12 | 0 |
 
 Both Model seven-word records are all zero. Entry's array counts are 0/0/0;
@@ -213,10 +257,14 @@ order `+0x80/+0xe0/+0xf0/+0x100/+0x19c`, are **144/78/7/0/48**. Its three
 `+0x55c` records also have null references. The Polys links are respectively 3
 and 26. These concrete referents do not establish universal record member names.
 
-Entry's known native span is now export `[12,136)`, with opaque `[136,228)`;
-FrontEnd's is `[12,7484)`, with opaque `[7484,7540)`. The extension retains 68
-additional Entry bytes and 6,384 additional FrontEnd bytes. No remaining bytes
-are silently dropped or treated as padding.
+The extension through `+0x19c` accounts for export `[12,136)` in Entry and
+`[12,7484)` in FrontEnd. The final fields consume the remaining 92 and 56 bytes:
+Entry's final array count is 2 at export offset 152, followed by 72 record
+bytes; FrontEnd's count is 1 at offset 7,500, followed by 36 record bytes.
+Their known native spans now end at 228 and 7,540 respectively, exactly at the
+export boundaries. No bytes in these two Models remain opaque or are treated
+as padding. This is serialized coverage of these samples, not geometry or
+runtime behavior parity.
 
 ### Bounded StaticMesh dependency lookup
 
@@ -241,7 +289,34 @@ or new mesh payload read.
 
 ## Evidence and validation
 
-**VERIFIED (extended Model):** five focused Model tests pass for the full known
+**VERIFIED (final Model fields):** five focused Model tests pass, including every
+known-prefix truncation, negative/oversized final counts, full-payload preflight,
+nonbinary raw flag inputs, zero-count arrays and arbitrary trailing bytes.
+The paired product check matches all 424 output rows, retaining the prior prefix
+comparison and adding all 35 final raw words, two counts and three final record
+spans. Both original exports end exactly at their observed boundaries. The
+independent final-array oracle passes 29 focused checks. The new Model source
+and all 254 frozen baseline files remain unchanged; no baseline or Polys suite
+ran. These are static package-reader results, not retail-client execution.
+
+Private final-field evidence is under `evidence/model-final-tail-native/`.
+`native-support/receipt.json` has SHA-256
+`f46a289fcec20b5b55e4c3a48c60b64ee8fcd9b0468373165bdfe5f42d80b26e`.
+It verifies all 1,825 bytes of the three new REA bodies, complete chained
+boundaries, the reused Model/scalar helper proofs, version gates, record widths
+and the conditional helper's explicitly limited side-effect coverage.
+`rea-bundle.json` has SHA-256
+`6ab6c2490a2a0ca83b699138dc6e9929d133d15fd9217b993be1490b51780a24`;
+all three records were exported before reset with no target or cleanup pending.
+The final-array oracle at `independent/final-oracle/oracle.json` has SHA-256
+`bc84de23d9278d769dd6293b097ce7cfc6a8e6e2e166fab1339990034d0462d8`.
+The product receipt at `independent/product-check/verification.json` has
+SHA-256 `dd2691908cd0ac6377afa58cbe980c270cda03fac96d4469bc3ac3784e8398bc`;
+the joined native/oracle/product receipt at `independent/verification.json` has
+SHA-256 `063f0bce42a78c74c4ae36d6bf3bca1d9982f056bc7c181b19f184c3c16538d5`.
+The private frozen baseline is `2cb32808ad84aee344cd444703af095bbbe31773`.
+
+**VERIFIED (extension through `+0x19c`):** five focused Model tests pass for that known
 prefix, every truncation, each reference slot, raw-field retention, all bulk
 headers, dynamic-count limits and the inline table's 64/65-record boundary.
 The 16-byte `+0x80` variant rejects explicitly. The original-byte product check
