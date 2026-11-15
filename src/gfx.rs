@@ -11,6 +11,8 @@ pub mod text;
 
 #[path = "gfx/shapes.rs"]
 pub mod shapes;
+#[path = "gfx/tessellate.rs"]
+pub mod tessellate;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
