@@ -202,9 +202,80 @@ than a guessed key hash:
 the exact `UiKeyBinding` lookup already documented in [LOCALIZATION.md](LOCALIZATION.md).
 The existing resource reader resolves `Frontend/UIButtonLogIn` to display ID
 `0x590a017f2861053f`, whose English text is `Log In`. Its current scope does not
-include inherited prototype fields, locale formatting, or full native failure
-behavior. The saved `forceAllCaps` setting belongs to the script path; it is not
-a reason to rewrite the stored locale text.
+include inherited prototype fields, marker formatting, locale fallback, or full
+native failure behavior. The saved `forceAllCaps` setting belongs to the script
+path; it is not a reason to rewrite the stored locale text.
+
+## Bounded native resource and plain-string profile
+
+**OBSERVED with REA:** the generated class registration at `0x1416e6280`
+installs four descriptors from `0x1429fa160`, with stride `0x98`. The record
+named `DisplayText` contains the offset/width pair `0x58,8`; `TooltipText`
+contains `0x70,8`. The other two records associate TooltipFont and TooltipStyle
+with `0x60` and `0x68`. Registration uses the same type descriptor as the
+selected UILocalizedInfoPrototype type check. The offset interpretation is
+supported by the independent callback loads; a generic descriptor-offset
+consumer was not reconstructed; the table and callback provide independent
+observations of the same offsets.
+
+The callback obtains its prototype through `0x14158e290`. That routine returns
+an existing entry's object at `+0x30`, or enters a lazy load path and caches the
+result. The ordinary loader `0x141605200` creates an object, then invokes the
+selected handler's virtual slot zero with that object, its entry reference and
+input stream. Its alternate stream path also converges on this loader.
+`0x14160ebf0` requests a cleared allocation; `0x14064d0b0` calls the imported
+`memset` with zero and the pool's block size before the constructor callback.
+The selected derived constructor explicitly clears font/style fields, without
+writing either text-reference slot. These reads establish allocation clearing,
+not effective text defaults after the serializer. Parent application, terminal
+missing-field treatment and postprocessing still cross an unresolved boundary.
+The existing explicit-parent resource view in
+[PROTOTYPE_VALUES.md](PROTOTYPE_VALUES.md) has its own source and data evidence;
+this investigation does not upgrade that view to native-runtime parity.
+
+**OBSERVED with REA:** both text references enter thunk `0x1418b1130`, which
+forces selector `UINT64_MAX` before calling `0x1418c4840`. The selected catalog
+loader initializes the base node's consumed mask to `UINT64_MAX` at
+`0x1418a6c29`. Its alternate-form loop reads an eight-byte consumed mask,
+two-byte produced flags and four-byte text offset, then creates separate linked
+nodes through `0x1418a80a0`; it preserves the base mask. The selector compares
+against that base mask before traversing alternates. Consequently this callback
+uses the stored **default text** for records created by that observed loading
+path, including records that have alternate forms. This is not a general
+variant-selection rule for other callers.
+
+The active catalog comes from the global resource context, not a locale
+argument to this callback. Lookup `0x1418bb160` also contains mode-dependent
+fallback for absent entries and for text containing the exact marker
+`!!Missing translation:`. Its missing-entry path can construct an invalid-ID
+marker. The numeric mode values, their correspondence to English or other
+languages, live selection and complete fallback order remain unverified.
+Choosing an arbitrary first locale or returning an empty string for a missing
+ID is not supported by this evidence.
+
+After selection, `0x14187e820` scans for `#`. If none occurs, its marker
+collection stays empty and it skips the text writeback, preserving the selected
+bytes. Marker branches, including nested/reference-like forms, require further
+work. The following bridge calls the imported `MultiByteToWideChar` with code
+page `65001`, flags `8`, and a NUL-terminated input length. No malformed input was
+executed; a strict profile can require valid UTF-8 instead of guessing its
+failure result.
+
+A future pure resource resolver can therefore expose this bounded contract:
+
+- Take an exact resolved prototype reference, explicit effective DisplayText and
+  TooltipText references with their origins, and an explicitly selected catalog.
+  Unresolved fields or inheritance must remain explicit.
+- Require present default entries with valid UTF-8, no `#`, and no missing
+  translation marker. A stored zero-ID entry is distinct from an absent ID.
+- Format the prototype reference with `0x%llX`, preserve the selected display
+  and tooltip text, and compute `hasTooltip` from `TooltipText != 0`.
+- Return typed unsupported/missing-resource outcomes outside that scope. Do not
+  uppercase text, substitute authored placeholders or infer script state here.
+
+This contract prepares native-shaped resource data. It does not install
+ExternalInterface, construct AS objects, execute the saved label setters or
+prove that retail startup reached the callback.
 
 ## Failure paths and limits of the return contract
 
@@ -231,9 +302,9 @@ a verified callback profile rather than silently substitute the package's false
 default or fabricate a tooltip.
 
 No retail process, login, account, server or native UI was used. Actual startup,
-live native receiver selection, inherited prototype fields, locale formatting,
-diagnostic-handler policy, failure-stack contents, HTML layout and rendered
-parity remain unverified. Arbitrary non-string label values also require the
+live native receiver selection, effective inherited prototype fields, marker
+formatting, locale fallback, diagnostic-handler policy, failure-stack contents,
+HTML layout and rendered parity remain unverified. Arbitrary non-string label values also require the
 input-conversion qualification; the authored login label is a string.
 
 ## Locale changes and other text mechanisms
@@ -344,6 +415,19 @@ Private root:
   or helper receipts. SHA-256:
   `08b1cf2d396166c86686a9926dd96a03b91f0efceff27f61df6d35bca4331f5e`.
   All earlier receipts remain unchanged.
+- `aggregate-followup/{prototype-fields,prototype-resolution,locale-format}/receipt.json`:
+  bounded field registration, cache/loader/allocator and locale loader/formatter
+  candidate records, respectively. Their SHA-256 values are
+  `1b7af4a6f60a40b773318a7bc36f81d59ca69eda26ef0e43ae1c146648cf4daa`,
+  `d16ee43396659a07dcc28b1adbaa3bfbe8eba49234d9b68400656b6a540898bf`, and
+  `f4aad27612b3441351d11318178b6d6f691129f2e0894679f4e8d76d5a2ca816`.
+- `aggregate-followup/resource-profile/native.bundle.json`: four additional
+  canonical REA records, including selected loader/variant/default-node paths,
+  field registration, cleared allocation, formatter and import identities.
+  SHA-256: `dd88d461b0b8c52eacebc832d88528fc9ab5fce7e6f82ccee8d5e8ac8b43d5b9`.
+- `aggregate-followup/resource-profile/verification.json`: Evidence IDs, commands,
+  unchanged input, complete selected JSON outputs and helper receipt readback.
+  SHA-256: `71936d5868d94d6dbe6a2eff31d45dfaba11849d3a12446e55074f1f7fd59ff5`.
 
 **VERIFIED (focused static checks):** original Rust decoder harnesses compiled
 and parsed manager/login/UISource with 2,173 / 1,654 / 13,326 tags and enumerated
@@ -371,6 +455,13 @@ hash. The 82-byte state-install selection's partial final instruction was
 superseded by an 84-byte read; the movie-entry selection has a later partial
 tail outside the claimed `this` assignment. These boundary details are recorded
 in the follow-up receipt and do not establish complete whole-program analysis.
+The four resource-profile commands also completed with exit 0, untruncated
+output, unchanged executable hash and no invalid decoded instructions in their
+selected ranges. Their receipt verified 48 field, 37 prototype-resolution and
+51 locale-format retained files, alongside the unchanged earlier receipts.
+Full native functions and selected chained-unwind fragments are distinguished
+in the candidate records; a completed selected read is not a complete serializer
+or fallback-policy reconstruction.
 
 ## Sources and rights
 
@@ -380,7 +471,7 @@ in the follow-up receipt and do not establish complete whole-program analysis.
 | Expanded private GFX/SWF inventory: 52 paths / 27 unique hashes, including frontend options and font movies | Proprietary retail data; authorized private interoperability study | Complete selected action/clip search for AcquireLocalizedData, conditional class definitions and tooltip consumers. Exact aliases and hashes remain in the follow-up receipt. |
 | Pinned `frontend-startup/UnrealEngine3/MarvelGame/CookedPCConsole/{MarvelGame,GFxUI}.upk` | Proprietary retail data; authorized private interoperability study | Native return-struct field identities/defaults, function/property references and selected wrapper script bytes. SHA-256: MarvelGame `d9c98071ecbbf5d2b35936fa52283b804c45acccaa16faf232561c796ee9cdc6`; GFxUI `dca575a8e84f16dd1cec7e2fd4afd4c98bf7070a5a853ebb84bcfd57f3951199`. |
 | Pinned `MarvelHeroesOmega.exe`, SHA-256 `8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1` | Proprietary owned 1.52.0.1700 client; authorized private interoperability study | Selected native callback wrappers, resource lookup, reference formatting and static table entries through REA. |
-| Original project `src/avm1.rs`, `src/avm1/`, `src/gfx.rs`, `src/gfx/`, `src/upk.rs`, `src/upk/`, saved original decoder helpers, `docs/LOCALIZATION.md`, and prior private PE-scanner helper | Original project code and analysis with their existing provenance | Reused privately for decoding, bounded address discovery, and comparison with the existing resource bridge. No external implementation copied. |
+| Original project `src/avm1.rs`, `src/avm1/`, `src/gfx.rs`, `src/gfx/`, `src/upk.rs`, `src/upk/`, `src/localization.rs`, saved original decoder helpers, `docs/LOCALIZATION.md`, `docs/PROTOTYPE_VALUES.md`, and prior private PE-scanner helper | Original project code and analysis with their existing provenance | Reused privately for decoding, bounded address discovery, and comparison with the existing resource bridge. No external implementation copied. |
 | `~/.agents/skills/reverse-engineer-anything/SKILL.md` and registered REA tool schemas | Toolkit/workflow instructions; toolkit source licence not established by this read | Evidence handling, selected read-only analysis and canonical export. |
 
 No new outside source repository, web page, dependency or client implementation
