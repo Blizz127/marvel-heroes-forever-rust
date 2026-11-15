@@ -1618,6 +1618,36 @@ subsequent original-frame progress is measured separately.
 
 ## Dedicated saved-action execution
 
+## Explicit current-name snapshot
+
+`AttachedNameSnapshot { target, name }` binds a caller-established current String
+from an existing coherent public display handle to its exact `AttachedClipId`.
+`bind_attached_name_snapshot` rejects target mismatch, duplicate binding, invalid
+or NUL-containing UTF-16 and string-budget overflow before publication. An empty
+known name is valid; an unbound name remains an explicit unsupported boundary.
+The `_name` getter returns the exact supplied String before ordinary storage,
+children or prototype lookup, without allocating storage or charging another
+String. The native evidence is in `REA_ATTACHED_NAME.md`.
+
+`attached_name_snapshot` exposes this witness and
+`invalidate_attached_name_snapshot` discards it after externally reported name or
+handle mutation. Invalidation performs no rename, child-map change or lifecycle
+transition and does not refund cumulative allocation accounting. A later binding
+requires a newly established witness. The setter and lazy native name generator
+remain unsupported. No filename, Scene debugging label, default or generated
+ordinal supplies a name automatically.
+
+Two focused checks pass for unknown versus known-empty state, receiver identity,
+Unicode preservation, no storage/allocation side effects, invalidation/rebinding,
+budgets, invalid target/text and mismatched native-ID profile. Their private
+receipt is `avm1-runtime/name-snapshot-checks.json`. The actual original manager
+run remains stopped at GetMember108644 after167 frame instructions on frozen
+`5a16ae4`; its real current root name is unknown. An explicitly supplied synthetic
+name can advance a separate controlled probe, not change that historical result
+into a native name observation.
+
+## Dedicated saved-action execution
+
 The saved-action APIs and current scope are documented in
 `SAVED_ACTION_STATE.md`, with native frame/source contracts in
 `SAVED_EVENT_EXECUTION.md` and `SAVED_CLIP_ACTION_LOADING.md`. Installed wrappers

@@ -86,6 +86,13 @@ pub struct AttachedTabEnabledInfo {
     /// Last admitted tabEnabled setter; independent of focus-write provenance.
     pub last_write: Option<CodeOrigin>,
 }
+/// Caller-established current contents of an existing coherent display handle.
+/// This is not a placement/filename-derived default or a request to rename it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttachedNameSnapshot {
+    pub target: DisplayTargetId,
+    pub name: Text,
+}
 #[derive(Debug, Clone)]
 pub struct AttachedInfo {
     pub target: DisplayTargetId,
@@ -128,6 +135,7 @@ pub(super) struct AttachedClip {
     binding: Option<AttachedMovieBinding>,
     focus_rect: Option<AttachedFocusRectInfo>,
     tab_enabled_last_write: Option<CodeOrigin>,
+    name_snapshot: Option<Text>,
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
@@ -302,6 +310,7 @@ impl Vm {
             binding,
             focus_rect: None,
             tab_enabled_last_write: None,
+            name_snapshot: None,
             owner,
             storage: None,
             prototype: Some(prototype),
@@ -367,6 +376,48 @@ impl Vm {
     pub fn attached_event_state(&self, id: AttachedClipId) -> Result<AttachedEventState> {
         self.check_attached(id)?;
         Ok(self.attached[id.0].spec.event_state)
+    }
+    /// Bind a known current name for this exact live target and its existing
+    /// public handle. The caller must establish that association independently.
+    /// Authentic empty names are valid. An unknown/missing handle is not empty.
+    pub fn bind_attached_name_snapshot(
+        &mut self,
+        id: AttachedClipId,
+        snapshot: AttachedNameSnapshot,
+    ) -> Result<()> {
+        self.check_attached(id)?;
+        if snapshot.target != self.attached[id.0].spec.target {
+            return self.fail(ErrorKind::Unsupported("attached name snapshot target mismatch"));
+        }
+        if self.attached[id.0].name_snapshot.is_some() {
+            return self.fail(ErrorKind::Unsupported("attached name snapshot already bound"));
+        }
+        if snapshot.name.len() > self.limits.string_units.saturating_sub(self.string_units) {
+            return self.fail(ErrorKind::Budget("attached name snapshot string units"));
+        }
+        if snapshot.name.contains(&0)
+            || char::decode_utf16(snapshot.name.iter().copied()).any(|unit| unit.is_err())
+        {
+            return self.fail(ErrorKind::Unsupported("attached name snapshot UTF-16 profile"));
+        }
+        self.string_units += snapshot.name.len();
+        self.attached[id.0].name_snapshot = Some(snapshot.name);
+        Ok(())
+    }
+    pub fn attached_name_snapshot(&self, id: AttachedClipId) -> Result<Option<AttachedNameSnapshot>> {
+        self.check_attached(id)?;
+        Ok(self.attached[id.0].name_snapshot.as_ref().map(|name| AttachedNameSnapshot {
+            target: self.attached[id.0].spec.target,
+            name: Arc::clone(name),
+        }))
+    }
+    /// Discard a witness after externally reported name/handle mutation. This
+    /// performs no native rename, child-map update or lifecycle transition.
+    /// String accounting is cumulative and is not refunded by invalidation.
+    pub fn invalidate_attached_name_snapshot(&mut self, id: AttachedClipId) -> Result<()> {
+        self.check_attached(id)?;
+        self.attached[id.0].name_snapshot = None;
+        Ok(())
     }
     /// Bind an independently supplied raw target+b8 snapshot once. No native
     /// default is inferred from event flags, source bytes or root identity.
@@ -790,6 +841,19 @@ impl Vm {
     }
     pub(super) fn attached_lookup(&self, id: AttachedClipId, key: &Text) -> Result<AttachedMember> {
         self.check_attached(id)?;
+        if key.as_ref() == text("_name").as_ref() {
+            if self.attached_name_profile.as_ref().is_some_and(|profile| {
+                profile.classify_attached_name(key) != AttachedNameClass::Standard(13)
+            }) {
+                return self.fail(ErrorKind::Unsupported("attached name native ID profile"));
+            }
+            let Some(name) = &self.attached[id.0].name_snapshot else {
+                return self.fail(ErrorKind::Unsupported("attached current name is unbound"));
+            };
+            // Existing handle+10 is a native handled String result. It precedes
+            // own storage, children, prototypes and resolver/accessor fallback.
+            return Ok(AttachedMember::Present(Value::String(Arc::clone(name))));
+        }
         if key.as_ref() == text("_visible").as_ref() {
             if self.attached_name_profile.as_ref().is_some_and(|profile| {
                 profile.classify_attached_name(key) != AttachedNameClass::Standard(7)
@@ -1147,6 +1211,77 @@ mod tests {
         vm.delete_member(object_prototype, &text("__resolve"))
             .unwrap();
         assert!(vm.read_attached_member(root, "ordinaryMissing").is_err());
+    }
+
+    #[test]
+    fn current_name_snapshot_distinguishes_unknown_empty_and_receiver_and_never_renames() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let child = vm.create_attached_movie_clip(spec(2, Some(root))).unwrap();
+        assert!(vm.read_attached_member(root, "_name").is_err());
+        assert_eq!(vm.attached_name_snapshot(root).unwrap(), None);
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        vm.bind_attached_name_snapshot(root, AttachedNameSnapshot {
+            target: DisplayTargetId(1), name: text(""),
+        }).unwrap();
+        let supplied = text("CaseSensitive 🦀");
+        vm.bind_attached_name_snapshot(child, AttachedNameSnapshot {
+            target: DisplayTargetId(2), name: Arc::clone(&supplied),
+        }).unwrap();
+        assert_eq!(vm.read_attached_member(root, "_name").unwrap(),
+            AttachedMember::Present(Value::string("")));
+        assert_eq!(vm.read_attached_member(child, "_name").unwrap(),
+            AttachedMember::Present(Value::String(Arc::clone(&supplied))));
+        assert_eq!(vm.object_count(), before.0);
+        assert_eq!(vm.properties, before.1);
+        assert_eq!(vm.string_units, before.2 + supplied.len());
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        assert!(!vm.attached_info(child).unwrap().child_snapshot_installed);
+        assert!(vm.write_attached_member(child, "_name", Value::string("rename")).is_err());
+        assert_eq!(vm.attached_name_snapshot(child).unwrap().unwrap().name, supplied);
+        let charged = vm.string_units;
+        vm.invalidate_attached_name_snapshot(child).unwrap();
+        assert!(vm.read_attached_member(child, "_name").is_err());
+        assert_eq!(vm.string_units, charged);
+        vm.bind_attached_name_snapshot(child, AttachedNameSnapshot {
+            target: DisplayTargetId(2), name: text("new externally established snapshot"),
+        }).unwrap();
+        assert_eq!(vm.read_attached_member(root, "_name").unwrap(),
+            AttachedMember::Present(Value::string("")));
+    }
+
+    #[test]
+    fn current_name_snapshot_rejects_invalid_admission_without_publication() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let charged = vm.string_units;
+        for snapshot in [
+            AttachedNameSnapshot {target: DisplayTargetId(2), name: text("wrong target")},
+            AttachedNameSnapshot {target: DisplayTargetId(1), name: text("nul\0name")},
+            AttachedNameSnapshot {target: DisplayTargetId(1), name: vec![0xd800].into()},
+        ] {
+            assert!(vm.bind_attached_name_snapshot(root, snapshot).is_err());
+            assert_eq!(vm.attached_name_snapshot(root).unwrap(), None);
+            assert_eq!(vm.string_units, charged);
+        }
+        vm.limits.string_units = charged + 2;
+        assert!(vm.bind_attached_name_snapshot(root, AttachedNameSnapshot {
+            target: DisplayTargetId(1), name: text("three"),
+        }).is_err());
+        vm.bind_attached_name_snapshot(root, AttachedNameSnapshot {
+            target: DisplayTargetId(1), name: text("ok"),
+        }).unwrap();
+        assert!(vm.bind_attached_name_snapshot(root, AttachedNameSnapshot {
+            target: DisplayTargetId(1), name: text(""),
+        }).is_err());
+        assert_eq!(vm.read_attached_member(root, "_name").unwrap(),
+            AttachedMember::Present(Value::string("ok")));
+        assert!(vm.attached_name_snapshot(AttachedClipId(999)).is_err());
+        assert!(vm.invalidate_attached_name_snapshot(AttachedClipId(999)).is_err());
+        vm.install_attached_name_profile(synthetic_profile()).unwrap();
+        // This synthetic profile intentionally maps another spelling to ID13.
+        assert!(vm.read_attached_member(root, "_name").is_err());
+        assert_eq!(vm.attached_name_snapshot(root).unwrap().unwrap().name, text("ok"));
     }
 
     #[test]

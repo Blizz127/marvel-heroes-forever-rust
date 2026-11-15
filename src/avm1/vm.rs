@@ -34,7 +34,7 @@ use applied_super::AttachedSuperCall;
 use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
-    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedTabEnabledInfo,
+    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedNameSnapshot, AttachedStorageId, AttachedTabEnabledInfo,
     AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
