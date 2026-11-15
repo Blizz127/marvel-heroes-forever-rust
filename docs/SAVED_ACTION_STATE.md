@@ -1,10 +1,10 @@
 # Persistent saved-action state
 
-`src/avm1/saved_state.rs` adds original state containers for the contracts in
-[saved event execution](SAVED_EVENT_EXECUTION.md). They do not install or run
-handlers, allocate native activation frames, or change the current diagnostic
-executor. Central VM integration remains required before any saved-event
-execution claim.
+`src/avm1/saved_state.rs` provides original state containers for the contracts in
+[saved event execution](SAVED_EVENT_EXECUTION.md). `saved_runtime.rs` now retains
+them in VM arenas and lends their actual stack, registers and pool to a dedicated
+saved Frame. The diagnostic executor remains separate. This bounded execution
+entry does not establish native event selection, queue order or lifecycle.
 
 Each installed action has its own `SavedActionState`, with immutable original
 source identity, aggregate event mask and derived mode. `SavedActionId` is an
@@ -42,6 +42,57 @@ supported normal-return path and keep unsupported/error outcomes distinct from
 completed event delivery. Nothing here creates an automatic default Environment
 or bypasses those execution requirements.
 
+## Bounded VM entry
+
+`Vm::install_saved_action(owner, source, original_mask)` allocates a distinct
+`SavedActionId`; the source must match the registered Program's entire span.
+The installer admits the Construct/Load/combined masks `0x40000`, `1` and
+`0x40001`, and rejects empty sources or an initial End byte. The full retained
+span includes trailing bytes: there is no terminator trimming or synthesis.
+[Native clip-action loading](SAVED_CLIP_ACTION_LOADING.md) documents those
+source and per-record mask facts. Callers still establish which actual native
+installation belongs to the supplied owner; matching source coordinates alone
+does not prove that association.
+
+`register_saved_environment(state)` adopts one explicit Environment per typed
+owner. Source movie and owner-selected Environment remain independent facts.
+Known loaded versions 7..19, live eligible case-3 owner/target identity, one
+adopted root, supplied Value identities and heap/stack budgets are checked.
+`saved_action_info`, `saved_environment_state` and `saved_environment_halted`
+provide read-only inspection. Saved state is never cloned for replay.
+
+`execute_saved_action(action, environment, host)` initially executes only pure
+Construct/Load mode4. Combined-mask mode3 is retained but explicitly rejected
+at entry. No mode3 target default or signed-depth field is invented. Mode4 bit4
+returns `SavedExecution::TargetBit4Skipped` with zero body work. Otherwise the
+Frame receives the persistent operand vector and four registers, target/global
+lookup with a null activation fence, typed target `this`, and the retained
+wrapper pool. There is no new activation, arguments object or Super object.
+
+The first executed ConstantPool locks its wrapper offset. Later visits to either
+the same or another offset do not decode/charge strings again. Invalid saved
+constant indices and register indices above three push Undefined; out-of-bank
+StoreRegister does nothing, even before looking for an operand. DefineLocal uses
+the target's normal member-write route, and DefineLocal2 converts/pops the name
+without declaring a property. Ordinary frames keep their existing semantics.
+
+Function definitions, With, target changes, SetVariable and ordinary script calls
+remain explicit first-profile boundaries. The latter require a separate shared
+Environment stack/register proof; the current ordinary executor owns private
+vectors. Once an Environment is adopted, generic diagnostic `execute` and
+ordinary script invocation are therefore rejected, avoiding an untracked run
+followed by reuse of stale persistent state. Existing bounded native callbacks
+remain explicit host/intrinsic paths. Reentry is rejected before borrowing arena
+slots, and no callback/table mutation is interpreted as native event delivery.
+
+Admission failures leave the Environment usable. Once body execution begins,
+every returned error restores partial stack/register/pool state to the arenas,
+then halts that Environment. It cannot be retried implicitly. A successful body
+returns `Completed { instructions, host_calls }`, discards the saved call's result
+destination, and retains residual operands. Both paths restore the caller's
+origin, active context and depth. This halt policy and engineering budget
+failures are explicit Rust behavior, not claims about native exception recovery.
+
 ## Provenance and validation scope
 
 The implementation uses only original project types and the owned-executable
@@ -56,7 +107,7 @@ Environment state across two synthetic handler steps. These are state checks,
 not original bytecode execution or native event comparison. The final private
 receipt records the exact module hash and terminal check result.
 
-**VERIFIED, Rust state checks:** all three focused tests pass with exit 0 and
+**OBSERVED historical isolated Rust state checks:** all three focused tests pass with exit 0 and
 no compiler warnings. The final module SHA-256 is
 `d4a1de20b8658f21333a531369dbe84661925f1b2ea2acdfbbaddfc34cd275de`.
 The private harness at `evidence/saved-action-state-module/` compiles this exact
@@ -66,3 +117,13 @@ module source; `final-module.rs` retains the checked source. The earlier
 Text-pool draft and its passing intermediate check remain separately recorded.
 The final representation uses the current Frame's `Arc<Vec<Value>>`, containing
 only String values decoded from admitted pool entries.
+
+**OBSERVED integrated checks:** four new runtime checks retain supplied nonempty
+state across repeated calls and independent wrappers, restore partial mutations
+before halting on error, keep preflight failures usable, and distinguish a bit4
+skip from completion. Together with the three state checks and four focused
+ordinary-frame regression checks, eleven pass. Exact source and binary hashes
+are retained in `evidence/avm1-runtime/saved-runtime-first-checks.json`, SHA256
+`5e70bf086f7397109f605a31895964436baa53988d093fd286064a15cf51260e`.
+This is synthetic runtime verification; no original saved handler or native
+event comparison was run for this increment.

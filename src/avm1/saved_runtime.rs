@@ -60,6 +60,15 @@ impl Vm {
         self.saved_idle()?;
         self.saved_owner_profile(owner)?;
         self.saved_source_profile(source)?;
+        if self.code[source.code.0]
+            .instructions
+            .first()
+            .is_none_or(|instruction| instruction.opcode == 0)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "saved installer requires nonempty source with nonzero first opcode",
+            ));
+        }
         if !matches!(original_mask, 1 | 0x40000 | 0x40001) {
             return self.fail(ErrorKind::Unsupported("saved installer event mask profile"));
         }
@@ -545,7 +554,7 @@ mod tests {
     #[test]
     fn saved_runtime_admission_failures_leave_environment_usable() {
         let (mut vm, owner, env) = fixture();
-        let src = source(&mut vm, &[0]);
+        let src = source(&mut vm, &[0x96, 0, 0, 0]);
         let combined = vm.install_saved_action(owner, src, 0x40001).unwrap();
         let normal = vm.install_saved_action(owner, src, 1).unwrap();
         assert_eq!(

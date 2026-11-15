@@ -1532,6 +1532,32 @@ pass. Final source/binary hashes and all six results are in
 `80c7d3630f1c88a9424eb087830bba27a86d91238db283936a07cd0dc04f1b5e`.
 These synthetic checks do not establish original-frame completion.
 
+**OBSERVED next original-frame diagnostic:** frozen `5734d6b`, with the same
+452-initializer selection and fixture, reaches 159 frame instructions. Read-only
+public snapshots show root `dispatchQueue` changing from Missing/no storage to
+Present(ObjectId 139) in storage 15888, with own flags 1. The first new stop is
+CodeId 15, SetMember at 60254 in `_global.MarvelObject`'s constructor: original
+`this.tabEnabled = false` after its superclass call. The authenticated native
+name profile identifies standard member 29; its setter is still unsupported.
+Focus/event state, Selection and class-registry observations are unchanged, and
+there are no unknown native calls. Private
+`avm1-attached-manager-frame-action-increment4/receipt.json`, SHA256
+`edbe93eefca2f22f283102bcc1596c31fc0dc4dc9bd44034d6ef12cd867cd67e`,
+retains all frozen inputs and build/run exit 0 with that explicit VM stop.
+
+## Dedicated saved-action execution
+
+The saved-action APIs and current scope are documented in
+`SAVED_ACTION_STATE.md`, with native frame/source contracts in
+`SAVED_EVENT_EXECUTION.md` and `SAVED_CLIP_ACTION_LOADING.md`. Installed wrappers
+retain independent source pools; adopted typed-owner Environments retain their
+supplied operand vector and four registers. The first bounded executor runs pure
+Construct/Load mode4 with explicit raw state, distinguishes a bit4 skip, and
+halts on returned body errors after retaining partial state. It does not replace
+the generic frame diagnostic or claim that parsed ClipAction records have been
+delivered. Native event selection, eligibility, ordering, same-installation mask
+splitting and actual source-to-owner association remain host responsibilities.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established

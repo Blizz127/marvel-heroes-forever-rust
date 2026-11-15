@@ -21,6 +21,10 @@ mod deferred;
 mod external_interface;
 #[path = "focus_rect.rs"]
 mod focus_rect;
+#[path = "saved_runtime.rs"]
+mod saved_runtime;
+#[path = "saved_state.rs"]
+pub mod saved_state;
 #[path = "string.rs"]
 mod string;
 use applied_super::AttachedSuperCall;
@@ -43,6 +47,8 @@ pub use attached_textfield::{
 pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
+pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
+pub use saved_state::{SavedActionId, SavedActionSource, SavedEnvironmentState, SavedMode};
 pub use string::StringObjects;
 
 pub type Text = Arc<[u16]>;
@@ -444,6 +450,19 @@ struct Frame {
     this: Value,
     this_visible: bool,
     locals: ObjectId,
+    kind: FrameKind,
+}
+enum FrameKind {
+    Ordinary,
+    Saved {
+        action: saved_state::SavedActionState,
+        max_stack_values: usize,
+    },
+}
+impl Frame {
+    fn is_saved(&self) -> bool {
+        matches!(self.kind, FrameKind::Saved { .. })
+    }
 }
 enum Flow {
     End,
@@ -488,6 +507,10 @@ pub struct Vm {
     attached_targets: BTreeMap<DisplayTargetId, AttachedTarget>,
     text_fields: Vec<attached_textfield::AttachedTextField>,
     attached_child_entries: usize,
+    saved_actions: Vec<Option<saved_runtime::InstalledAction>>,
+    saved_environments: Vec<Option<saved_runtime::InstalledEnvironment>>,
+    saved_environment_owners: BTreeMap<AttachedClipId, SavedEnvironmentId>,
+    saved_active: bool,
 }
 impl Vm {
     /// This execution profile supports SWF 7+; legacy coercions are not guessed.
@@ -529,6 +552,10 @@ impl Vm {
             attached_targets: BTreeMap::new(),
             text_fields: Vec::new(),
             attached_child_entries: 0,
+            saved_actions: Vec::new(),
+            saved_environments: Vec::new(),
+            saved_environment_owners: BTreeMap::new(),
+            saved_active: false,
         };
         if !(7..=19).contains(&version) {
             return vm.fail(ErrorKind::Unsupported(
@@ -1885,7 +1912,13 @@ impl Vm {
         Ok(())
     }
     fn push(&self, frame: &mut Frame, value: Value) -> Result<()> {
-        if frame.stack.len() >= self.limits.stack_values {
+        let limit = match frame.kind {
+            FrameKind::Saved {
+                max_stack_values, ..
+            } => max_stack_values.min(self.limits.stack_values),
+            FrameKind::Ordinary => self.limits.stack_values,
+        };
+        if frame.stack.len() >= limit {
             return self.fail(ErrorKind::Budget("operand stack"));
         }
         frame.stack.push(value);
@@ -2208,6 +2241,11 @@ impl Vm {
         target: ObjectId,
         host: &mut impl Host,
     ) -> Result<Execution> {
+        if !self.saved_environments.is_empty() {
+            return self.fail(ErrorKind::Unsupported(
+                "diagnostic execution after saved Environment adoption",
+            ));
+        }
         self.reset_execution();
         self.check_object(target)?;
         if matches!(
@@ -2234,6 +2272,7 @@ impl Vm {
             this: self.target_value(target),
             this_visible: true,
             locals: target,
+            kind: FrameKind::Ordinary,
         };
         let value = match self.run(code, &program, &mut frame, host)? {
             Flow::Return(v) => v,
@@ -2468,6 +2507,14 @@ impl Vm {
             }
             Kind::UnsupportedNative(name) => {
                 return self.fail(ErrorKind::UnsupportedNativeFunction(name));
+            }
+            Kind::Script(_) if !self.saved_environments.is_empty() => {
+                // Ordinary invocation currently owns a separate operand vector.
+                // Saved-handler calls require the native shared-Environment
+                // frame/cleanup contract before that representation is admitted.
+                return self.fail(ErrorKind::Unsupported(
+                    "script call after saved Environment adoption requires shared state profile",
+                ));
             }
             Kind::Script(function) => function,
             Kind::StringConstructor => {
@@ -2830,6 +2877,7 @@ impl Vm {
             this: this.clone(),
             this_visible: flags & 2 == 0,
             locals: activation,
+            kind: FrameKind::Ordinary,
         };
         for (index, param) in definition.parameters.iter().enumerate() {
             let value = args.get(index).cloned().unwrap_or(Value::Undefined);
@@ -3002,6 +3050,9 @@ impl Vm {
         )
     }
     fn write_register(&self, frame: &mut Frame, index: u8, value: Value) -> Result<()> {
+        if frame.is_saved() && index > 3 {
+            return Ok(());
+        }
         let slot = frame
             .registers
             .get_mut(usize::from(index))
@@ -3048,6 +3099,11 @@ impl Vm {
         frame: &mut Frame,
         host: &mut impl Host,
     ) -> Result<()> {
+        if frame.is_saved() {
+            return self.fail(ErrorKind::Unsupported(
+                "saved action function definition/capture profile",
+            ));
+        }
         let function = self.alloc(
             Kind::Script(ScriptFunction {
                 target: frame.target,
@@ -3168,6 +3224,7 @@ impl Vm {
                             Literal::Null => Value::Null,
                             Literal::Undefined => Value::Undefined,
                             Literal::Boolean(v) => Value::Bool(*v != 0),
+                            Literal::Register(r) if frame.is_saved() && *r > 3 => Value::Undefined,
                             Literal::Register(r) => {
                                 frame
                                     .registers
@@ -3175,11 +3232,21 @@ impl Vm {
                                     .cloned()
                                     .ok_or_else(|| self.error(ErrorKind::InvalidRegister(*r)))?
                             }
+                            Literal::Constant8(i) if frame.is_saved() => frame
+                                .pool
+                                .get(usize::from(*i))
+                                .cloned()
+                                .unwrap_or(Value::Undefined),
                             Literal::Constant8(i) => {
                                 frame.pool.get(usize::from(*i)).cloned().ok_or_else(|| {
                                     self.error(ErrorKind::InvalidConstant(u16::from(*i)))
                                 })?
                             }
+                            Literal::Constant16(i) if frame.is_saved() => frame
+                                .pool
+                                .get(usize::from(*i))
+                                .cloned()
+                                .unwrap_or(Value::Undefined),
                             Literal::Constant16(i) => frame
                                 .pool
                                 .get(usize::from(*i))
@@ -3193,13 +3260,38 @@ impl Vm {
                     }
                 }
                 Operands::ConstantPool(pool) => {
-                    let mut values = Vec::new();
-                    for value in pool {
-                        values.push(Value::String(self.decode_text(value)?));
+                    if let FrameKind::Saved { action, .. } = &mut frame.kind {
+                        let origin = CodeOrigin {
+                            code,
+                            source_offset: instruction.span.offset,
+                        };
+                        action
+                            .visit_constant_pool(origin, || {
+                                pool.iter().map(|value| self.decode_text(value)).collect()
+                            })
+                            .map_err(|error| match error {
+                                saved_state::PoolError::Decode(error) => error,
+                                saved_state::PoolError::State(_) => {
+                                    self.error(ErrorKind::Unsupported(
+                                        "saved constant-pool source/state profile",
+                                    ))
+                                }
+                            })?;
+                        frame.pool = Arc::clone(action.pool());
+                    } else {
+                        let mut values = Vec::new();
+                        for value in pool {
+                            values.push(Value::String(self.decode_text(value)?));
+                        }
+                        frame.pool = Arc::new(values);
                     }
-                    frame.pool = Arc::new(values);
                 }
                 Operands::StoreRegister(r) => {
+                    // Native modes3/4 ignore out-of-bank destinations entirely.
+                    if frame.is_saved() && *r > 3 {
+                        pc += 1;
+                        continue;
+                    }
                     let value = frame
                         .stack
                         .last()
@@ -3219,6 +3311,9 @@ impl Vm {
                     }
                 }
                 Operands::With(body) => {
+                    if frame.is_saved() {
+                        return self.fail(ErrorKind::Unsupported("saved action With scope"));
+                    }
                     let object = self.object_id(self.pop(frame)?)?;
                     frame.scopes.insert(0, object);
                     if self.depth >= self.limits.call_depth {
@@ -3326,15 +3421,27 @@ impl Vm {
                         self.push(frame, value)?;
                     }
                     0x1d | 0x3c => {
+                        if frame.is_saved() && instruction.opcode == 0x1d {
+                            return self.fail(ErrorKind::Unsupported(
+                                "saved action SetVariable resolution profile",
+                            ));
+                        }
                         let value = self.pop(frame)?;
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        self.set_variable(frame, key, value, instruction.opcode == 0x3c, host)?;
+                        if frame.is_saved() {
+                            self.simple_name(&key)?;
+                            self.write_member(frame.target, key, value, host)?;
+                        } else {
+                            self.set_variable(frame, key, value, instruction.opcode == 0x3c, host)?;
+                        }
                     }
                     0x41 => {
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        self.set_variable(frame, key, Value::Undefined, true, host)?;
+                        if !frame.is_saved() {
+                            self.set_variable(frame, key, Value::Undefined, true, host)?;
+                        }
                     }
                     0x4e => {
                         let key = self.pop(frame)?;
@@ -6129,6 +6236,7 @@ mod tests {
             this: Value::Object(vm.root()),
             this_visible: true,
             locals: vm.object().unwrap(),
+            kind: FrameKind::Ordinary,
         };
         assert!(matches!(
             vm.get_variable(&frame, &text("gfx.controls.Widget"), &mut RejectHost)
@@ -6164,6 +6272,7 @@ mod tests {
             this: Value::Object(inner),
             this_visible: true,
             locals: inner,
+            kind: FrameKind::Ordinary,
         };
         assert_eq!(
             vm.variable(&frame, &text("shadow"), &mut RejectHost)
