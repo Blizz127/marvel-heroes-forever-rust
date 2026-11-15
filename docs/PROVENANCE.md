@@ -552,3 +552,10 @@ claim remains the pinned executable evidence. The latest
 descriptor, filename resolver, engine creator and post-creation inverse matrix;
 unobserved runtime inputs remain explicit and no third-party implementation was
 copied.
+
+The dev15 Linux/window dependency collection contains the same 121 registry
+dependencies and 231 selected licence/notice files. Its private manifest is
+`evidence/dependency-notices-dev15-linux/manifest.json`, SHA-256
+`9a372a0fdc06021ddaab37464e801cd5d5b6b8df126bdfd1d16a5a29579e34c6`.
+The package contains original project deliverables and these notices, without
+retail executable, assets, extracted data or captures.

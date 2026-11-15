@@ -5,7 +5,24 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev15 integration in progress
+## 2026-11-15 dev15 diagnostic increment
+
+**VERIFIED build/startup:** clean tested code
+`6650da5bd8567e9b4dbc5980d3b59624b7e5da0e` builds with the window feature.
+Twelve final CLI/image checks pass, including both explicit World selections
+and wrong-class rejection. The initial smoke expected error code 1; the CLI
+correctly returns 2. That failed harness receipt is retained, and the corrected
+check also verifies the exact rejection reason. An isolated two-frame Xvfb
+startup passes with empty stderr. Saved login and cursor pixels preserve their
+previous identities. Binary SHA-256:
+`26a8b1cac2a191483f92812a81163917437fafc26c8ebb18b0c2aa999c4d55e0`.
+
+Receipts: `evidence/dev15-build-result.json`,
+`evidence/build-0.1.0-dev.15-smoke-final.json` and
+`evidence/dev15-native-html/receipt.json`. The production build reports one
+unused test-only import warning; it is not a runtime failure. No original
+constructor visibility change, native frontend, login or gameplay parity is
+claimed. This build still contains zero finished Forever upgrades.
 
 **VERIFIED later bounded execution:** all 34 original login Construct saved
 phases completed 1,686 instructions and 674 writes with zero host calls. Each
