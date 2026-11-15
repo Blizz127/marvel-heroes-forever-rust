@@ -2294,3 +2294,33 @@ The source was unchanged across compilation and checks. Static authority is
 [REA_GLOBAL_EXTENSIONS.md](REA_GLOBAL_EXTENSIONS.md). Private verification:
 `avm1-runtime/global-extensions-checks/receipt.json`, SHA-256
 `19e059a0e1d9605eb02a8329b7439cc16f2bb5919bdcf7077f3a680810a0c38b`. No original manager or native process was executed by these checks.
+
+### Native-global replay stops on original numeric assignment
+
+OBSERVED controlled increment12 on frozen `bc320b3`: adopting the explicit
+global profile with `current_byte: None` changes the first supported frontier.
+UIComponent initializer0 completes in 220 instructions; FocusHandler
+initializer1 (tag383/sprite34, span12444) stops after 112 instructions at
+**SetMember13566, CodeId1**. Original Push13554 supplies register3's preloaded
+global, `gfxExtensions`, and Integer1, represented by the VM as Number1.0.
+The exact-Bool native-global profile rejects that original operand. It was not
+rewritten, coerced without proof, or retried with a supplied byte zero.
+
+Selection.addListener13552 already ran, retaining listener118/add count1.
+Class registration count is zero; root storage remains absent, prototype17
+and supplied rawb8 `0x5a5a0180` remain unchanged. GlobalExtensionsInfo still
+has unknown byte, no last write and no marker attempt. Its subsequent getter
+reports unknown state; gfxVersion remains Undefined. Mouse stays deferred
+with global flags1 and no hide request. The containing frame, its6370 write
+and Mouse.hide6391 were **not executed**.
+
+The prior 452-initializer/290-frame-instruction results belong to the earlier
+controlled Plain-global model. They do not establish that execution with the
+new native-global state profile. Numeric native conversion is the next
+evidence dependency; the native handler/cursor boundary remains separate.
+
+Private `avm1-attached-manager-frame-action-increment12/receipt.json` SHA-256:
+`85d8e4fead6ab94cecec88af7883b2c325bf53ac64b997dc1cd405427a5a05f4`.
+One build/run used 29 frozen entries and preserved the prior fixtures/receipts.
+A proposed independent helper audit could not start because of the thread
+limit; no independent audit is claimed. No native/window execution occurred.
