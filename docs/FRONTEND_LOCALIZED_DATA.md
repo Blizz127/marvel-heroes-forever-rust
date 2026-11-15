@@ -43,6 +43,29 @@ label-path lookup, object allocation and failure-return semantics remain outside
 this module. A successful pure lookup does not establish frontend execution or
 wire/behavior parity.
 
+## Focused verification
+
+**VERIFIED against original stored locale bytes:** A private dependency-free
+harness checked all 77,089 default entries in the four English partitions.
+70,103 results preserved their raw text bytes, source partition/entry/text spans
+and UTF-16 roundtrip; 5,111 of those contained non-ASCII characters. The remaining
+6,986 entries correctly rejected the scoped unsupported marker paths: 6,983 with
+`#` and three with the actual missing-translation sentinel.
+
+6,316 nonzero references to empty default text produced `has_tooltip=true`.
+The actual stored zero-ID entry is empty and produced false. 73 supported
+entries with alternates selected their base string; an independent raw case
+confirmed a distinct alternate was not substituted. Eight independently selected
+raw cases also verified identity spelling, both string slots' marker rejection,
+missing-ID errors and zero-prototype rejection. No supplementary-plane character
+occurs in the 77,227 stored strings, so that character class was not exercised by
+this original-data check.
+
+These checks supply explicit reference values; they do not infer effective
+prototype fields or invoke the native/VM callback. The frozen source and input
+hashes are in private `evidence/localized-data-check/receipt.json`, SHA-256
+`abf813937c5d5d149dd910d96234c62eca354f5f615cb7e3ef73375207a66d45`.
+
 ## Provenance
 
 The implementation uses original Rust and the standard library. Its native
