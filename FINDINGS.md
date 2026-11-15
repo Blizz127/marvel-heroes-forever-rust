@@ -5,7 +5,17 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev21 work in progress
+## 2026-11-15 dev21 diagnostic increment
+
+**VERIFIED private staging, 13:31 UTC:** all 417 packaged file sizes/hashes and
+the complete file set pass, with packaged version and Original-preset readback.
+Private path: `builds/0.1.0-dev.21`. Clean package source is
+`20f82743d4e864f575fe66c78f903ae937335d99`; only documentation differs from the
+tested source below. Manifest SHA-256:
+`850c211ac14e5aa26f4933794d45fc95f13c3bd088e7e107a5e60f3b8e5b2663`.
+Receipt: `evidence/build-0.1.0-dev.21-package-validation.json`. Coordinator intake
+is queued and supersedes dev20's Rust diagnostic only. Publication, acknowledgement
+and owner-device validation remain unconfirmed; no retail tile was replaced.
 
 **VERIFIED combined dev21 build/startup:** clean source
 `3c6f73c0740563c4410bdb054a39f7a87b3516da` builds with the window feature in
@@ -89,8 +99,8 @@ dimension fields. Remaining resource/backend effects prevent a lifetime-wide
 or current-input claim. Receipt: `evidence/scale9-texture-updates/final-index.json`,
 SHA-256 `7eb1f851612741b7f867475e03ef0977e23a06a4520bcbb9eb6ee507293131b8`.
 
-Dev21 is built and validated; private staging is next. Dev20 remains the latest
-staged diagnostic until a separate package receipt is recorded.
+Dev21 is built, validated and privately staged. It remains diagnostic tooling;
+native startup, login, world entry and gameplay parity are not demonstrated.
 
 ## 2026-11-15 dev20 diagnostic increment
 

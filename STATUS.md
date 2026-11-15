@@ -1,25 +1,25 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 13:30 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:32 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.21`.
 
 ## Latest private diagnostic
 
-**VERIFIED:** `0.1.0-dev.20` is staged under
-`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.20/`.
-The window-enabled offline build, 45 CLI/image checks and isolated two-frame
-Rust-window startup pass. All 403 packaged file sizes/hashes and the complete
+**VERIFIED:** `0.1.0-dev.21` is staged under
+`~/.local/share/marvel-heroes-forever-rust/builds/0.1.0-dev.21/`.
+The window-enabled offline build, 17 focused CLI/image checks and isolated two-frame
+Rust-window startup pass. All 417 packaged file sizes/hashes and the complete
 file set match; packaged version and Original-preset readback pass. The clean
-package source is `5f083c99a6d46132e2f5fbe5d3e9e34159f05010`; tested code is
-`6ed15b2770d7215c3e2c884c8fbd405c996d706e`, with documentation-only differences.
+package source is `20f82743d4e864f575fe66c78f903ae937335d99`; tested code is
+`3c6f73c0740563c4410bdb054a39f7a87b3516da`, with documentation-only differences.
 Binary SHA-256:
-`354c23a2b7dcba6155ab9e3d1b6a609f95d46bae75a110989c87350031623ead`.
+`4344fd50b742d9fd645f748d9f0438c98b513d3b70fdf8aa2a79989d489af0d2`.
 
-Receipts are `evidence/build-0.1.0-dev.20-smoke.json`,
-`evidence/dev20-native-html/receipt.json` and
-`evidence/build-0.1.0-dev.20-package-validation.json`. Dependency notices cover
+Receipts are `evidence/build-0.1.0-dev.21-smoke.json`,
+`evidence/dev21-native-html/receipt.json` and
+`evidence/build-0.1.0-dev.21-package-validation.json`. Dependency notices cover
 121 selected packages and 231 notice texts. Coordinator intake is queued;
 publication and owner-device validation remain unconfirmed. Staged is not
 published. Earlier private builds remain available.
@@ -55,8 +55,8 @@ notices; no retail executable, game assets, captures or extracted data.
   next stops at original numeric1 assignment to gfxExtensions (offset13566).
   No frame/Mouse call ran in that replay. The numeric conversion extension now
   passes nineteen focused checks; a corrected original replay is pending.
-  The prior Plain-global run remains a separate controlled profile. Dev21 has
-  not been built or staged.
+  The prior Plain-global run remains a separate controlled profile. Dev21's
+  combined diagnostic build and staging checks pass independently of that replay.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions
@@ -85,8 +85,8 @@ and the component ledgers linked from [PROVENANCE.md](docs/PROVENANCE.md).
 
 Continue the actual Mouse user-event handler path, fresh target and root
 construction, default application, ModelComponent linkage and native Scale9
-geometry/resource inputs. Checked Model bindings and bounded native rectangle/
-paint arithmetic are included in dev20. Then connect the complete display lifecycle to the
+geometry/resource inputs. Dev21 adds numeric global conversion, selected Model
+geometry and positive-tolerance rectangle admission. Then connect the complete display lifecycle to the
 persistent renderer and input host. A callback stub, guessed default or synthetic
 check must not be presented as original startup success.
 
