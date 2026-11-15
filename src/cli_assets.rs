@@ -1,7 +1,13 @@
 //! Offline CLI entry points over original frontend readers. No network access.
 
 use marvel_heroes_forever::{
-    frontend::{AssetLocation, AssetSet, ImageResolution, object_path},
+    frontend::{
+        AssetLocation, AssetSet, ImageResolution,
+        library::{
+            Limits as LibraryLimits, MovieAlias, MovieLibrary, Resolution as SymbolResolution,
+        },
+        object_path,
+    },
     texture::Texture2D,
     upk::{Package, PackageArchive},
 };
@@ -19,6 +25,116 @@ fn text(value: &OsString) -> Result<&str> {
 
 pub fn run(args: &[OsString]) -> Result<()> {
     match args {
+        [command, operation, package, selector, extra @ ..]
+            if command == "frontend" && operation == "scene" =>
+        {
+            use marvel_heroes_forever::gfx::{
+                CharacterKind,
+                scene::{Limits, MovieRef, NodeKind, Scene},
+            };
+            let (assets, library) = load_library(package, extra)?;
+            let export = select(assets.archive(0)?.package(), text(selector)?)?;
+            let id = library
+                .id_for_location(AssetLocation { package: 0, export })
+                .ok_or_else(|| invalid("selected export is not a loaded movie"))?;
+            let entry = library
+                .entry(id)
+                .ok_or_else(|| invalid("movie library index missing"))?;
+            let scene = Scene::first_frame(
+                MovieRef::new(id, &entry.asset.movie),
+                &library,
+                Limits::default(),
+            )?;
+            let shapes = scene
+                .nodes
+                .iter()
+                .filter(|node| {
+                    node.kind
+                        .definition()
+                        .is_some_and(|d| d.kind == CharacterKind::Shape)
+                })
+                .count();
+            let unresolved = scene
+                .nodes
+                .iter()
+                .filter(|node| {
+                    matches!(
+                        node.kind,
+                        NodeKind::Import {
+                            unresolved: Some(_),
+                            ..
+                        } | NodeKind::MissingCharacter { .. }
+                            | NodeKind::ClassOnly
+                    )
+                })
+                .count();
+            let unsupported: usize = scene.nodes.iter().map(|node| node.unsupported.len()).sum();
+            println!(
+                "OBSERVED {} static first frame: {} nodes, {shapes} shape instances, {unresolved} unresolved nodes, {unsupported} unsupported node conditions",
+                entry.asset.object_path,
+                scene.nodes.len()
+            );
+            println!(
+                "Unexecuted script bindings: {}; unbound action tags: {}; retained opaque records: {}",
+                scene.actions.len(),
+                scene.unbound_action_tags.len(),
+                scene.opaque_nodes.len()
+            );
+            for node in scene.nodes.iter().take(32) {
+                println!(
+                    "node {} parent {:?} name {:?} visible {} kind {:?}",
+                    node.id,
+                    node.parent,
+                    node.segment.as_ref().and_then(|s| s.name.as_deref()),
+                    node.effective_visible,
+                    node.kind
+                );
+            }
+            println!(
+                "Serialized first-frame snapshot only; nested sprites start at frame zero and scripts have not changed the scene."
+            );
+        }
+        [command, operation, package, extra @ ..]
+            if command == "frontend" && operation == "imports" =>
+        {
+            let (_assets, library) = load_library(package, extra)?;
+            let mut total = 0;
+            let mut resolved = 0;
+            for (id, entry) in library.entries().iter().enumerate() {
+                let bindings: Vec<_> = library
+                    .bindings()
+                    .filter(|b| b.source_movie == id)
+                    .collect();
+                let found = bindings
+                    .iter()
+                    .filter(|b| matches!(b.resolution, SymbolResolution::Resolved { .. }))
+                    .count();
+                println!(
+                    "OBSERVED {}: {found}/{} imported symbols resolved",
+                    entry.asset.object_path,
+                    bindings.len()
+                );
+                total += bindings.len();
+                resolved += found;
+                for binding in bindings
+                    .into_iter()
+                    .filter(|b| !matches!(b.resolution, SymbolResolution::Resolved { .. }))
+                    .take(8)
+                {
+                    println!(
+                        "  {} [{}] from {}: {:?}",
+                        binding.symbol, binding.local_character_id, binding.url, binding.resolution
+                    );
+                }
+            }
+            println!(
+                "VERIFIED {} saved movie structures; resolved {resolved}/{total} imported symbols in the supplied library.",
+                library.entries().len()
+            );
+            println!(
+                "Explicit font routes are caller selections; native import behavior and runtime execution remain unverified."
+            );
+        }
         [command, operation, package, selector, dependencies @ ..]
             if command == "frontend" && operation == "inspect" =>
         {
@@ -84,7 +200,100 @@ pub fn run(args: &[OsString]) -> Result<()> {
         {
             render_texture(package, text(selector)?, Path::new(output))?;
         }
+        [command, operation, package, selector, extra @ ..]
+            if command == "texture" && operation == "window" =>
+        {
+            let frames = match extra {
+                [] => None,
+                [flag, count] if flag == "--frames" => {
+                    let count = text(count)?.parse::<u64>()?;
+                    if !(1..=1_000_000).contains(&count) {
+                        return Err(invalid("preview frame count must be 1..1000000"));
+                    }
+                    Some(count)
+                }
+                _ => {
+                    return Err(invalid(
+                        "usage: mhf texture window <package> <texture> [--frames N]",
+                    ));
+                }
+            };
+            window_texture(package, text(selector)?, frames)?;
+        }
         _ => return Err(invalid("invalid asset command; use mhf --help")),
+    }
+    Ok(())
+}
+
+fn load_library(package: &OsString, extra: &[OsString]) -> Result<(AssetSet, MovieLibrary)> {
+    let mut archives = vec![PackageArchive::open(package)?];
+    let mut aliases = Vec::new();
+    let mut index = 0;
+    while index < extra.len() {
+        if extra[index] == "--font-library" {
+            if !aliases.is_empty() || index + 1 >= extra.len() {
+                return Err(invalid(
+                    "--font-library needs exactly one selected movie object path",
+                ));
+            }
+            aliases.push(MovieAlias {
+                logical_object_path: "MarvelFonts.gfxfontlib".into(),
+                target_object_path: text(&extra[index + 1])?.to_owned(),
+            });
+            index += 2;
+        } else {
+            if extra[index]
+                .to_str()
+                .is_some_and(|value| value.starts_with("--"))
+            {
+                return Err(invalid("unknown movie library option"));
+            }
+            archives.push(PackageArchive::open(&extra[index])?);
+            index += 1;
+        }
+    }
+    let indices: Vec<_> = (0..archives.len()).collect();
+    let assets = AssetSet::new(archives)?;
+    let library = MovieLibrary::load(&assets, &indices, &aliases, LibraryLimits::default())?;
+    Ok((assets, library))
+}
+
+#[cfg(not(feature = "window"))]
+fn window_texture(_package: &OsString, _selector: &str, _frames: Option<u64>) -> Result<()> {
+    Err(invalid(
+        "this build lacks native window support; build with --features window",
+    ))
+}
+
+#[cfg(feature = "window")]
+fn window_texture(package: &OsString, selector: &str, frames: Option<u64>) -> Result<()> {
+    use marvel_heroes_forever::{
+        render::ImageEncoding,
+        window::{PreviewImage, PreviewOptions, run_image_preview},
+    };
+    let texture = load_texture(package, selector)?;
+    let decoded = texture.decode_mip(0)?;
+    println!(
+        "OBSERVED Texture2D SRGB metadata: {:?}. Preview uses explicit Linear input/output for raw-channel inspection.",
+        texture.descriptor.srgb
+    );
+    let image = PreviewImage {
+        width: decoded.width,
+        height: decoded.height,
+        pixels: decoded.pixels,
+        encoding: ImageEncoding::Linear,
+    };
+    let mut options = PreviewOptions::new(ImageEncoding::Linear);
+    options.title = format!("Marvel Heroes Forever — {selector} (saved texture)");
+    options.frame_limit = frames;
+    if frames.is_some() {
+        options.close_after = Some(std::time::Duration::from_secs(15));
+    }
+    let report = run_image_preview(image, options)?;
+    println!("OBSERVED native image preview: {report:?}");
+    println!("Saved texture presentation; retail scene and display parity remain unverified.");
+    if frames.is_some_and(|expected| report.frames_presented != expected) {
+        return Err(invalid("preview closed before the requested frame count"));
     }
     Ok(())
 }

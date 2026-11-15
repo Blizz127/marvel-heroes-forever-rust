@@ -13,6 +13,10 @@ pub mod text;
 pub mod shapes;
 #[path = "gfx/tessellate.rs"]
 pub mod tessellate;
+#[path = "gfx/scene.rs"]
+pub mod scene;
+#[path = "gfx/glyphs.rs"]
+pub mod glyphs;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -281,6 +285,8 @@ pub struct DisplayObject {
     pub visible: bool,
     pub opaque_background: Option<[u8; 4]>,
     pub has_clip_actions: bool,
+    /// Most recently serialized handlers, retained as checked movie spans.
+    pub clip_actions: Vec<ClipAction>,
 }
 impl Default for DisplayObject {
     fn default() -> Self {
@@ -298,6 +304,7 @@ impl Default for DisplayObject {
             visible: true,
             opaque_background: None,
             has_clip_actions: false,
+            clip_actions: Vec::new(),
         }
     }
 }
@@ -457,6 +464,7 @@ impl Movie {
                     }
                     if p.has_clip_actions {
                         object.has_clip_actions = true;
+                        object.clip_actions = p.clip_actions.clone();
                     }
                 }
                 TagData::Remove {
@@ -1200,6 +1208,7 @@ mod tests {
         let parsed = Movie::parse(&bytes).unwrap();
         let snapshot = parsed.static_frame(0, 0).unwrap();
         assert!(snapshot.objects[&1].has_clip_actions);
+        assert_eq!(snapshot.objects[&1].clip_actions.len(), 1);
         assert_eq!(snapshot.ignored_action_tags.len(), 1);
         match &parsed.tags[1].data {
             TagData::Place(value) => {

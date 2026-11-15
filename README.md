@@ -10,7 +10,9 @@ See `FINDINGS.md` for measured evidence and `docs/PROVENANCE.md` for sources.
 
 Build the asset tools with `nice -n 19 cargo build --offline -j2` (Rust 1.88+).
 Their default build uses only the standard library. Add `--features renderer`
-for the optional wgpu Vulkan image renderer. No server connection is made.
+for the optional wgpu Vulkan image renderer, or `--features window` for native
+image presentation. Required native libraries and verified runtime scope are
+recorded in [window support](docs/WINDOW.md). No server connection is made.
 
 The default preset is Forever; Original is one switch away. Only completed
 upgrades can be exposed. No graphics upgrades are implemented yet.
@@ -27,7 +29,8 @@ mhf calligraphy verify /private/path/Calligraphy.sip
 ```
 
 `calligraphy verify` checks supported metadata members and reports the remaining
-prototype bodies as skipped. The tools never extract members to filesystem paths.
+prototype bodies as skipped. These SIP/Calligraphy commands never extract members
+to filesystem paths.
 A nonzero error exit is 2. Source hashes establish file identity separately from
 successful decompression or parsing.
 
@@ -71,6 +74,8 @@ mhf frontend verify /private/path/MarvelFrontEnd_SF.upk /private/path/MarvelGame
 mhf frontend inspect /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager
 mhf texture inspect /private/path/MarvelFrontEnd_SF.upk frontendbg_2560x1440
 mhf texture render /private/path/MarvelFrontEnd_SF.upk frontendbg_2560x1440 ~/.local/share/marvel-heroes-forever-rust/evidence/background.pam
+mhf texture window /private/path/MarvelFrontEnd_SF.upk frontendbg_2560x1440
+mhf frontend imports /private/path/MarvelFrontEnd_SF.upk /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en
 ```
 
 `texture render` requires the renderer feature. It decodes mip zero, draws a
@@ -81,3 +86,8 @@ movie's explicit References plus qualified object paths; missing or ambiguous
 dependencies remain visible. Script execution, font routing and live render
 targets are still needed. See [frontend composition](docs/FRONTEND_COMPOSITION.md)
 and [renderer evidence](docs/RENDERER.md).
+
+`frontend scene` takes the same package/library inputs plus a movie selector and
+inspects the recovered static first-frame tree. Sprite nesting, display depth,
+transforms, imported symbols and unexecuted action bindings remain explicit.
+This is a structural snapshot; it is not the script-initialized game screen.

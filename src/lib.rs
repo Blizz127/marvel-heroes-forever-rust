@@ -10,9 +10,12 @@ pub mod frontend;
 pub mod gfx;
 pub mod options;
 pub mod prototype_catalog;
+pub mod prototype_values;
 #[cfg(feature = "renderer")]
 pub mod render;
 pub mod sip;
 pub mod texture;
 pub mod texture_cache;
 pub mod upk;
+#[cfg(feature = "window")]
+pub mod window;

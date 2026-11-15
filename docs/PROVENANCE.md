@@ -134,3 +134,36 @@ crate metadata and exact upstream supplementary notice sources, including the
 explicitly absent hexf-parse upstream notice and its separately identified CC0
 declaration/standard terms. These are build dependencies and attribution records,
 not proprietary game data or copied game-client implementations.
+
+## Further frontend and native evidence
+
+[Tessellation](GFX_TESSELLATION.md) describes the original bounded geometry
+algorithm and exact inherited format sources. [Native window](WINDOW.md) adds
+the pinned winit/wgpu APIs, X.Org test tooling and privately extracted official
+Ubuntu runtime packages used only for isolated native presentation checks.
+[Actual font resources](FRONTEND_FONTS.md) registers the newly hash-pinned
+proprietary locale font movies and distribution defaults; fonts remain private.
+
+[AVM1 execution](AVM1_VM.md) records Adobe SWF/ActionScript and primary ECMA-262
+edition 3 references for the newly written bounded VM. [Button/control study](GFX_BUTTONS.md)
+records Adobe format references, the cached BSD-3-Clause pypdf inspection tool,
+and the actual absence of DefineButton tags in the studied frontend. Its standalone
+button reader currently has synthetic coverage only and is not exposed as a
+working retail-control feature.
+
+[Prototype effective values](PROTOTYPE_VALUES.md) extends the exact read-only
+AGPL MHServerEmu source ledger for parent/default behavior. The original resolver
+retains unresolved runtime-assignment contexts and never substitutes server code.
+[REA native alternative](REA_NATIVE_ALTERNATIVE.md) registers supported REA
+Rizin/objdump capabilities, exact owner binary ranges, exported Evidence and
+remaining runtime limits; no original executable was launched or patched.
+
+[Movie library](MOVIE_LIBRARY.md) and [static scenes](GFX_SCENE.md) compose those
+original readers with exact private import/export and placement observations.
+The scene ledger records the inherited Adobe SWF documentation and explicit
+static-frame interpretation; no outside scene graph or UI implementation is used.
+
+[Glyph geometry](GLYPH_GEOMETRY.md) registers the Adobe-authored font/text format
+references and actual private English/static-text glyph evidence used for the
+original outlines and exact rational placement. Native rasterization and dynamic
+text layout remain separate from geometric decoding.

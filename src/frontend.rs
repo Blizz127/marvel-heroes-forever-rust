@@ -16,6 +16,9 @@ use std::{
     io,
 };
 
+#[path = "frontend/library.rs"]
+pub mod library;
+
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }

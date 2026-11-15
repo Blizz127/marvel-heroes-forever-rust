@@ -46,8 +46,11 @@ fn usage() {
     println!("  mhf upk verify-objects <package.upk>");
     println!("  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]");
     println!("  mhf frontend verify <package.upk> [dependency.upk ...]");
+    println!("  mhf frontend imports <package.upk> [dependency.upk ...] [--font-library full.object.path]");
+    println!("  mhf frontend scene <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path]");
     println!("  mhf texture inspect <package.upk> <texture-name|1-based-index>");
     println!("  mhf texture render <package.upk> <texture-name|1-based-index> <private-output.pam>");
+    println!("  mhf texture window <package.upk> <texture-name|1-based-index> [--frames N]");
     println!("  mhf --version");
     println!("No assets are embedded. No server connection is made.");
 }
@@ -360,6 +363,7 @@ fn status(preset: Preset) {
         "Implemented: SIP/LZ4, Calligraphy prototype bodies, UE3/LZO, textures, GFX structure and movie image binding."
     );
     println!("Offscreen image renderer compiled: {}", cfg!(feature = "renderer"));
+    println!("Native image window compiled: {}", cfg!(feature = "window"));
     println!("Not implemented: playable frontend, login, world or combat.");
     println!("Retail behavior parity is not verified.");
 }
