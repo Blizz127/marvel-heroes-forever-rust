@@ -14,6 +14,9 @@ use std::{
 };
 use wgpu::util::DeviceExt;
 
+#[path = "render/mesh.rs"]
+pub mod mesh;
+
 const MAX_IMAGE_BYTES: usize = 256 * 1024 * 1024;
 const MAX_QUADS: usize = 65_536;
 const VERTEX_BYTES: u64 = 32;
@@ -326,6 +329,19 @@ impl QuadRenderer {
         quads: &[Quad<'_>],
     ) -> io::Result<Readback> {
         let vertices = self.prepare(width, height, clear, quads)?;
+        self.readback_scene(width, height, |encoder, view| {
+            self.encode(encoder, view, clear, quads, &vertices);
+        })
+    }
+
+    /// Shared bounded readback for child rendering pipelines on this device.
+    fn readback_scene(
+        &self,
+        width: u32,
+        height: u32,
+        encode: impl FnOnce(&mut wgpu::CommandEncoder, &wgpu::TextureView),
+    ) -> io::Result<Readback> {
+        self.image_size(width, height)?;
         let row_bytes = width * 4;
         let padded_row = row_bytes.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
             * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
@@ -355,7 +371,7 @@ impl QuadRenderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Offscreen image commands"),
             });
-        self.encode(&mut encoder, &view, clear, quads, &vertices);
+        encode(&mut encoder, &view);
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
