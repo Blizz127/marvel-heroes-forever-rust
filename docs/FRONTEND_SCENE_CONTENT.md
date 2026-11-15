@@ -2,22 +2,27 @@
 
 `frontend::scene_content::prepare(&assets, &library, &scene, limits)` prepares
 owned CPU data for the supplied structural scene. It uses original shape edges,
-existing tessellation and declared texture bindings. It makes no GPU calls,
+existing tessellation, declared texture bindings and saved plain EditText glyphs. It makes no GPU calls,
 executes no scripts and invents no replacement or bounding-box geometry.
 
 ## Owned caches and instances
 
-`PreparedScene` owns `nodes`, `meshes`, `images`, `textures`, `actions`,
+`PreparedScene` owns `nodes`, `meshes`, `texts`, `fonts`, `glyphs`, `images`, `textures`, `actions`,
 `opaque_nodes`, `unbound_action_tags`, `stats` and the tessellation options.
 Each prepared node retains its complete cloned `SceneNode` as `instance`,
 including raw placement, composed transforms, visibility, ordered masks and
 source identity. `content` identifies a group, shape cache index, bitmap cache
 index, original text definition or explicitly unrendered content. `limitations`
-retains effects or behaviors not prepared by this stage.
+retains effects or behaviors not prepared by this stage. `PreparedNode.text`
+indexes a text-cache record while the existing `NodeContent::Text { definition }`
+retains its original identity.
 
 | Cache | Identity | Retained data |
 | --- | --- | --- |
 | `meshes` | Resolved `(movie_id, character_id)` | `DefinitionRef`, optional original `Shape`, optional `tessellate::Mesh`, per-fill image indices and preparation issues |
+| `texts` | Resolved `(movie_id, character_id)` | Original EditText, exact font binding, optional saved layout, typed failure and glyph placements |
+| `fonts` | Exact resolved font `(movie_id, character_id)` | Original FontDefinition and parse issues |
+| `glyphs` | Exact FontIdentity plus glyph index | Original GlyphOutline and optional neutral-white mesh in font EM units |
 | `images` | Local movie bitmap character ID, before import resolution | Exact import chain, resolved definition, existing `ImageBinding`, logical dimensions, texture index, explicit unverified padding policy and issues |
 | `textures` | `AssetLocation { package, export }` | Original descriptor including optional SRGB property, mip index, physical mip dimensions, optional decoded RGBA and issues |
 
@@ -34,6 +39,67 @@ repeat/smoothing flags and directed-edge provenance remain in the original
 shape/mesh types. Stroke definitions remain in `Shape`; unexpanded stroke counts
 and inferred winding are explicit issues/statistics. This bridge does not convert
 world transforms to screen pixels or normalize fill coordinates.
+
+## Saved plain text and geometry
+
+`TextAsset` preserves the original `EditText` body, bounds, flags, saved color,
+variable name and initial text. `layout` is the original `EditTextLayout` from
+`edit_layout::layout_initial`; it is always `SavedInitial`, never a localization,
+script update, inferred runtime string or populated input control. Its source
+spans, UTF-8/UTF-16 indices, rational pens, baselines, advances, line boxes and
+original font/glyph identity remain available to the caller. Repeated placements
+of one text definition reuse one text cache record.
+
+Font selection follows only `MovieLibrary::binding`. Each `FontBinding` keeps
+its local ID, complete import chain and resolved font-cache index. Missing
+aliases, symbols, definitions, cycles and unsupported font formats remain
+explicit issues; there is no global symbol search, filename guess or fallback.
+An explicit caller-selected English inspection alias can resolve the saved
+`gfxfontlib` imports, but this bridge never selects that alias. Native locale
+routing evidence and its remaining limits belong to `REA_NATIVE_ALTERNATIVE.md`
+and `MOVIE_LIBRARY.md`.
+
+`TextAsset.layout_error` retains the typed `EditLayoutError`, separately from
+`issues`. HTML, password, automatic sizing, device fonts, wrapping-needed cases
+and the layout module's other unsupported features produce no glyph placements.
+Even an empty password field is rejected before content layout. Static DefineText
+records are still explicit unsupported text entries in this bridge; their
+separate glyph/layout implementation is not implicitly invoked.
+
+For each accepted field, `TextAsset.glyphs` aligns with `layout.glyphs`:
+
+- `layout_index` selects the exact rational placement and source metadata.
+- `glyph` indexes the shared `PreparedScene.glyphs` cache.
+- `local_matrix` scales original font EM coordinates by `height_twips / units_per_em`
+  and adds the field-local rational pen/baseline converted to f64.
+- `color: Option<[u8; 4]>` keeps the saved paint. Missing color remains unresolved.
+
+The adapter composes `node.world_matrix.compose(local_matrix)`, then an explicit
+stage-to-pixel transform. No `/20` conversion, bounds-origin shift, hinting,
+kerning guess or vertical flip is inserted by the bridge. The exact rational
+layout remains available even though tessellated curve points and the final
+matrix use floating point.
+
+Cached glyph meshes use neutral white fill so that a glyph can be shared by
+fields of different colors and sizes. The adapter must replace that neutral
+paint with each placement's saved RGBA **before** applying the scene's composed
+color transform. It must skip and report an absent color. Neutral white is an
+internal cache representation, not an inferred saved text color.
+
+`Limits.glyph_fill_rule` explicitly selects the glyph tessellation policy
+(default EvenOdd); `PreparedScene.glyph_fill_rule` records it. The shape winding
+override does not silently change this policy. The shared curve tolerance is in
+EM units when used for glyphs, and in shape twips when used for shape meshes.
+Native fill/rasterization, hinting and antialiasing parity remain unverified.
+
+This stage does not apply field-bounds clipping or draw an optional EditText
+border. It preserves `TextBoundsClippingNotApplied`, `TextBorderNotPrepared`,
+`FontRasterizationUnverified` and `SavedTextStateOnly` limitations for the adapter.
+A laid-out empty string is a successful zero-glyph layout. A failed glyph remains
+a referenced cache entry with decode/tessellation issues; it does not become a
+rectangle, replacement character or substitute font. Consumers must inspect
+text layout errors, font-binding issues, font issues and glyph issues as well as
+ordinary shape/texture preparation issues.
 
 ## Image resolution and sampling boundaries
 
@@ -66,8 +132,9 @@ does not probe cache paths or substitute another mip.
 Preparation preserves filters, non-normal blend modes, scaling grids, bitmap
 cache requests, opaque backgrounds, morph ratios, scene unsupported markers,
 bound actions and all unbound/opaque script records. Those behaviors are not
-silently called implemented. Text nodes retain their real `DefinitionRef` and
-`TextNotPrepared`; the independent glyph/layout modules can extend this bridge.
+silently called implemented. Unsupported text nodes retain their real
+`DefinitionRef`, typed layout error or decode issue, and `TextNotPrepared`.
+Prepared saved plain text retains the limitations described above.
 Direct bitmap instances retain image bindings but have
 `DirectBitmapGeometryNotPrepared`, because this module does not manufacture a
 quad or use a definition's bounds as a visual substitute.
@@ -83,9 +150,14 @@ login screen. There is no overall `complete=true` claim.
 Defaults: 100,000 nodes, 4,096 mesh records, 16,384 bitmap bindings, 4,096 texture
 records, 2,000,000 triangles, 256 MiB decoded RGBA, 64 MiB selected shape bodies,
 2,000,000 shape records/edges and 32 bitmap import hops. Import hops are capped
-at 256. Existing shape/texture/tessellation input and work bounds also apply.
-Triangle counts cover unique cached meshes; decoded bytes cover unique cached
-textures. The total RGBA budget is checked before inline pixel allocation.
+at 256. Text adds 4,096 text records, 128 fonts, 16,384 glyph meshes, 16 MiB
+of text tag bodies, 64 MiB of font tag bodies, 2,000,000 glyph records/edges and
+1,000,000 cached glyph placements. Before layout, source scalar count is a
+conservative placement-budget preflight (line separators also count there).
+Existing shape/texture/text/font/tessellation input and work bounds also apply.
+Triangle counts cover both unique shape and glyph meshes; placement counts cover
+unique cached layouts, not repeated display instances. Decoded bytes cover unique
+cached textures. The total RGBA budget is checked before inline pixel allocation.
 
 Source identity conflicts, invalid tessellation options and budget exhaustion
 return an error without a successful partial result. Recoverable asset-specific
@@ -94,7 +166,7 @@ parse, tessellation, binding or decoding failures remain explicit
 budget diagnostics are treated as fatal limits, rather than skipped geometry.
 The caches do not mutate the supplied AssetSet, MovieLibrary or Scene.
 
-## Actual-file smoke
+## Initial shape/image actual-file smoke
 
 **VERIFIED (CPU preparation only):** the private smoke loaded the selected
 frontend, manager and font archives, created a `MovieLibrary` without logical
@@ -108,8 +180,8 @@ prepared the actual login, character-select and manager content.
 | frontend_manager | 6 | 1 | 2 | 1 | 16,384 | 5 |
 
 All three preparations had zero asset preparation issues. No selected shape had
-stroke edges in these snapshots. Login retains 33 unprepared text nodes and
-character-select retains 17; scripts and other per-node limitations remain
+stroke edges in these snapshots. That earlier bridge retained 33 unprepared text nodes in login and
+17 in character-select; scripts and other per-node limitations remain
 explicit. Login's used imported bitmap `movie 13 / character 71` resolved through
 the exact library binding to `!UISource`, `movie 19 / character 44`, and decoded
 its referenced texture. These movie numbers are local indices of the retained
@@ -139,14 +211,66 @@ Private evidence under
 `verification.json`. Original client packages and decoded image bytes stay
 private; neither is a repository or distributable asset.
 
+## Saved EditText actual-file smoke
+
+**VERIFIED (CPU preparation only):** the extension smoke used the same three
+private packages and first-frame snapshots, first without logical aliases and
+then with caller-supplied `MarvelFonts.gfxfontlib -> MarvelFonts.fonts_en`.
+This is an explicit English diagnostic selection, not native locale detection.
+
+| Actual movie | Text instances / definitions | Ready saved layouts | Unique ready glyph meshes | Cached / instanced glyph placements | Combined shape + glyph triangles | Typed layout failures |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| marvel_login_dialog | 33 / 21 | 16 | 51 | 142 / 243 | 30,406 | 5 HTML |
+| marvel_character_select | 17 / 17 | 10 | 39 | 101 / 101 | 23,874 | 6 HTML, 1 wrapping required |
+| frontend_manager | 0 / 0 | 0 | 0 | 0 / 0 | 2 | 0 |
+
+Each populated snapshot used two exact resolved fonts. There were no glyph,
+font, or text asset-preparation issues beyond the separately retained typed
+layout failures. Every cached glyph mesh was ready; empty/space geometry remains
+an empty original glyph, without substitute quads. Without a caller font route,
+no text layout succeeded: login retained 16 unresolved font bindings plus its
+five HTML failures; character select retained 11 unresolved bindings plus its
+six HTML failures. The route was never guessed.
+
+The smoke checked exact cache identities, every text/glyph index, original saved
+color and font identity, preserved action/opaque records, and affine placement
+against `EditTextLayout::position` at an integer EM probe point for every placed
+glyph. The focused unit test independently checked fractional baselines and EM
+scaling before a rotated/scaled world transform. Its one selected test passed;
+no routine full suite was run.
+
+Zero text/font/glyph-cache, text-byte/font-byte, glyph-record and
+placement budgets rejected the actual login scene. Zero font import hops and a
+combined triangle ceiling equal to the earlier shape-only total also rejected
+preparation; glyph work cannot escape the shared triangle budget. All smoke
+commands exited successfully. Password rejection remains covered by the existing
+layout module's typed policy, not an observed password flag in these selected
+first-frame fields.
+
+All 33 login and 17 character-select text instances retained
+`effective_visible=true` from the serialized structural snapshot. This is not a
+claim about initialized or script-controlled visibility. No VM update,
+localization, input, native render comparison, GPU result or retail UI behavior
+was tested in this extension.
+
+Private evidence: `evidence/scene-edittext/{smoke.rs,smoke.tsv,details.txt,`
+`focused-test.txt,source-snapshot.json,verification.json}`. The receipt pins the
+actual input hashes, exact original-project source snapshot, compiled smoke and
+focused test. The snapshot supplies existing glyph/layout module hooks privately;
+this increment changes only this document and `src/frontend/scene_content.rs`.
+
 ## Sources and provenance
+
+The saved text extension also reads original project `docs/MOVIE_LIBRARY.md` and
+`docs/REA_NATIVE_ALTERNATIVE.md` for the explicit font-route boundary. It does not
+claim new native observations from those records.
 
 This is original glue around the project's original modules; no third-party
 implementation was studied or copied for this increment.
 
 | Input read | Ownership / licence | Use |
 | --- | --- | --- |
-| Project `src/frontend.rs`, `src/frontend/library.rs`, `src/gfx/{scene,shapes,tessellate}.rs`, `src/texture.rs`, `src/texture_cache.rs`, `src/upk.rs` and module declarations | Original project code; underlying source studies retain their existing PROVENANCE entries | Existing APIs, explicit identity, metadata, decode and budget behavior |
+| Project `src/frontend.rs`, `src/frontend/library.rs`, `src/gfx/{scene,shapes,tessellate,text,glyphs,edit_layout}.rs`, `src/texture.rs`, `src/texture_cache.rs`, `src/upk.rs` and module declarations | Original project code; underlying source studies retain their existing PROVENANCE entries | Existing APIs, explicit identity, metadata, decode and budget behavior |
 | Private `evidence/frontend-import-library-smoke.json` and original `evidence/frontend-movie-dependencies.rs` | Original project findings/harness | Select the already established private package inputs and lookup identities |
 | Private pins `alienware-candidate/.../MarvelFrontEnd_SF.upk`, `frontend-startup/.../MarvelGame.upk`, `frontend-fonts/.../MarvelFonts_SF.upk` | Proprietary game files, owner-authorized compatibility study | Actual scene/asset preparation and limits checks only |
 

@@ -3,11 +3,14 @@
 
 use super::library::{MovieLibrary, Resolution, SymbolBinding};
 use super::{AssetLocation, AssetSet, ImageBinding, ImageResolution};
+use crate::gfx::edit_layout::{self, EditLayoutError, EditTextLayout};
+use crate::gfx::glyphs::{FontIdentity, GlyphMesh, GlyphOutline, OutlineLimits, ResolvedFont};
 use crate::gfx::scene::{
-    ActionNode, DefinitionRef, MovieId, NodeId, OpaqueNode, Scene, SceneNode, TagRef,
+    ActionNode, Affine, DefinitionRef, MovieId, NodeId, OpaqueNode, Scene, SceneNode, TagRef,
 };
-use crate::gfx::shapes::{self, Fill, Shape};
+use crate::gfx::shapes::{self, Color, Fill, FillRule, Shape};
 use crate::gfx::tessellate::{self, Mesh};
+use crate::gfx::text::{EditText, FontDefinition};
 use crate::gfx::{CharacterKind, TagData};
 use crate::texture::{BulkPayload, Descriptor, RgbaImage};
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,6 +20,14 @@ use std::io;
 pub struct Limits {
     pub max_nodes: usize,
     pub max_meshes: usize,
+    pub max_texts: usize,
+    pub max_fonts: usize,
+    pub max_glyphs: usize,
+    pub max_text_bytes: usize,
+    pub max_font_bytes: usize,
+    pub max_glyph_records: usize,
+    pub max_glyph_placements: usize,
+    pub glyph_fill_rule: FillRule,
     pub max_images: usize,
     pub max_textures: usize,
     pub max_triangles: usize,
@@ -31,6 +42,14 @@ impl Default for Limits {
         Self {
             max_nodes: 100_000,
             max_meshes: 4096,
+            max_texts: 4096,
+            max_fonts: 128,
+            max_glyphs: 16_384,
+            max_text_bytes: 16 * 1024 * 1024,
+            max_font_bytes: 64 * 1024 * 1024,
+            max_glyph_records: 2_000_000,
+            max_glyph_placements: 1_000_000,
+            glyph_fill_rule: FillRule::EvenOdd,
             max_images: 16_384,
             max_textures: 4096,
             max_triangles: 2_000_000,
@@ -45,6 +64,12 @@ impl Default for Limits {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PreparationStage {
+    TextDecode,
+    FontBinding,
+    FontDecode,
+    TextLayout,
+    GlyphDecode,
+    GlyphTessellation,
     ShapeDecode,
     Tessellation,
     BitmapBinding,
@@ -86,6 +111,10 @@ pub enum Limitation {
     OpaqueBackgroundNotApplied,
     MorphRatioNotApplied(u16),
     TextNotPrepared,
+    SavedTextStateOnly,
+    TextBoundsClippingNotApplied,
+    TextBorderNotPrepared,
+    FontRasterizationUnverified,
     DirectBitmapGeometryNotPrepared,
     UnresolvedOrNonDisplayContent,
 }
@@ -104,6 +133,8 @@ pub struct PreparedNode {
     /// Complete structural instance, including masks, raw placement and source IDs.
     pub instance: SceneNode,
     pub content: NodeContent,
+    /// Text cache entry, including explicit unsupported or failed text records.
+    pub text: Option<usize>,
     pub limitations: Vec<Limitation>,
 }
 
@@ -115,6 +146,57 @@ pub struct MeshAsset {
     pub mesh: Option<Mesh>,
     /// Aligned with mesh.fills; Some references the local movie bitmap-ID cache.
     pub fill_images: Vec<Option<usize>>,
+    pub issues: Vec<PreparationIssue>,
+}
+
+/// Exact local font reference and its library-resolved target. No fallback.
+#[derive(Clone, Debug)]
+pub struct FontBinding {
+    pub movie_id: MovieId,
+    pub character_id: u16,
+    pub import_chain: Vec<SymbolBinding>,
+    pub font: Option<usize>,
+    pub issues: Vec<PreparationIssue>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FontAsset {
+    pub definition: DefinitionRef,
+    pub font: Option<FontDefinition>,
+    pub issues: Vec<PreparationIssue>,
+}
+
+/// A cached original glyph in font EM units with a neutral white fill.
+/// TextGlyph.color supplies the saved paint BEFORE the scene color transform.
+#[derive(Clone, Debug)]
+pub struct GlyphAsset {
+    pub font: FontIdentity,
+    pub glyph_index: usize,
+    pub outline: Option<GlyphOutline>,
+    pub mesh: Option<GlyphMesh>,
+    pub issues: Vec<PreparationIssue>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextGlyph {
+    pub layout_index: usize,
+    pub glyph: usize,
+    /// EM -> field-local twips; compose world_matrix.compose(local_matrix).
+    pub local_matrix: Affine,
+    /// None is unresolved paint, never an implied white/black default.
+    pub color: Option<[u8; 4]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextAsset {
+    pub definition: DefinitionRef,
+    pub field: Option<EditText>,
+    pub font_binding: Option<FontBinding>,
+    /// Original saved initial plain text only. No localization or VM updates.
+    pub layout: Option<EditTextLayout>,
+    pub layout_error: Option<EditLayoutError>,
+    /// Aligned with layout.glyphs; failed geometry remains a referenced cache entry.
+    pub glyphs: Vec<TextGlyph>,
     pub issues: Vec<PreparationIssue>,
 }
 
@@ -156,6 +238,10 @@ pub struct Statistics {
     pub shape_bytes: usize,
     pub shape_records: usize,
     pub stroke_edges_not_expanded: usize,
+    pub text_bytes: usize,
+    pub font_bytes: usize,
+    pub glyph_records: usize,
+    pub glyph_placements: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -163,6 +249,10 @@ pub struct PreparedScene {
     pub root: NodeId,
     pub nodes: Vec<PreparedNode>,
     pub meshes: Vec<MeshAsset>,
+    pub texts: Vec<TextAsset>,
+    pub fonts: Vec<FontAsset>,
+    pub glyphs: Vec<GlyphAsset>,
+    pub glyph_fill_rule: FillRule,
     pub images: Vec<BitmapAsset>,
     pub textures: Vec<TextureAsset>,
     pub actions: Vec<ActionNode>,
@@ -209,6 +299,10 @@ pub fn prepare(
             root: scene.root,
             nodes: Vec::new(),
             meshes: Vec::new(),
+            texts: Vec::new(),
+            fonts: Vec::new(),
+            glyphs: Vec::new(),
+            glyph_fill_rule: limits.glyph_fill_rule,
             images: Vec::new(),
             textures: Vec::new(),
             actions: scene.actions.clone(),
@@ -218,6 +312,9 @@ pub fn prepare(
             tessellation: limits.tessellation,
         },
         meshes: BTreeMap::new(),
+        texts: BTreeMap::new(),
+        fonts: BTreeMap::new(),
+        glyphs: BTreeMap::new(),
         images: BTreeMap::new(),
         textures: BTreeMap::new(),
         catalogs: BTreeMap::new(),
@@ -227,6 +324,7 @@ pub fn prepare(
             return Err(invalid("scene node index/identity mismatch"));
         }
         let mut limitations = node_limitations(node);
+        let mut text = None;
         let content = if let Some(definition) = node.kind.definition() {
             builder.check_definition(definition)?;
             match definition.kind {
@@ -247,7 +345,23 @@ pub fn prepare(
                     }
                 }
                 CharacterKind::Text => {
-                    limitations.push(Limitation::TextNotPrepared);
+                    let index = builder.text(definition)?;
+                    let asset = &builder.result.texts[index];
+                    if asset.layout.is_none() {
+                        limitations.push(Limitation::TextNotPrepared);
+                    } else {
+                        limitations.push(Limitation::SavedTextStateOnly);
+                        limitations.push(Limitation::TextBoundsClippingNotApplied);
+                        limitations.push(Limitation::FontRasterizationUnverified);
+                    }
+                    if asset
+                        .field
+                        .as_ref()
+                        .is_some_and(|field| field.flags.border())
+                    {
+                        limitations.push(Limitation::TextBorderNotPrepared);
+                    }
+                    text = Some(index);
                     NodeContent::Text { definition }
                 }
                 CharacterKind::Sprite => NodeContent::Group,
@@ -265,6 +379,7 @@ pub fn prepare(
         builder.result.nodes.push(PreparedNode {
             instance: node.clone(),
             content,
+            text,
             limitations,
         });
     }
@@ -310,6 +425,9 @@ struct Builder<'a> {
     limits: Limits,
     result: PreparedScene,
     meshes: BTreeMap<(MovieId, u16), usize>,
+    texts: BTreeMap<(MovieId, u16), usize>,
+    fonts: BTreeMap<(MovieId, u16), usize>,
+    glyphs: BTreeMap<(FontIdentity, usize), usize>,
     images: BTreeMap<(MovieId, u16), usize>,
     textures: BTreeMap<AssetLocation, usize>,
     catalogs: BTreeMap<MovieId, Result<BTreeMap<u16, ImageBinding>, String>>,
@@ -450,6 +568,346 @@ impl Builder<'_> {
         }
         asset.shape = Some(shape);
         self.result.meshes.push(asset);
+        Ok(index)
+    }
+
+    fn text(&mut self, definition: DefinitionRef) -> io::Result<usize> {
+        let key = (definition.movie_id, definition.character_id);
+        if let Some(&index) = self.texts.get(&key) {
+            return Ok(index);
+        }
+        if self.result.texts.len() >= self.limits.max_texts {
+            return Err(invalid("scene-content text budget exceeded"));
+        }
+        let index = self.result.texts.len();
+        let mut asset = TextAsset {
+            definition,
+            field: None,
+            font_binding: None,
+            layout: None,
+            layout_error: None,
+            glyphs: Vec::new(),
+            issues: Vec::new(),
+        };
+        let movie = &self.library.entry(definition.movie_id).unwrap().asset.movie;
+        let tag = movie
+            .tags
+            .get(definition.tag_index)
+            .ok_or_else(|| invalid("text tag index out of bounds"))?;
+        add_budget(
+            &mut self.result.stats.text_bytes,
+            tag.body.len,
+            self.limits.max_text_bytes,
+            "text source byte",
+        )?;
+        if tag.code != 37 {
+            asset.issues.push(PreparationIssue::message(
+                PreparationStage::TextDecode,
+                "static or other text definition is not prepared by the EditText bridge",
+            ));
+        } else {
+            match EditText::parse(tag.body.bytes(movie.bytes())?, tag.body.offset) {
+                Err(error) => asset
+                    .issues
+                    .push(PreparationIssue::error(PreparationStage::TextDecode, error)),
+                Ok(field) => {
+                    if field.id != definition.character_id {
+                        return Err(invalid("decoded EditText ID differs from definition"));
+                    }
+                    // These unsupported formats are rejected by layout_initial before
+                    // font selection or content layout, including empty passwords.
+                    if !field.flags.password() && !field.flags.html() {
+                        if let Some(local_id) = field.font_id {
+                            asset.font_binding =
+                                Some(self.font_binding(definition.movie_id, local_id)?);
+                        }
+                        let potential = field.initial_text.as_deref().unwrap_or("").chars().count();
+                        if potential
+                            > self.limits.max_glyph_placements - self.result.stats.glyph_placements
+                        {
+                            return Err(invalid(
+                                "scene-content glyph placement preflight budget exceeded",
+                            ));
+                        }
+                    }
+                    let resolved = asset
+                        .font_binding
+                        .as_ref()
+                        .and_then(|binding| binding.font)
+                        .and_then(|index| {
+                            let cached = &self.result.fonts[index];
+                            cached.font.as_ref().map(|font| ResolvedFont {
+                                identity: FontIdentity {
+                                    movie_id: cached.definition.movie_id,
+                                    character_id: cached.definition.character_id,
+                                },
+                                definition: font,
+                            })
+                        });
+                    match edit_layout::layout_initial(&field, |id| {
+                        if Some(id) != field.font_id {
+                            return Err(EditLayoutError::UnresolvedFont { local_id: id });
+                        }
+                        resolved.ok_or(EditLayoutError::UnresolvedFont { local_id: id })
+                    }) {
+                        Err(error) => {
+                            if matches!(error, EditLayoutError::Limit(_)) {
+                                return Err(invalid(format!(
+                                    "scene-content text layout limit: {error}"
+                                )));
+                            }
+                            asset.layout_error = Some(error);
+                        }
+                        Ok(layout) => {
+                            add_budget(
+                                &mut self.result.stats.glyph_placements,
+                                layout.glyphs.len(),
+                                self.limits.max_glyph_placements,
+                                "glyph placement",
+                            )?;
+                            if field.color.is_none() && !layout.glyphs.is_empty() {
+                                asset.issues.push(PreparationIssue::message(
+                                    PreparationStage::TextLayout,
+                                    "saved text color is absent; paint must remain unresolved",
+                                ));
+                            }
+                            for (layout_index, glyph) in layout.glyphs.iter().enumerate() {
+                                let glyph_index = self.glyph(glyph.font, glyph.glyph_index)?;
+                                asset.glyphs.push(TextGlyph {
+                                    layout_index,
+                                    glyph: glyph_index,
+                                    local_matrix: edit_glyph_matrix(glyph),
+                                    color: glyph.color,
+                                });
+                            }
+                            asset.layout = Some(layout);
+                        }
+                    }
+                    asset.field = Some(field);
+                }
+            }
+        }
+        self.texts.insert(key, index);
+        self.result.texts.push(asset);
+        Ok(index)
+    }
+
+    fn font_binding(&mut self, movie_id: MovieId, character_id: u16) -> io::Result<FontBinding> {
+        let mut result = FontBinding {
+            movie_id,
+            character_id,
+            import_chain: Vec::new(),
+            font: None,
+            issues: Vec::new(),
+        };
+        let mut current = (movie_id, character_id);
+        let mut visited = BTreeSet::new();
+        loop {
+            if !visited.insert(current) {
+                result.issues.push(PreparationIssue::message(
+                    PreparationStage::FontBinding,
+                    "font import cycle",
+                ));
+                break;
+            }
+            let Some(entry) = self.library.entry(current.0) else {
+                result.issues.push(PreparationIssue::message(
+                    PreparationStage::FontBinding,
+                    "font target movie is absent",
+                ));
+                break;
+            };
+            let Some(character) = entry.asset.movie.dictionary.get(&current.1) else {
+                result.issues.push(PreparationIssue::message(
+                    PreparationStage::FontBinding,
+                    "font character is absent from dictionary",
+                ));
+                break;
+            };
+            if character.kind == CharacterKind::Imported {
+                if result.import_chain.len() >= self.limits.max_import_hops {
+                    return Err(invalid("scene-content font import budget exceeded"));
+                }
+                let Some(binding) = self.library.binding(current.0, current.1) else {
+                    result.issues.push(PreparationIssue::message(
+                        PreparationStage::FontBinding,
+                        "imported font has no declared library binding",
+                    ));
+                    break;
+                };
+                result.import_chain.push(binding.clone());
+                if let Resolution::Resolved {
+                    movie,
+                    character_id,
+                    ..
+                } = binding.resolution
+                {
+                    current = (movie, character_id);
+                    continue;
+                }
+                result.issues.push(PreparationIssue::message(
+                    PreparationStage::FontBinding,
+                    format!("font import unresolved: {:?}", binding.resolution),
+                ));
+                break;
+            }
+            if character.kind != CharacterKind::Font {
+                result.issues.push(PreparationIssue::message(
+                    PreparationStage::FontBinding,
+                    format!("text references {:?} instead of a font", character.kind),
+                ));
+                break;
+            }
+            let definition = DefinitionRef {
+                movie_id: current.0,
+                character_id: current.1,
+                tag_index: character.tag_index,
+                kind: character.kind,
+                bounds: character.bounds,
+            };
+            result.font = Some(self.font(definition)?);
+            break;
+        }
+        Ok(result)
+    }
+
+    fn font(&mut self, definition: DefinitionRef) -> io::Result<usize> {
+        let key = (definition.movie_id, definition.character_id);
+        if let Some(&index) = self.fonts.get(&key) {
+            return Ok(index);
+        }
+        if self.result.fonts.len() >= self.limits.max_fonts {
+            return Err(invalid("scene-content font budget exceeded"));
+        }
+        let movie = &self.library.entry(definition.movie_id).unwrap().asset.movie;
+        let tag = movie
+            .tags
+            .get(definition.tag_index)
+            .ok_or_else(|| invalid("font tag index out of bounds"))?;
+        add_budget(
+            &mut self.result.stats.font_bytes,
+            tag.body.len,
+            self.limits.max_font_bytes,
+            "font source byte",
+        )?;
+        let mut asset = FontAsset {
+            definition,
+            font: None,
+            issues: Vec::new(),
+        };
+        match FontDefinition::parse(tag.code, tag.body.bytes(movie.bytes())?, tag.body.offset) {
+            Ok(font) => {
+                if font.id != definition.character_id {
+                    return Err(invalid("decoded font ID differs from definition"));
+                }
+                asset.font = Some(font);
+            }
+            Err(error) => asset
+                .issues
+                .push(PreparationIssue::error(PreparationStage::FontDecode, error)),
+        }
+        let index = self.result.fonts.len();
+        self.fonts.insert(key, index);
+        self.result.fonts.push(asset);
+        Ok(index)
+    }
+
+    fn glyph(&mut self, identity: FontIdentity, glyph_index: usize) -> io::Result<usize> {
+        let key = (identity, glyph_index);
+        if let Some(&index) = self.glyphs.get(&key) {
+            return Ok(index);
+        }
+        if self.result.glyphs.len() >= self.limits.max_glyphs {
+            return Err(invalid("scene-content glyph mesh budget exceeded"));
+        }
+        let font_index = *self
+            .fonts
+            .get(&(identity.movie_id, identity.character_id))
+            .ok_or_else(|| invalid("layout font was not prepared"))?;
+        let font = self.result.fonts[font_index]
+            .font
+            .as_ref()
+            .ok_or_else(|| invalid("layout font has no decoded definition"))?;
+        let movie = &self.library.entry(identity.movie_id).unwrap().asset.movie;
+        let mut asset = GlyphAsset {
+            font: identity,
+            glyph_index,
+            outline: None,
+            mesh: None,
+            issues: Vec::new(),
+        };
+        let mut limits = OutlineLimits::default();
+        limits.max_records = limits
+            .max_records
+            .min(self.limits.max_glyph_records - self.result.stats.glyph_records);
+        match GlyphOutline::from_font_with_limits(font, glyph_index, movie.bytes(), limits) {
+            Err(error) => {
+                if error.to_string().contains("limit exceeded") {
+                    return Err(error);
+                }
+                asset.issues.push(PreparationIssue::error(
+                    PreparationStage::GlyphDecode,
+                    error,
+                ));
+            }
+            Ok(outline) => {
+                let records = outline
+                    .records
+                    .len()
+                    .checked_add(outline.edges.len())
+                    .ok_or_else(|| invalid("glyph record count overflow"))?;
+                add_budget(
+                    &mut self.result.stats.glyph_records,
+                    records,
+                    self.limits.max_glyph_records,
+                    "glyph record",
+                )?;
+                let mut options = self.limits.tessellation;
+                options.max_triangles = options
+                    .max_triangles
+                    .min(self.limits.max_triangles - self.result.stats.triangles);
+                // Shape winding override is separate from the explicit glyph policy.
+                options.fill_rule_override = None;
+                match outline.tessellate(
+                    Color {
+                        red: 255,
+                        green: 255,
+                        blue: 255,
+                        alpha: 255,
+                    },
+                    self.limits.glyph_fill_rule,
+                    options,
+                ) {
+                    Err(error) => {
+                        if error.to_string().contains("budget") {
+                            return Err(error);
+                        }
+                        asset.issues.push(PreparationIssue::error(
+                            PreparationStage::GlyphTessellation,
+                            error,
+                        ));
+                    }
+                    Ok(mesh) => {
+                        let count = mesh.mesh.fills.iter().try_fold(0usize, |total, fill| {
+                            total
+                                .checked_add(fill.indices.len() / 3)
+                                .ok_or_else(|| invalid("glyph triangle count overflow"))
+                        })?;
+                        add_budget(
+                            &mut self.result.stats.triangles,
+                            count,
+                            self.limits.max_triangles,
+                            "triangle",
+                        )?;
+                        asset.mesh = Some(mesh);
+                    }
+                }
+                asset.outline = Some(outline);
+            }
+        }
+        let index = self.result.glyphs.len();
+        self.glyphs.insert(key, index);
+        self.result.glyphs.push(asset);
         Ok(index)
     }
 
@@ -669,6 +1127,20 @@ impl Builder<'_> {
     }
 }
 
+/// The layout owns the exact rational pen; conversion happens only at this
+/// geometry boundary. No bounds-origin shift or implicit pixel conversion.
+fn edit_glyph_matrix(glyph: &edit_layout::EditGlyph) -> Affine {
+    let scale = f64::from(glyph.height_twips) / f64::from(glyph.units_per_em);
+    Affine {
+        a: scale,
+        b: 0.0,
+        c: 0.0,
+        d: scale,
+        tx: glyph.x.as_f64(),
+        ty: glyph.baseline.as_f64(),
+    }
+}
+
 fn rgba_bytes(width: u32, height: u32) -> io::Result<usize> {
     usize::try_from(width)
         .ok()
@@ -690,4 +1162,60 @@ fn add_budget(total: &mut usize, amount: usize, limit: usize, name: &str) -> io:
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gfx::Span;
+    use crate::gfx::edit_layout::{EditGlyph, TextSource, Twips};
+
+    #[test]
+    fn glyph_em_scale_and_fractional_baseline_precede_world_rotation() {
+        let glyph = EditGlyph {
+            source: TextSource {
+                bytes: 0..1,
+                utf16: 0..1,
+                movie_bytes: None,
+            },
+            unicode: 'A',
+            code: 65,
+            glyph_index: 4,
+            shape_source: Span { offset: 0, len: 0 },
+            font: FontIdentity {
+                movie_id: 3,
+                character_id: 9,
+            },
+            local_font_id: 2,
+            line_index: 0,
+            x: Twips {
+                numerator: 1025,
+                denominator: 2048,
+            },
+            baseline: Twips {
+                numerator: -7169,
+                denominator: 2048,
+            },
+            advance: Twips {
+                numerator: 0,
+                denominator: 2048,
+            },
+            height_twips: 25,
+            units_per_em: 1024,
+            color: Some([17, 31, 42, 64]),
+        };
+        let world = Affine {
+            a: 0.0,
+            b: 2.0,
+            c: -3.0,
+            d: 0.0,
+            tx: 100.0,
+            ty: 200.0,
+        };
+        let point = world
+            .compose(edit_glyph_matrix(&glyph))
+            .transform(20.0, -30.0);
+        // Exact rational reference: local (2025,-8669)/2048 twips.
+        assert_eq!(point, [100.0 + 26007.0 / 2048.0, 200.0 + 4050.0 / 2048.0]);
+    }
 }
