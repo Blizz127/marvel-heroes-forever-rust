@@ -7,6 +7,16 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev22 diagnostic increment
 
+**VERIFIED private staging, 13:51 UTC:** all 429 packaged file sizes/hashes and
+the complete file set pass, with packaged version and Original-preset readback.
+Private path: `builds/0.1.0-dev.22`. Clean package source is
+`87f4d80ebef992c271acf468b8ed05c94b7c8ec4`; only documentation differs from the
+tested source below. Manifest SHA-256:
+`338629b703590bd8b85b058834dd3fb77a72fd75016c860caa8f06c137d76de2`.
+Receipt: `evidence/build-0.1.0-dev.22-package-validation.json`. Coordinator intake
+is queued and supersedes dev21's Rust diagnostic only. Publication and owner-device
+validation remain unconfirmed; no retail tile or service was changed.
+
 **VERIFIED combined build/startup:** clean source
 `25a6e6abc9caca8565ac32db70306c14d66e43a3` builds with the window feature in
 32.39 seconds without warnings. All seventeen focused CLI/image checks pass,
