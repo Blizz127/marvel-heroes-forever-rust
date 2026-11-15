@@ -297,3 +297,191 @@ changed no configuration and ran no original executable.
 
 All project documentation added here is original analysis prose. No reference
 implementation or recovered client function was copied into client source.
+
+## First startup `ASSetPropFlags` call: scope, flags and return
+
+This follow-up resolves the earlier visitor-scope, flag-name, binding-consumer
+and default-return limits above. It does not resolve every argument coercion or
+every native object class. The AVM1 lane identified the motivating call at
+manager movie offset 12,374 as `(gfx.core.UIComponent.prototype, null, 1)` with
+three arguments. Its prototype was replaced by `ActionExtends` at movie offset
+8,705, whose superclass is `MovieClip`.
+
+**VERIFIED (static native control flow):** The null selector visits the
+`Extends`-created prototype's own stored members, including members already
+excluded from enumeration. It does not traverse the prototype chain or invoke
+member getters. Setting numeric flag `1` makes these members non-enumerable.
+The registered native function leaves an `Undefined` result, which the
+`CallFunction` handler copies onto the operand stack.
+
+### Binding the actual prototype to the visitor
+
+The raw opcode `0x69` table entry at `0x14020d4f0` points to `0x14020c4a4`,
+which calls `0x1401e9d80`. Its successful extension path allocates an object and
+calls constructor `0x1401e4310` at `0x1401e9fb2`. That constructor installs
+interface vtable `0x142513cd0` at object offset `0x20`; slot `0x40` contains
+`0x1401924c0`, the complete member visitor recovered here. The new object is
+passed to the subclass prototype-assignment helper `0x1401911c0` at
+`0x1401e9fca`. This ties the scope proof to the class used by the startup call,
+rather than assuming that every native object shares one implementation.
+
+The visitor at `0x1401924c0..0x1401926d4` walks occupied entries in the hash table
+at interface offset `0x18`. Its precise option handling is:
+
+| Visitor option | Native behavior | Null-selector option `0x0c` |
+| --- | --- | --- |
+| `0x04` | Include stored entries whose property flags contain `0x01`; otherwise skip them at `0x140192582..0x14019258b` | Included |
+| `0x08` | For special value tag `0x0a`, pass a temporary tag-zero value instead of resolving it through object virtual getter `0x58` | Resolution skipped |
+| `0x01` | After own entries, recursively call the linked prototype's visitor at `0x140192687..0x1401926c4` | No recursion |
+
+Other stored values are passed directly to the callback. The flags callback
+`0x140179ef0` uses the member name and current flags, computes the already
+verified mask expression, and invokes the flags setter; it does not consume the
+member value. Thus this operation does not execute accessor getters. The
+special internal tag `0x0a` is deliberately not assigned an accessor type name
+here. Native builtins represented by own stored entries are included; properties
+absent from the own hash are not synthesized by this visitor. This distinction
+prevents an unsupported claim that all native builtins are visited.
+
+### Numeric flag effects
+
+These public names describe effects traced through the same prototype's native
+virtual methods, rather than names guessed from the mask arithmetic.
+
+| Mask | Effect | Native consumer |
+| --- | --- | --- |
+| `1` | `dontEnum`: suppress enumeration | Raw `Enumerate`/`Enumerate2` reach `0x140208bf0`, which calls the visitor with options `0x0b` at `0x140208e61`. Option `0x04` is absent, so the visitor skips entries carrying property flag `1`. Its callback `0x140188340` pushes visited member names. |
+| `2` | `dontDelete`: reject deletion | Raw `Delete` (`0x3a`) reaches `0x14020a269` and object slot `0x30`. This prototype binds that slot to `0x1401b8040`; its test at `0x1401b8090` returns false before removal when flag `2` is set. |
+| `4` | `readOnly`: reject assignment | Raw `SetMember` (`0x4f`) reaches `0x14020b571`; its general member path calls object slot `0x18` at `0x14020b6a3`. This prototype binds that slot to `0x1401a1020`; the test at `0x1401a11da` returns false before value assignment when flag `4` is set. |
+
+These are scoped behaviors for the recovered stored-member paths. Array index
+fast paths, absent-member deletion results, arbitrary native subclasses, and
+all inherited accessor cases have not been established by this flag proof.
+
+### Registered binding and return value
+
+The native registration consumer is now recovered: `0x14020f6a1` loads the
+name/callback table beginning at `0x142adc940`, and `0x1401e9bd0` consumes its
+16-byte pairs. The previously observed `ASSetPropFlags` pair at `0x142adca70`
+therefore has an actual consumer. The loop creates a function object with
+vtable `0x1425150c0`, places callback `0x1401cb620` at object offset `0x68`, and
+registers its named function value. This supersedes the earlier inference from
+adjacent pointers alone.
+
+The raw `CallFunction` handler initializes its local result to value tag zero at
+`0x14020a78e`, puts its address into call-structure offset `0x08`, and invokes the
+function object's slot `0x50`. That slot resolves to wrapper `0x14018c5b0`;
+both wrapper branches preserve the same result pointer when invoking the native
+callback. `ASSetPropFlags` does not access the result field, and call-structure
+cleanup does not modify it. The handler copies the result to the operand stack
+at `0x14020a8a8..0x14020a8b2`.
+
+The tag name has an independent opcode anchor: raw `Push` (`0x96`) subtype `3`
+writes internal tag zero at `0x14020cc82`, while subtype `2` writes internal tag
+one at `0x14020caea`. The Adobe SWF v19 operand table names these subtypes
+`Undefined` and `null`, respectively. Consequently the unchanged return is
+`Undefined`, and the earlier null-selector tag-one interpretation is also
+grounded. This uses the primary specification citation already read by the
+AVM1 lane; this helper did not reopen or copy the specification.
+
+### Receipts and remaining limits
+
+Seven complete REA records are retained in
+`evidence/rea-native-alternative/asflags-scope-final.bundle.json` (SHA-256
+`924946c886060bb00a71eb22bed863a99511d228f8a671ee1791bf9febfb074b`).
+The private `asflags-scope-proof-receipt.json` lists the commands, exact
+addresses, limitations and validation results. The separate five-record return
+study is retained in `evidence/rea-asflags-followup-return/final.bundle.json`
+with its detailed `finding-summary.json`.
+
+| Result | REA Evidence ID |
+| --- | --- |
+| Complete own-member visitor and flags setter | `ev_98b99cd0c3a2d13784a9234ec13683d46c66d31af33997387bd8ee3e12bb26e7` |
+| Enumeration helper, raw Extends dispatch and base constructor | `ev_08e85d17a2f786f20e56b1e529d18ae148f9481d8ad5c4fb86e70d35ea829f04` |
+| Extends allocation path and deletion flag check | `ev_2d00d168d94ae46572e5953c919b32938697f5b31f0bdde53b5d04693991762b` |
+| Exact prototype constructor/vtable and name-enumeration callback | `ev_b86d375ba8c9ca1cdfd66172094d00fc60a72a691fd09a3e93dbfebeddf0b700` |
+| Complete assignment method and raw Delete case | `ev_820980a2b7e2c4340592ed0dcd933652c281056d7b90c1a3849e64a5d1a0564a` |
+| General SetMember virtual call and exact Delete/SetMember dispatch entries | `ev_403f108412a6bdc90b4eaaa9f9b12465557a439946b5b57a15a99daec08138bc` |
+| CallFunction result initialization and result copy | `ev_e89e7eb58f807a894f6625381f61cf4bb1cf0841476ede648ed737eed353bfea` |
+| Registration consumer, native wrapper and Push tag mapping | `ev_baa1bc0e27483ab8df8eee94de03d3795c651dc840a70de0902a005289939e72` |
+
+All scope and return calls completed with exit code zero, untruncated output and
+the original target hash unchanged. Both investigations exported and reset
+their REA state. Some bounded windows include adjacent functions, padding or a
+partial final instruction; claims use only the stated complete instructions
+and followed branches. The automatic string-region warnings do not imply a
+complete global string search.
+
+The three-argument default clear mask still depends on the environment byte at
+offset `0xf0`: zero except when that byte equals five, when the clear mask is
+seven. A two-call follow-up establishes that the byte initializes to zero and
+is refreshed when the target at environment offset `0xe0` changes or is restored.
+The exact getter `0x140099650` calls target slot `0x208`, then the returned
+object's slot `0x20`; the low result byte is cached. Receipts are in
+`evidence/rea-asflags-followup-version/finding-summary.json` and
+`final.bundle.json` (two complete records, unchanged target). Its relation to
+the SWF version remains unproved at this checkpoint. This is an
+explicit remaining dependency, not permission to replace it silently with a
+movie-header byte. No retail executable was run, no runtime parity was claimed,
+and no game data or recovered implementation entered this repository.
+
+### Extends metadata and ordinary flag preservation
+
+**VERIFIED (static native setup):** Both metadata members created on the new
+prototype start with flags `3` (`dontEnum | dontDelete`). Constructor parent
+setter `0x14018edf0` supplies flags `3` and a special tag-`0x0a` value for the
+interned `__proto__` key, then stores the linked parent at interface offset
+`0x10`. The subsequent Extends helper `0x14018ec90` supplies flags `3` and a
+function value for `__constructor__`. Both use the raw member setter slot
+`0x50` on the new object.
+
+The names have an independent interned-table anchor: constructor `0x1401d4490`
+constructs the builtin string array at offset `0x138`. Array constructor
+`0x140181020` passes literal pointer table `0x142add2e0`, count `0x9c`, to
+`0x140097f70`, whose loop interns consecutive pointers into consecutive
+eight-byte destination slots. Exact literal-pointer reads at `0x142add550` and
+`0x142add560` identify `__proto__` and `__constructor__`, giving the member
+offsets `0x3a8` and `0x3b8` used by those setters. The flags-setting call's null
+visitor includes these own stored members even though they are already hidden.
+Consequently the unproved clear-mask choice is material for the real first
+call: old flags `3`, set mask `1` produce `3` with clear mask zero and `1` with
+clear mask seven. Equality on flags initially zero is insufficient to remove
+this startup dependency.
+
+The ordinary value-assignment helper `0x14018d9d0` copies the value tag and
+payload without writing property-flags byte `+1`. Its old-value cleanup
+`0x1401887a0..0x1401888bb` also leaves that byte untouched on every recovered
+return path: it modifies payload slots and referenced-object reference counts,
+and passes referenced objects rather than the destination value to cleanup
+callees. This supports preserving flags on ordinary well-formed stored-value
+updates, including string/object/function replacements. It does not establish
+all property accessor, watch callback or inherited-write semantics.
+
+Private supporting evidence:
+
+- `evidence/rea-native-alternative/extends-baseline-final.bundle.json`,
+  `ev_b1581a5e345f23786489233d0206cad994918ebfca3304e02b1d2abea26eef0f`:
+  both complete metadata setters and initial flag arguments.
+- `evidence/rea-native-alternative/extends-name-binding-final.bundle.json`,
+  `ev_88b1ea56646a79ebfe7b823771f0b22d29b8e6c8bfcb4dcc64a0c4dca32602b4`
+  and `ev_5de603be82d92b5907b35369248200732fda049b1d4c60fe5880ced8d9b92b76`:
+  interned array construction/order, literal pointers/names, and complete
+  value-cleanup control flow. Data after cleanup's last return is its dispatch
+  table, not additional executed instructions.
+- `evidence/rea-asflags-followup-return/assignment-flags-summary.json`:
+  saved assignment-helper paths, now complemented by the cleanup evidence.
+
+All three added REA calls completed without truncation, exited zero and
+preserved the target hash; their sessions were exported/reset. The final
+name-binding call also contains a separate, explicitly preliminary MovieDef
+constructor lead for the continuing cached-byte investigation.
+
+Additional provenance for this follow-up: the AVM1 lane's already-read Adobe
+*SWF File Format Specification v19*, Chapter 5 `ActionPush`, printed page 69 /
+PDF page 71, [primary specification mirror](https://open-flash.github.io/mirrors/swf-spec-19.pdf#page=71)
+(Copyright 2006–2012 Adobe Systems Incorporated, all rights reserved; study
+only), supplies the raw operand names. Existing project AVM1 notes and private
+startup observations identify the first call and its `Extends` construction;
+they are project-owned investigation records with their own source ledgers.
+All other outside inputs are the same executable, installed tools and REA
+guidance listed in the provenance table above.
