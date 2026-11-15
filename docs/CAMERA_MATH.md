@@ -325,10 +325,68 @@ external engine source, third-party math implementation or web source was used.
 Exact paths, tool versions, hashes and private source-ledger receipts accompany
 the evidence and can be added to the integrator-owned provenance index.
 
+## Original explicit-input module
+
+`src/camera.rs` implements the supported contract without dependencies. It owns
+an originally generated sine table and exposes raw `RotatorWords([i32;3])`,
+`Pose`, row-major `Matrix4`, `DepthRange`, `FovAxis`, `ProjectionProfile` and
+`ProjectionInput`. No camera position, rotation, FOV, viewport or depth is
+selected by the module. `CameraMath::new()` constructs only the math context;
+its Default implementation does the same.
+
+```text
+CameraMath::sin_cos(word)                         -> (f32, f32)
+CameraMath::rotation_translation(pose)            -> Result<Matrix4, CameraError>
+CameraMath::inverse_rotation(raw_words)           -> Result<Matrix4, CameraError>
+CameraMath::view(pose)                            -> Result<Matrix4, CameraError>
+CameraMath::projection(input, caller_tangent)     -> Result<Matrix4, CameraError>
+half_fov_radians(explicit_fov_degrees)             -> Result<f32, CameraError>
+```
+
+The projection callback is `FnMut(f32) -> f32`, called for Y then X, even when
+the angles agree. This makes the tangent implementation an explicit caller
+choice. Passing Rust `f32::tan` uses platform math and carries no native CRT
+precision claim. The supported profile is Unconstrained with explicit X, Y or
+Major axis. ConstrainedAspect preserves its supplied aspect but returns
+`UnresolvedConstrainedViewport`; it never substitutes a guessed crop or silently
+uses unconstrained math.
+
+The implementation validates finite position and FOV, strictly positive viewport
+dimensions and near depth, far≥near, finite positive tangent results, and every
+returned matrix entry. Equal near/far selects the recovered Q constant. It
+rejects arithmetic overflow rather than returning a nonfinite matrix. These are
+deliberate finite-input API boundaries; the original native forward constructor
+would copy nonfinite position words, which this API rejects. No claim is made
+about native error handling outside the supported input domain.
+
+**VERIFIED focused implementation checks:** the standalone module compiled with
+rustc 1.98.1 on x86_64 Linux, and the private harness compiled at optimization
+level 2. Its generated table agrees in all 16,384 words with the frozen static
+replay. Independently authored instruction interpreters, which did not read the
+Rust module, supplied forward/inverse/view/projection oracles. The Rust harness
+matches 77 checks and 1,061 words: 24 finite forward matrices, 16 inverse matrices,
+16 view matrices, nine caller projection matrices, nine half-angle values and
+three direct-helper depth subsets. The last three compare only the four depth
+entries, because the direct helper fixtures have independent half-angles/scales
+outside the public caller profile. Deterministic supplied tangent values make
+the arithmetic comparison independent of the host's math library.
+
+Eight native forward fixtures with nonfinite translations are correctly rejected
+by the finite API. Thirteen further boundary checks cover equal-depth success,
+invalid position/FOV/viewport/depth/aspect/tangent, unresolved constrained profile
+and computed view/projection overflow. No routine suite, renderer, native camera
+call or live client was run. `rust-oracle-check.json`, `rust-table-check.json`,
+`validation-boundaries.txt`, the private original harness and frozen oracle
+receipts retain the exact inputs, source hashes and limitations. These checks
+were performed before the integrator's module-export hook; no full application
+build is asserted by this lane.
+The private `implementation-receipt.json` SHA256 is
+`00e3ffcf2895d97a3695c582d714448e680e70435a0a0561f19fbd01074cc0e3`.
+
 **Still unresolved:** live camera selection and modifiers; effective FOV/aspect/
 near settings; camera animation and missing move-axis171; viewport scalar `s`;
 the output target; loaded CRT tangent precision; runtime floating-point state;
-and rendered behavior. A next original Rust increment may implement the explicit
-finite-input rotation/view/projection contract, with the tangent precision and
-unsupported crop policy stated. It must not present the resulting camera as the
-active retail Vista or a completed 3D frontend.
+and rendered behavior. The original module implements the explicit finite-input
+rotation/view/projection contract with tangent precision and unsupported crop
+policy stated. It does not establish the active retail Vista or a completed 3D
+frontend.
