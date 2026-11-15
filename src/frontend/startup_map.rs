@@ -1,7 +1,9 @@
 //! Saved frontend Kismet preparation. No scheduling, defaults or import loading.
 use crate::upk::{
     Package, PackageArchive,
+    level::{LevelLinkSlot, LevelObject},
     objects::{self, Property, PropertyList, Span, Value},
+    world::{WorldLinkSlot, WorldObject},
 };
 use std::{
     cell::Cell,
@@ -246,6 +248,305 @@ pub struct StartupMap {
     pub unprepared_targets: Vec<UnpreparedTarget>,
     pub usage: Usage,
 }
+
+/// A native field's span is relative to its owning export, without a property tag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeOrigin {
+    pub export_index: usize,
+    pub serial_offset: usize,
+    pub encoded_value: Span,
+}
+impl NativeOrigin {
+    pub fn logical_value_offset(&self) -> Option<usize> {
+        self.serial_offset.checked_add(self.encoded_value.offset)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeReference {
+    pub value: ObjectReference,
+    pub origin: NativeOrigin,
+}
+
+/// The native GetGameSequence rule uses only the first +0xe8 array element.
+/// Later nonnull elements never replace an empty array or its first null entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MainSequence {
+    EmptyArray,
+    FirstNull {
+        link: NativeReference,
+    },
+    Local {
+        link: NativeReference,
+        /// Zero-based export index; the encoded reference itself is one-based.
+        export_index: usize,
+        /// Index within WorldStartupMap::inventory.sequences.
+        inventory_index: usize,
+    },
+}
+
+/// Explicit saved World -> PersistentLevel -> first game-sequence selection.
+/// This does not establish the runtime current Level or execute any sequence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldStartupMap {
+    pub world_identity: Reference,
+    pub world_class_identity: Reference,
+    pub world: WorldObject,
+    pub persistent_level: NativeReference,
+    pub level_identity: Reference,
+    pub level_class_identity: Reference,
+    pub level: LevelObject,
+    pub main_sequence: MainSequence,
+    /// The unchanged all-export inventory, including sequences outside this route.
+    pub inventory: StartupMap,
+    /// Aggregate work, including the two native exports and all inventory work.
+    pub usage: Usage,
+}
+
+impl WorldStartupMap {
+    pub fn selected_sequence(&self) -> Option<&Sequence> {
+        match self.main_sequence {
+            MainSequence::Local {
+                inventory_index, ..
+            } => self.inventory.sequences.get(inventory_index),
+            _ => None,
+        }
+    }
+}
+
+/// Prepare the saved route for one caller-selected, zero-based World export.
+/// Imported links are not loaded. Null/wrong PersistentLevel and wrong local
+/// identities are rejected; an absent main sequence remains an explicit result.
+pub fn prepare_world(
+    archive: &PackageArchive,
+    world_export_index: usize,
+    limits: Limits,
+) -> Result<WorldStartupMap> {
+    let package = archive.package();
+    if package.exports.len() > limits.exports {
+        return Err(Error::Budget {
+            resource: "exports",
+            limit: limits.exports,
+        });
+    }
+    let mut work = Work {
+        package,
+        limits,
+        usage: Usage::default(),
+        identity_bytes: Cell::new(0),
+    };
+    let (world_identity, world_class_identity) =
+        work.native_identity(world_export_index, "Engine.World", 0)?;
+    let world_bytes = work.read_native(archive, world_export_index)?;
+    let world = WorldObject::parse_export(package, world_export_index, &world_bytes)
+        .map_err(|e| native_error(world_export_index, e))?;
+    work.native_properties(&world.object.properties)?;
+    charge(
+        &mut work.usage.array_items,
+        world.reference_array_count,
+        limits.array_items,
+        "array items",
+    )?;
+    let persistent = world
+        .links
+        .iter()
+        .find(|link| link.slot == WorldLinkSlot::PersistentLevel)
+        .ok_or_else(|| {
+            invalid(
+                Some(world_export_index),
+                "World has no PersistentLevel slot",
+            )
+        })?;
+    let persistent_level =
+        work.native_reference(world_export_index, persistent.span, persistent.reference)?;
+    let level_export_index = local_link(&persistent_level, "PersistentLevel")?;
+    let (level_identity, level_class_identity) =
+        work.native_identity(level_export_index, "Engine.Level", world_identity.value)?;
+    let level_bytes = work.read_native(archive, level_export_index)?;
+    let level = LevelObject::parse_export(package, level_export_index, &level_bytes)
+        .map_err(|e| native_error(level_export_index, e))?;
+    work.native_properties(&level.object.properties)?;
+    for count in [
+        level.actors.links.len(),
+        level.model_components.links.len(),
+        level.sequences.links.len(),
+        level.url.extra_strings.len(),
+    ] {
+        charge(
+            &mut work.usage.array_items,
+            count,
+            limits.array_items,
+            "array items",
+        )?;
+    }
+    let first_sequence = first_sequence(&mut work, level_export_index, &level)?;
+    // Resolve and check the selected role before preparing unrelated inventory.
+    let selected_index = match &first_sequence {
+        Some(link) if !matches!(link.value, ObjectReference::Null) => {
+            let index = local_link(link, "main Sequence")?;
+            work.native_identity(index, "Engine.Sequence", level_identity.value)?;
+            Some(index)
+        }
+        _ => None,
+    };
+    work.usage.identity_bytes = work.identity_bytes.get();
+    let mut remaining = limits;
+    remaining.selected_exports -= work.usage.selected_exports;
+    remaining.serialized_bytes -= work.usage.serialized_bytes;
+    remaining.properties -= work.usage.properties;
+    remaining.array_items -= work.usage.array_items;
+    remaining.identity_bytes -= work.usage.identity_bytes;
+    let inventory = prepare(archive, remaining)?;
+    let main_sequence = bind_sequence(first_sequence, selected_index, &inventory)?;
+    let mut usage = work.usage;
+    for (used, amount, limit, name) in [
+        (
+            &mut usage.selected_exports,
+            inventory.usage.selected_exports,
+            limits.selected_exports,
+            "selected exports",
+        ),
+        (
+            &mut usage.serialized_bytes,
+            inventory.usage.serialized_bytes,
+            limits.serialized_bytes,
+            "serialized bytes",
+        ),
+        (
+            &mut usage.properties,
+            inventory.usage.properties,
+            limits.properties,
+            "properties",
+        ),
+        (
+            &mut usage.array_items,
+            inventory.usage.array_items,
+            limits.array_items,
+            "array items",
+        ),
+        (
+            &mut usage.identity_bytes,
+            inventory.usage.identity_bytes,
+            limits.identity_bytes,
+            "identity bytes",
+        ),
+    ] {
+        charge(used, amount, limit, name)?;
+    }
+    Ok(WorldStartupMap {
+        world_identity,
+        world_class_identity,
+        world,
+        persistent_level,
+        level_identity,
+        level_class_identity,
+        level,
+        main_sequence,
+        inventory,
+        usage,
+    })
+}
+
+fn native_error(export: usize, error: io::Error) -> Error {
+    if error.kind() == io::ErrorKind::Unsupported {
+        Error::Unsupported {
+            export,
+            message: error.to_string(),
+        }
+    } else {
+        invalid(Some(export), error.to_string())
+    }
+}
+
+fn local_link(link: &NativeReference, role: &str) -> Result<usize> {
+    match &link.value {
+        ObjectReference::Reference(Reference {
+            kind: ReferenceKind::Export { export_index, .. },
+            ..
+        }) => Ok(*export_index),
+        ObjectReference::Null => Err(invalid(
+            Some(link.origin.export_index),
+            format!("null {role} reference"),
+        )),
+        _ => Err(Error::Unsupported {
+            export: link.origin.export_index,
+            message: format!("imported {role} is not loaded by saved startup preparation"),
+        }),
+    }
+}
+
+fn first_sequence(
+    work: &mut Work<'_>,
+    level_export_index: usize,
+    level: &LevelObject,
+) -> Result<Option<NativeReference>> {
+    let links = level
+        .links
+        .get(level.sequences.links.clone())
+        .ok_or_else(|| {
+            invalid(
+                Some(level_export_index),
+                "Level sequence slice is out of bounds",
+            )
+        })?;
+    let Some(first) = links.first() else {
+        return Ok(None);
+    };
+    if first.slot != LevelLinkSlot::Sequence(0) {
+        return Err(invalid(
+            Some(level_export_index),
+            "first Level sequence slot is not ordinal zero",
+        ));
+    }
+    work.native_reference(level_export_index, first.span, first.reference)
+        .map(Some)
+}
+
+fn bind_sequence(
+    first: Option<NativeReference>,
+    selected_index: Option<usize>,
+    inventory: &StartupMap,
+) -> Result<MainSequence> {
+    let Some(link) = first else {
+        return Ok(MainSequence::EmptyArray);
+    };
+    if matches!(link.value, ObjectReference::Null) {
+        return Ok(MainSequence::FirstNull { link });
+    }
+    let export_index = selected_index.ok_or_else(|| {
+        invalid(
+            Some(link.origin.export_index),
+            "selected Sequence was not resolved",
+        )
+    })?;
+    let mut found = inventory.sequences.iter().enumerate().filter(|(_, sequence)| {
+        matches!(sequence.object.identity.kind, ReferenceKind::Export { export_index: i, .. } if i == export_index)
+    });
+    let (inventory_index, sequence) = found.next().ok_or_else(|| {
+        invalid(
+            Some(export_index),
+            "selected Sequence is outside prepared inventory",
+        )
+    })?;
+    if found.next().is_some() {
+        return Err(invalid(
+            Some(export_index),
+            "ambiguous selected Sequence inventory",
+        ));
+    }
+    if link.value != ObjectReference::Reference(sequence.object.identity.clone()) {
+        return Err(invalid(
+            Some(export_index),
+            "selected Sequence identity disagrees with inventory",
+        ));
+    }
+    Ok(MainSequence::Local {
+        link,
+        export_index,
+        inventory_index,
+    })
+}
+
 #[derive(Clone, Copy)]
 enum Kind {
     Sequence,
@@ -420,6 +721,119 @@ struct Work<'a> {
     identity_bytes: Cell<usize>,
 }
 impl Work<'_> {
+    fn native_identity(
+        &self,
+        index: usize,
+        expected_class: &str,
+        expected_outer: i32,
+    ) -> Result<(Reference, Reference)> {
+        let export =
+            self.package.exports.get(index).ok_or_else(|| {
+                invalid(Some(index), "selected native export index is out of bounds")
+            })?;
+        let value = index
+            .checked_add(1)
+            .and_then(|v| i32::try_from(v).ok())
+            .ok_or_else(|| invalid(Some(index), "selected export reference overflow"))?;
+        let identity = self.reference(value)?;
+        let class = self.reference(export.class_index)?;
+        if !class.object_path.eq_ignore_ascii_case(expected_class)
+            || !matches!(&class.kind, ReferenceKind::Import { class_package, class_name, .. }
+                if class_package.eq_ignore_ascii_case("Core") && class_name.eq_ignore_ascii_case("Class"))
+        {
+            return Err(Error::Unsupported {
+                export: index,
+                message: format!("saved startup requires exact {expected_class} class import"),
+            });
+        }
+        self.require_class(&class, index)?;
+        if export.object_flags & 0x0200_0000_0000_0000 != 0 {
+            return Err(Error::Unsupported {
+                export: index,
+                message: "selected native startup object has an unsupported state-frame preamble"
+                    .into(),
+            });
+        }
+        if export.outer_index != expected_outer {
+            return Err(invalid(
+                Some(index),
+                "selected native object's outer disagrees with saved route",
+            ));
+        }
+        Ok((identity, class))
+    }
+
+    fn read_native(&mut self, archive: &PackageArchive, index: usize) -> Result<Vec<u8>> {
+        let export = self
+            .package
+            .exports
+            .get(index)
+            .ok_or_else(|| invalid(Some(index), "native export is out of bounds"))?;
+        charge(
+            &mut self.usage.selected_exports,
+            1,
+            self.limits.selected_exports,
+            "selected exports",
+        )?;
+        charge(
+            &mut self.usage.serialized_bytes,
+            export.serial_size,
+            self.limits.serialized_bytes,
+            "serialized bytes",
+        )?;
+        archive.read_export(index).map_err(|source| Error::Read {
+            export: index,
+            source,
+        })
+    }
+
+    fn native_properties(&mut self, properties: &PropertyList) -> Result<()> {
+        charge(
+            &mut self.usage.properties,
+            properties.entries.len(),
+            self.limits.properties,
+            "properties",
+        )?;
+        for property in &properties.entries {
+            if let Value::Array { count, .. } = property.value {
+                charge(
+                    &mut self.usage.array_items,
+                    count,
+                    self.limits.array_items,
+                    "array items",
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn native_reference(&self, index: usize, span: Span, value: i32) -> Result<NativeReference> {
+        let export = self
+            .package
+            .exports
+            .get(index)
+            .ok_or_else(|| invalid(Some(index), "native origin export is out of bounds"))?;
+        let end = span
+            .offset
+            .checked_add(span.length)
+            .filter(|end| *end <= export.serial_size)
+            .ok_or_else(|| invalid(Some(index), "native reference span is outside export"))?;
+        if span.length != 4 || export.serial_offset.checked_add(end).is_none() {
+            return Err(invalid(
+                Some(index),
+                "invalid native reference width or logical offset",
+            ));
+        }
+        Ok(NativeReference {
+            value: self.object_reference(value)?,
+            origin: NativeOrigin {
+                export_index: index,
+                serial_offset: export.serial_offset,
+                encoded_value: span,
+            },
+        })
+    }
+
     fn name(&self, n: crate::upk::NameRef) -> Result<String> {
         let name = self
             .package
@@ -1198,6 +1612,205 @@ mod tests {
     }
     fn end(b: &mut Vec<u8>) {
         name(b, 0);
+    }
+
+    fn route_package() -> Package {
+        let mut p = package();
+        let mut add_name = |value: &str| {
+            let index = p.names.len();
+            p.names.push(NameEntry {
+                value: value.into(),
+                flags: 0,
+            });
+            n(index)
+        };
+        let world_class = add_name("World");
+        let level_class = add_name("Level");
+        let world_name = add_name("TheWorld");
+        let level_name = add_name("PersistentLevel");
+        let sequence_name = add_name("MainSequence");
+        p.imports.truncate(2);
+        for object_name in [world_class, level_class] {
+            p.imports.push(Import {
+                class_package: n(8),
+                class_name: n(10),
+                outer_index: -1,
+                object_name,
+            });
+        }
+        let template = p.exports[0].clone();
+        p.exports = [
+            (world_name, -3, 0),
+            (level_name, -4, 1),
+            (sequence_name, -2, 2),
+        ]
+        .into_iter()
+        .map(|(object_name, class_index, outer_index)| Export {
+            object_name,
+            class_index,
+            outer_index,
+            serial_size: 128,
+            ..template.clone()
+        })
+        .collect();
+        p
+    }
+
+    fn route_level(p: &mut Package, references: &[i32]) -> LevelObject {
+        let mut bytes = Vec::new();
+        // NetIndex, None, self, empty actors, four empty URL strings, empty
+        // URL extra strings, port/word, null model, empty model components.
+        for v in [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 7777, 0, 0, 0] {
+            word(&mut bytes, v);
+        }
+        word(&mut bytes, references.len() as i32);
+        for value in references {
+            word(&mut bytes, *value);
+        }
+        p.exports[1].serial_size = bytes.len();
+        LevelObject::parse_export(p, 1, &bytes).unwrap()
+    }
+
+    fn route_inventory(p: &Package) -> StartupMap {
+        let w = work(p);
+        StartupMap {
+            export_count: p.exports.len(),
+            sequences: vec![Sequence {
+                object: Object {
+                    identity: w.reference(3).unwrap(),
+                    class_identity: w.reference(-2).unwrap(),
+                    serial_offset: p.exports[2].serial_offset,
+                    serial_size: 12,
+                    net_index: 0,
+                    properties: PropertyList {
+                        entries: Vec::new(),
+                        start_offset: 4,
+                        end_offset: 12,
+                        terminator: Span {
+                            offset: 4,
+                            length: 8,
+                        },
+                    },
+                    parent_sequence: None,
+                },
+                members: None,
+            }],
+            level_loaded: Vec::new(),
+            open_movies: Vec::new(),
+            player_variables: Vec::new(),
+            unprepared_targets: Vec::new(),
+            usage: Usage::default(),
+        }
+    }
+
+    #[test]
+    fn native_route_requires_engine_class_outer_and_supported_prefix() {
+        let mut p = route_package();
+        for (i, class, outer) in [
+            (0, "Engine.World", 0),
+            (1, "Engine.Level", 1),
+            (2, "Engine.Sequence", 2),
+        ] {
+            assert!(work(&p).native_identity(i, class, outer).is_ok());
+        }
+        assert!(work(&p).native_identity(9, "Engine.World", 0).is_err());
+        assert!(work(&p).native_identity(0, "Engine.Level", 0).is_err());
+        assert!(work(&p).native_identity(1, "Engine.Level", 0).is_err());
+        p.imports[3].class_package = n(13);
+        assert!(work(&p).native_identity(1, "Engine.Level", 1).is_err());
+        p.imports[3].class_package = n(8);
+        p.exports[2].object_flags |= 0x0200_0000_0000_0000;
+        assert!(work(&p).native_identity(2, "Engine.Sequence", 2).is_err());
+        p.exports[0].outer_index = 2;
+        assert!(work(&p).native_identity(1, "Engine.Level", 1).is_err());
+    }
+
+    #[test]
+    fn sequence_selection_preserves_empty_first_null_and_ordinal_zero() {
+        let mut p = route_package();
+        let empty = route_level(&mut p, &[]);
+        assert!(first_sequence(&mut work(&p), 1, &empty).unwrap().is_none());
+        let later = route_level(&mut p, &[0, 3]);
+        let first = first_sequence(&mut work(&p), 1, &later).unwrap().unwrap();
+        assert_eq!(first.value, ObjectReference::Null);
+        assert_eq!(
+            first.origin.encoded_value,
+            later.links[later.sequences.links.start].span
+        );
+        assert!(matches!(
+            bind_sequence(Some(first), None, &route_inventory(&p)).unwrap(),
+            MainSequence::FirstNull { .. }
+        ));
+        let mut selected = route_level(&mut p, &[3, 0]);
+        let first = first_sequence(&mut work(&p), 1, &selected)
+            .unwrap()
+            .unwrap();
+        assert_eq!(local_link(&first, "main Sequence").unwrap(), 2);
+        assert!(matches!(
+            bind_sequence(Some(first), Some(2), &route_inventory(&p)).unwrap(),
+            MainSequence::Local {
+                export_index: 2,
+                inventory_index: 0,
+                ..
+            }
+        ));
+        selected.links[selected.sequences.links.start].slot = LevelLinkSlot::Sequence(1);
+        assert!(first_sequence(&mut work(&p), 1, &selected).is_err());
+    }
+
+    #[test]
+    fn selected_native_reference_and_inventory_cannot_change_identity() {
+        let p = route_package();
+        let span = Span {
+            offset: 12,
+            length: 4,
+        };
+        let w = work(&p);
+        assert!(local_link(&w.native_reference(0, span, 0).unwrap(), "PersistentLevel").is_err());
+        assert!(local_link(&w.native_reference(0, span, -4).unwrap(), "PersistentLevel").is_err());
+        assert!(w.native_reference(0, span, 4).is_err());
+        assert!(w.native_reference(0, span, i32::MIN).is_err());
+        assert!(
+            w.native_reference(
+                0,
+                Span {
+                    offset: usize::MAX,
+                    length: 4
+                },
+                1
+            )
+            .is_err()
+        );
+        assert!(
+            w.native_reference(
+                0,
+                Span {
+                    offset: 12,
+                    length: 8
+                },
+                1
+            )
+            .is_err()
+        );
+        let first = w.native_reference(1, span, 3).unwrap();
+        assert_eq!(first.origin.logical_value_offset(), Some(1012));
+        let mut inventory = route_inventory(&p);
+        inventory.sequences[0].object.identity.object_path = "OtherWorld.Sequence".into();
+        assert!(bind_sequence(Some(first.clone()), Some(2), &inventory).is_err());
+        inventory = route_inventory(&p);
+        inventory.sequences.push(inventory.sequences[0].clone());
+        assert!(bind_sequence(Some(first.clone()), Some(2), &inventory).is_err());
+        inventory.sequences.clear();
+        assert!(bind_sequence(Some(first), Some(2), &inventory).is_err());
+        let mut w = work(&p);
+        w.limits.identity_bytes = 0;
+        assert!(matches!(
+            w.native_identity(0, "Engine.World", 0),
+            Err(Error::Budget {
+                resource: "identity bytes",
+                ..
+            })
+        ));
     }
 
     #[test]
