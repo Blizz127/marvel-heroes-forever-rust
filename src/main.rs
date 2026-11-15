@@ -55,6 +55,7 @@ fn usage() {
         "  mhf frontend scene <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path]"
     );
     println!("  mhf frontend init-probe <package.upk> <movie>");
+    println!("  mhf frontend startup-map <package.upk>");
     println!(
         "  mhf frontend pointer-probe <package.upk> <movie> <stage-x-pixels> <stage-y-pixels> <private-output.pam> [dependency.upk ...]"
     );

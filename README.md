@@ -9,7 +9,8 @@ this repository under `~/.local/share/marvel-heroes-forever-rust/`.
 See `FINDINGS.md` for measured evidence and `docs/PROVENANCE.md` for sources.
 
 Build the asset tools with `nice -n 19 cargo build --offline -j2` (Rust 1.88+).
-Their default build uses only the standard library. Add `--features renderer`
+Their default build includes RustCrypto SHA-256 for private source verification.
+Add `--features renderer`
 for optional wgpu Vulkan image/triangle rendering, or `--features window` for native
 preview presentation. Required native libraries and verified runtime scope are
 recorded in [window support](docs/WINDOW.md). No server connection is made.
@@ -48,11 +49,17 @@ UE3 metadata inspection is also available for the observed version 868/3:
 mhf upk summary /private/path/MarvelFrontEndMap.upk
 mhf upk inspect /private/path/MarvelFrontEnd_SF.upk
 mhf upk exports /private/path/MarvelFrontEnd_SF.upk
+mhf frontend startup-map /private/path/MarvelFrontEndMap.upk
 ```
 
 This reads object tables and supported property/native payloads through bounded
 LZO decoding. Static and skeletal mesh geometry can be read through the library; material/world
 rendering and the playable frontend remain unimplemented.
+
+`frontend startup-map` reports saved LevelLoaded links in their original order,
+OpenMovie resources, variable links and explicit flag origins. Missing serialized
+values stay unknown; it does not run the sequence or create a native movie player.
+See [saved startup preparation](docs/FRONTEND_STARTUP_MAP.md).
 
 Prototype bodies and supported asset properties now have separate commands:
 

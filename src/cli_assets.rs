@@ -25,6 +25,9 @@ fn text(value: &OsString) -> Result<&str> {
 
 pub fn run(args: &[OsString]) -> Result<()> {
     match args {
+        [command, operation, package] if command == "frontend" && operation == "startup-map" => {
+            inspect_startup_map(package)?;
+        }
         [command, operation, package, selector, output, extra @ ..]
             if command == "frontend" && operation == "render-static" =>
         {
@@ -360,6 +363,120 @@ pub fn run(args: &[OsString]) -> Result<()> {
         }
         _ => return Err(invalid("invalid asset command; use mhf --help")),
     }
+    Ok(())
+}
+
+fn inspect_startup_map(package: &OsString) -> Result<()> {
+    use marvel_heroes_forever::frontend::startup_map::{self, ObjectReference, Saved};
+    fn reference(value: &ObjectReference) -> String {
+        match value {
+            ObjectReference::Null => "null".into(),
+            ObjectReference::Reference(value) => format!(
+                "{:+} {:?} ({:?})",
+                value.value, value.object_path, value.class_name
+            ),
+        }
+    }
+    fn flag(value: &Option<Saved<bool>>) -> String {
+        value.as_ref().map_or_else(
+            || "not serialized".into(),
+            |saved| {
+                format!(
+                    "{} @ {:?}",
+                    saved.value,
+                    saved.origin.logical_value_offset()
+                )
+            },
+        )
+    }
+    let archive = PackageArchive::open(package)?;
+    let prepared = startup_map::prepare(&archive, startup_map::Limits::default())?;
+    println!(
+        "OBSERVED saved startup map: {} exports, {} sequences, {} LevelLoaded events, {} OpenMovie actions, {} player variables.",
+        prepared.export_count,
+        prepared.sequences.len(),
+        prepared.level_loaded.len(),
+        prepared.open_movies.len(),
+        prepared.player_variables.len()
+    );
+    println!("Preparation usage: {:?}.", prepared.usage);
+    for event in &prepared.level_loaded {
+        println!(
+            "LevelLoaded {:+} {:?}:",
+            event.object.identity.value, event.object.identity.object_path
+        );
+        if let Some(outputs) = &event.outputs {
+            for (port_index, port) in outputs.value.iter().enumerate() {
+                println!(
+                    "  output {port_index} {:?}; disabled={}.",
+                    port.description.as_ref().map(|v| &v.value),
+                    flag(&port.disabled)
+                );
+                if let Some(links) = &port.links {
+                    for (order, link) in links.value.iter().enumerate() {
+                        println!(
+                            "    link {order}: {} input {}.",
+                            reference(&link.target.value),
+                            link.input_index.value
+                        );
+                    }
+                } else {
+                    println!("    links not serialized.");
+                }
+            }
+        } else {
+            println!("  outputs not serialized.");
+        }
+    }
+    for movie in &prepared.open_movies {
+        println!(
+            "OpenMovie {:+} {:?}:",
+            movie.object.identity.value, movie.object.identity.object_path
+        );
+        for (label, resource) in [
+            ("Movie", &movie.movie),
+            ("MoviePlayerClass", &movie.player_class),
+        ] {
+            println!(
+                "  {label}: {}.",
+                resource.as_ref().map_or_else(
+                    || "not serialized".into(),
+                    |v| reference(&v.reference.value)
+                )
+            );
+        }
+        println!(
+            "  start_paused={}; take_focus={}; capture_input={}; display_with_hud_off={}.",
+            flag(&movie.start_paused),
+            flag(&movie.take_focus),
+            flag(&movie.capture_input),
+            flag(&movie.display_with_hud_off)
+        );
+        if let Some(variables) = &movie.variables {
+            for (index, variable) in variables.value.iter().enumerate() {
+                println!(
+                    "  variable {index} {:?}:",
+                    variable.description.as_ref().map(|v| &v.value)
+                );
+                match &variable.linked_variables {
+                    None => println!("    links not serialized."),
+                    Some(values) if values.value.is_empty() => println!("    saved empty links."),
+                    Some(values) => {
+                        for value in &values.value {
+                            println!("    {}.", reference(&value.value));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "{} linked targets remain unprepared.",
+        prepared.unprepared_targets.len()
+    );
+    println!(
+        "Saved imports remain unresolved runtime resources. No defaults, sequence execution, player creation or login ran."
+    );
     Ok(())
 }
 

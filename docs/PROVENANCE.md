@@ -382,3 +382,9 @@ transform semantics. [Native String methods](STRING_NATIVE_METHODS.md) records
 the owned executable's boxing/constructor graph and exact ASCII uppercase map;
 unsupported Unicode and mutable-graph cases remain explicit. All native evidence
 and raw source inputs remain private under the paths in those studies.
+
+[Configuration-present probe](NATIVE_CONFIG_PRESENT_PROBE.md) compares the exact
+original file against its preceding absence while preserving the unsuccessful
+frontend result. [Source and Environment versions](TEXTFIELD_SOURCE_ENV_VERSION.md)
+distinguishes imported definition, selected MovieDef, field ancestor and captured
+function identities through owned-binary REA evidence.

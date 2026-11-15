@@ -129,8 +129,16 @@ full project suite were not run for this change.
 No native game, script VM, sequence scheduler, player creation, import loader,
 default-object finalization, receiver assignment or live login was run by
 these checks. Raw input, oracle data and compiled private harnesses remain
-outside git. The crate-level module hook and runtime integration belong to the
-integrator.
+outside git. The library is exposed as `frontend::startup_map`.
+
+**VERIFIED integrated CLI:** `mhf frontend startup-map <package.upk>` reports
+the prepared counts, LevelLoaded ports and ordered links, OpenMovie resource
+references, explicit Boolean origins, and variable links. Missing values and
+saved empty arrays remain distinct. A focused smoke on the pinned map passed
+nine checks, including the six-link order, absent start-paused flag, unchanged
+input hash and rejection of extra arguments. Private evidence is
+`evidence/startup-map-cli/receipt.json`; the four module tests also passed after
+root integration. This command reads saved data only and makes no connection.
 
 ## Evidence and provenance
 
