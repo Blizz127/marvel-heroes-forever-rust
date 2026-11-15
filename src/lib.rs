@@ -10,6 +10,7 @@ pub mod calligraphy;
 pub mod camera;
 pub mod frontend;
 pub mod gfx;
+pub mod integrity;
 pub mod localization;
 pub mod material;
 pub mod options;

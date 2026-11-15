@@ -339,3 +339,14 @@ observation; it does not establish a functioning login screen.
 context-specific viewport state, member flags, listeners and resize behavior.
 Its private REA evidence and source ledger distinguish constructor initialization
 from loaded frontend state and explicitly retain unresolved runtime inputs.
+
+[Source integrity](SOURCE_INTEGRITY.md) records the linked RustCrypto SHA-256
+primitive (`sha2 = 0.10.9`, MIT OR Apache-2.0), its versioned primary documentation
+and cached manifest/licence observations. Project verification glue remains
+original; dependency notices are packaged separately from private source data.
+[Initial frontend instance](FRONTEND_INITIAL_INSTANCE.md) records the owner's
+pinned MarvelFrontEndMap and its conditional OpenMovie producer through REA.
+[Instance text preparation](SCENE_TEXT_INSTANCES.md) retains explicit runtime
+style/provenance inputs and unchanged saved definitions. Neither proves native
+lifecycle execution. [World transform defaults](WORLD_TRANSFORM_DEFAULTS.md)
+records native copy/constructor gates while preserving unresolved effective inputs.
