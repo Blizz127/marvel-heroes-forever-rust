@@ -978,3 +978,39 @@ See [MODEL_INPUT_LAYOUT.md](MODEL_INPUT_LAYOUT.md). New outside sources were stu
 | [MicrosoftDocs/sdk-api](https://github.com/MicrosoftDocs/sdk-api/tree/656e9656bfaef34dd29cd7ee9e1146aec17e924c), CreateInputLayout, input-element and DXGI pages | Documentation CC BY 4.0, separate code licence MIT. API signature/validation contract. |
 | [Microsoft DirectX-Specs](https://github.com/microsoft/DirectX-Specs/tree/9c2586441fa2dd0d4953a5c4e9b9ff05717c19eb), `d3d/archive/D3D11_3_FunctionalSpec.htm` | Documentation CC BY 4.0, separate code licence MIT. Input conversion and precision; conceptual archived declarations excluded as ABI evidence. |
 | [MicrosoftDocs/cpp-docs](https://github.com/MicrosoftDocs/cpp-docs/tree/af4947c4bdf5993dcaee98e63d55a2d7a5744d7d), x64 software conventions | Documentation CC BY 4.0, separate code licence MIT. Pointer and aggregate layout. |
+
+## Primary output composition and Object callbacks
+
+[Primary output composition](SCALE9_PRIMARY_OUTPUT.md) reuses the previously
+registered owned normalization, descriptor export, record packing and triangle
+transfer evidence. The original Rust owner binds those operations to one
+immutable generated-record namespace. Exact profiles, resolved colors and
+invocation-wide cache continuity remain caller inputs; the synthetic independent
+oracle and focused tests do not establish a native draw or pixel parity.
+
+[Object prototype callbacks](REA_OBJECT_PRIMITIVES.md) use the same private
+proprietary executable, exact category/getter/callback records and proved
+Object allocation producers. Original Rust retains allocation provenance and
+explicit unknown receiver/frame gates; no external implementation was copied.
+The fresh-event follow-up in [state preservation](REA_MOUSE_STATE_PRESERVATION.md)
+separates constructor-proved fields from later shared-cache effects.
+
+[Engine option profiles](SCALE9_OPTIONS_ENGINE_PROFILE.md) reuse the registered
+owned constructor and query evidence, adding exact status writes, queued record
+execution and finite cleanup conditions. No current renderer readiness or option
+default follows from a fresh constructor's zero bit.
+
+## Concrete Model draw-record consumer
+
+See [MODEL_DRAW_CONSUMER.md](MODEL_DRAW_CONSUMER.md). The owned proprietary
+1.52.0.1700 executable (private pin SHA-256
+`8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`)
+was studied with two bounded target-free REA/Rizin calls for the concrete
+Model record dispatcher and two copy helpers. Exact prior Model/index/resource
+and input-layout receipts are reused; original product API sources were read
+at `a4566d25182f1e2d376629f1968bb97ae64170f8`. No new outside implementation or
+SDK source was introduced, and no implementation was copied. Private paths,
+hashes, purposes and licence categories are in
+`evidence/model-draw-consumer/sources.json` and component ledgers. Native data,
+reference snapshots and raw evidence remain private. The next caller-supplied
+virtual receiver and selected shader-record identities remain unresolved.

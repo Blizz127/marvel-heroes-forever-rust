@@ -7,6 +7,18 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev25 work in progress
 
+**VERIFIED Object prototype callbacks:** the exact native `toString`/`valueOf`
+profiles now execute in original Rust, retaining identities, flags and cold
+parents. A durable allocation witness distinguishes proved native Object
+instances from arbitrary Plain roots, activations and script prototypes. Eighteen
+focused checks and test/production metadata compilation pass without diagnostics.
+The retained initial failure was a synthetic Host fixture missing a required
+method; its correction did not change product code. Receipt:
+`evidence/avm1-runtime/object-primitives-checks/receipt.json`, SHA-256
+`97a488cbda39304d3a1d16ead6b455e4684956f9577c68b63037d4f8417def08`.
+No original replay or native callback execution is implied; the Mouse host
+boundary remains unchanged. See [native callback evidence](docs/REA_OBJECT_PRIMITIVES.md).
+
 **VERIFIED primary output composition:** one immutable generated-record owner
 now normalizes the complete supplied array before descriptor selection and
 binds triangle ordinal transfer to that same source. Preview and resumed chunks
