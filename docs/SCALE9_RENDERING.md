@@ -764,3 +764,179 @@ Additional source reads were original project evidence and tools only:
 and `native-scale9-output-math/contract/CONTRACT_NOTES.md`. The underlying owned
 binary/asset licence and compatibility-study provenance remain as recorded above;
 no outside implementation was copied or linked.
+
+## Native tag1009 binding and the post-creation image matrix
+
+This increment closes the compiled tag1009-to-factory argument route and
+identifies a matrix mutation after image construction. It supersedes the
+earlier suggestion that the saved basename must reach the examined creator
+`+0x08` method. It does **not** establish an executing modal's resolver, asset,
+cache outcome or selected texture dimensions. The renderer remains unchanged.
+
+**VERIFIED static route:** header reader `0x140085170` produces the tag code;
+dispatcher `0x14008f1c0` selects extended table `0x142adbb50[tag-1000]` for
+the admitted 1000–1009 range. Entry 9 is `0x14006e4a0`. That callback reads a
+u32 resource ID, three u16 values and two length-prefixed byte strings. Helpers
+`0x140084f60 → 0x140034c50 → 0x140084ff0` read a one-byte unsigned length,
+copy exactly that many bytes and append a native NUL. This path does not prove
+UTF8 validation or general embedded-NUL behavior in later string copies.
+
+**OBSERVED saved input:** UISource44/tag89 has header `7887+2`, body `7889+54`,
+ID 44, format 13 and declared dimensions 64×64. The first string is the export
+key at `7900+19`; the second is the existing bare filename at `7920+23`.
+An independent native-order replay consumes exactly all 54 body bytes and
+reproduces the handoff to `0x14006e310`. The complete source movie hash is
+`49ff476cb0316f22d43b9632bd5260141587ecd32a54b4d58a5dabfb3a1548f5`;
+the tag-body hash is
+`23e6a4406fab16abb335a492d8a0649165e451a84b2d5164780ac40340a613e2`.
+
+The callback masks the resource ID with `0x9ffff` before passing it to
+`0x14006e310`, which creates descriptor D:
+
+| Descriptor field | Recovered source |
+| --- | --- |
+| `+0x10` u32 | Zero-extended saved format |
+| `+0x20` string | Second saved string: filename |
+| `+0x28/+0x2a` u16 | Declared width and height |
+| `+0x2c` u32 | Kind 1, or 3 for the separate masked-ID condition; actual ID44 gives 1 |
+| `+0x30` string | First saved string: export key |
+| `+0x18` pointer | Address `M+0x80`, where `M=[loader+0x38]`, unless its first u32 is zero, then null |
+
+The metadata pointer is an address inside M, not a pointer loaded from that
+address. Its actual contents and upstream producer remain unproved.
+`0x140090930` creates the resource datum using interface singleton
+`0x142ca59e0`, table `0x142504c20`; `0x140090e30` assigns the ID handle and
+queues the datum. Interface `+0x18` is binder `0x140091ee0`. Queuing the datum
+does not establish that native binding ran or succeeded.
+
+### Resolved filename and creator selection
+
+The binder clones the descriptor and supplies resolver input with mode 2,
+original filename and binding-context string `B+0x70`. A non-null resolver at
+`[[B+0x10]+0x18]` receives virtual `+0x08`; otherwise helper `0x140031760`
+resolves the string. For this saved ASCII basename the default predicate is
+false. A nonempty base is copied, `/` is appended unless the base ends in `/`
+or `\`, then the filename is appended. An empty base leaves the basename.
+Neither the runtime base nor the presence/type of a custom resolver is observed.
+
+Only the binder's new-resource cache outcome enters creator selection. The
+creator comes from `[[B+0x10]+0x20]`; null fails. Existing cached resources
+take a distinct path whose state and internals were not reconstructed here.
+
+| Original descriptor state | Creator call and supplied extension |
+| --- | --- |
+| `D+0x18` non-null | Virtual `+0x18`, mode 2; info `+0x40` metadata pointer, `+0x48` key, `+0x50/+0x54` zero-extended declared dimensions |
+| `D+0x18` null | Virtual `+0x10`, mode 1; no mode-2 key/format/dimension extension |
+
+Both calls receive the **resolved filename string** in R8. Mode-2 info
+`+0x38` receives the format conversion from `0x14004d5e0`; saved format 13
+maps to integer 5. No external enum name is assigned to that value. Other
+heap/service fields remain explicit context inputs in the private record.
+
+For the earlier proved engine creator table `0x1421c3288`, virtual `+0x18`
+is a thunk to its own `+0x10`, `0x1412770c0`. Thus both descriptor branches
+reach this method **if that creator is selected**. Its distinct `+0x08`
+method is not substituted for the binder's calls.
+
+The `+0x10` method compares exactly ten narrow bytes against **`/ package/`**,
+including the space after the first slash, using imported
+`MSVCR120.dll!strncmp`. A match selects the suffix after those ten bytes.
+A mismatch supplies null to the next conversion helper and continues with
+an empty string; it is not an immediate return from this factory.
+
+The bounded conversion route is `0x1406e2730 → 0x1406e1800`, importing
+`KERNEL32.dll!lstrlenA` and `MultiByteToWideChar` with CodePage 0, flags 0 and
+counts including NUL. The installed codepage is unobserved; this is not UTF8
+proof. The following native order is retained:
+
+1. `0x14077b360` with third argument zero removes the last dot and suffix,
+   without checking which path component contains that dot.
+2. `0x141265ff0` performs lexical separator/relative-segment processing.
+   Complete original helper observations are retained privately; no host
+   filesystem normalization is substituted.
+3. The factory changes remaining wide backslashes to dots and calls
+   `0x1407b7710(class,0,resulting_name,0,0,0,1)`.
+
+The class initializer's exact Engine and Texture literals ground the
+Engine.Texture interpretation. The returned pointer passes unchanged to
+`0x141268d60([0x142c45980],asset)`. That wrapper's earlier conditional size
+queries remain applicable. The creator call does not directly pass the saved
+declared width/height as wrapper dimensions. Its all-query-failure fallback
+reads caller home-space slots whose initialization at this caller is unproved;
+zero or declaration-size fallback must not be invented.
+
+### Dimension ratio, inverse and proxy forwarding
+
+On either successful new-image branch the binder calls the returned image's
+virtual `+0x28` to obtain two u32 dimensions. It starts an identity matrix,
+computes declared-height/returned-height first at `0x140092225`, then
+declared-width/returned-width at `0x140092238`. Declared u16 values are widened
+and converted with CVTDQ2PS; returned u32 values are zero-extended through RAX
+before CVTSI2SS. Eight separate MULSS operations scale the identity's two rows.
+No explicit zero-size guard is present. At `0x1400922a7` the binder calls
+image virtual `+0x68` with that matrix and R8=0.
+
+For the selected engine wrapper table **`0x1421c11c0`**, `+0x68` is
+`0x140037d00`. It allocates image `+0x20` if needed, copies all eight matrix
+words and tail-calls `0x1400378d0`, which invokes the already recovered inverse
+`0x140036ee0` using a separate source copy. The optional image matrix therefore
+holds the **native inverse of the ratio matrix**. Its constructor-null state
+does not survive this successful binding path.
+
+Later image `+0xb0 → 0x1400372d0` obtains the selected Q `+0x38` matrix T and
+uses `0x140032800` to form **T × stored inverse** under the existing column
+affine convention, followed by the actual rectangle-origin arithmetic.
+The native inverse uses its determinant/reciprocal/product sequence; replacing
+it with independent reciprocal scale divisions or algebraically cancelling
+dimension ratios is not proved bit-equivalent. The saved declaration,
+returned-image size and selected Q normalization size are three distinct inputs.
+An independent finite-f32 witness uses the actual declared 64×64 but explicitly
+synthetic returned size 96×80: the stored inverse X coefficient is
+`0x3fbfffff`, while direct `96/64` gives `0x3fc00000`. This one-ULP difference
+checks the retained operation order; it is not an observed modal image size.
+
+Only **after** the setter, `0x140091460` creates a resource with embedded image
+proxy table **`0x1421c1360`**. The actual image is at resource `+0x48`, equivalently
+proxy `+0x28`. Proxy `+0xb0 → 0x14126ea00` forwards to that actual image's
+`+0xb0`, preserving the modified matrix. This later proxy table must not be
+confused with the actual image table when resolving the earlier `+0x68` call.
+
+The precise remaining gates are the native B/base/custom resolver and creator
+identity, metadata presence, new-versus-existing cache outcome, resolved engine
+object, successful wrapper/manager/Q initialization, chosen size pair and later
+lifecycle changes. Saved import/export identity and a decoded 64×64 Texture2D
+do not establish these values. This increment consequently does not enable
+`1/64` normalization or claim final Scale9 UV/pixel parity.
+
+### Evidence and source ledger
+
+Private evidence root:
+`~/.local/share/marvel-heroes-forever-rust/evidence/external-image-route/`.
+All new native observations use the same proprietary owner-pinned executable
+and SHA256 recorded above, solely for private compatibility study. Additional
+source reads were the two already pinned original movies, original prior
+`scale9-output/` and `scale9-rendering/` evidence, the installed REA skill/tool
+schemas, PE metadata and original project scripts. No SDK/parser/renderer
+implementation source was read or copied; no native client or GPU was run.
+
+| Record | Evidence ID |
+| --- | --- |
+| `rea-engine-path-factory.json` | `ev_a762aa8ea3e27f5338dc0649eb304d3851235b06fdce414a4e6d6096bbc29cf4` |
+| `rea-external-image-loader.json` | `ev_abee9c866f49da715ea8790d24978c86baf7a7af04f9285eec1837b196ebe581` |
+| `rea-wire-to-descriptor.json` | `ev_5a659c32a58199acbf9cfe7658d067817a534a42bf1820d52144eb0f84349667` |
+| `rea-binder-matrix-route.json` | `ev_bd9af1f45007c6db3480075ba84c2270a320f164fdfb2da99ade825858f5b631` |
+| `rea-registration-engine-conversion.json` | `ev_9a02a7084e6ad436ca043af256a074a409dcae9bfe6d2d683fc817866e77fe22` |
+| `rea-import-bindings.json` | `ev_a41215119c76b13f3b13521a3daf14356d843aa5f904a6787905bd836de662d1` |
+
+The six bounded records have unchanged executable digests and untruncated
+output. Independent PE-section checks match all returned **2,537 instruction
+spans / 9,597 bytes and 732 data bytes**. The loader record also retains an
+unsupported `pszj` subcommand: its requested string was not returned despite
+process exit 0. The later wire record supplies a separately verified 107-byte
+`pxj` observation; the original failure is preserved, not relabelled successful.
+Detailed source ledgers and field/arithmetic reviews remain under
+`loader-candidates/`, `factory-candidates/` and `verification/`. The complete
+62-record bundle, `complete.bundle.json`, has SHA256
+`2f3f874e048af8bb17bb99d0a95d4224e3ebfd868bdddce4f081c7d63418bca4`.
+It was exported and REA resources closed. No product source,
+renderer profile, full-suite result or native execution claim changes here.
