@@ -53,6 +53,8 @@ pub mod runtime_text;
 pub mod saved_handlers;
 #[path = "frontend/saved_dispatch.rs"]
 pub mod saved_dispatch;
+#[path = "frontend/saved_dynamic.rs"]
+pub mod saved_dynamic;
 #[path = "frontend/saved_scene_handlers.rs"]
 pub mod saved_scene_handlers;
 #[path = "frontend/scene_adoption.rs"]
