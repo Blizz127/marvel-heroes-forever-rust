@@ -916,3 +916,10 @@ The dev23 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev23-linux/manifest.json`, SHA-256
 `2fa9d39d6c75fc0dee953e15889225a84595c4ea54fdb20fc28c7364c7f80adb`.
+
+[Model vertex interpretation](MODEL_VERTEX_INTERPRETATION.md) joins exact owned
+producer, declaration, backend-table and literal evidence with independent
+saved-field inventories. All 96 selected coordinate fields equal the rational
+source expression, while source bits and finite-sample scope remain explicit.
+No external graphics enum was assigned from memory, shader arithmetic copied,
+codec transferred from another mesh class or renderer conversion added.
