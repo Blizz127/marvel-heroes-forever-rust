@@ -6,6 +6,9 @@
 use std::collections::BTreeMap;
 use std::io;
 
+#[path = "gfx/shapes.rs"]
+pub mod shapes;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub max_bytes: usize,
