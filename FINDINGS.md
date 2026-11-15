@@ -5,6 +5,46 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev11 diagnostic increment
+
+**VERIFIED Rust execution:** tested source
+`35ba47d433579e89716a4c3fee69995f5454c329` builds with the window feature.
+Binary SHA256 `b3e205ae2fd77ecfc8a914cdaa8dbcd32a87107acd70e515cdd282e0e1b389bb`
+passes nine focused CLI/image checks and a fresh isolated two-frame native-window
+smoke with no stderr. The original saved login remains 33/33 text fields and
+303 glyph fills; its pixels and the original cursor output remain identical to
+the retained diagnostic outputs. Receipts are private
+`evidence/build-0.1.0-dev.11-smoke.json` and `dev11-native-html/receipt.json`.
+
+This increment adds typed attached TextFields and checked per-instance host
+state, explicit imported source/Environment identities, verified private native
+name inventories, lazy builtin values, cached localization preparation,
+conditional Stage math, instance text preparation, SHA-256 source verification,
+and the offline `frontend startup-map` command. Each component retains its
+documented supported profile. The TextField host passed two synthetic cross-layer
+tests; startup-map preparation passed four focused tests and the original-map
+CLI smoke. Original wrapper/backend localization passed its separate frozen
+integration check. These do not constitute an initialized retail frontend.
+
+Native String uppercase and further attached initialization are subsequent
+increments. The original saved login-label sequence has not yet passed through
+the integrated typed host at this build checkpoint. Rendering runtime text and
+native field lifecycle/format adoption remain separate gaps. Stage state is not
+yet a complete VM Stage factory or listener dispatch.
+
+**VERIFIED preservation:** the full selected client distribution now has all
+16,489 files hash-checked, as recorded below. The latest completed retail probe
+used the smaller 454-file snapshot and successfully checked/opened the exact
+original ClientConfig, but still showed a black primary window at its 45-second
+deadline. It performed no input and left no owned processes; all 454 input
+hashes remained unchanged. A complete-distribution comparison is being prepared.
+
+The Linux notice collection covers 121 dependencies/231 notice files, manifest
+SHA256 `56b2785d28dcea38156ad5e76775952d7c70810e8474a17d4c7c2e9343f41be3`.
+This original-code diagnostic contains no game assets, makes no server
+connection, and exposes zero finished upgrades. Private staging and launcher
+publication remain distinct; no Rust publication route has been confirmed.
+
 ## 2026-11-15 dev10 diagnostic increment
 
 **VERIFIED Rust execution:** source
@@ -61,10 +101,20 @@ The version was decoded from REA's hashed RT_VERSION resource: file offset
 The aligned `VS_FIXEDFILEINFO` starts at 46,771,936. This identifies embedded
 metadata; it does not prove an unmodified retail installation or runtime behavior.
 
-Private working copy (partial while transfer runs):
+Private working copy:
 `~/.local/share/marvel-heroes-forever-rust/pins/alienware-candidate/`.
-The name remains candidate because copy completion and all-file verification
-are separate from executable version confirmation.
+**VERIFIED at 2026-11-15 10:48:11 UTC:** the copy process exited successfully,
+then every one of the 16,489 selected files matched the source size and SHA256:
+21,193,180,456 bytes, zero problems. The directory name is retained so existing
+evidence paths stay valid. Receipt:
+`evidence/alienware-full-pin-verification-20261115T1050Z.json` (the filename is
+an identifier; its `observed_at` field records the actual completion time).
+This establishes the selected distribution's identity, not runtime parity or
+coverage of files deliberately excluded from that inventory.
+Source inventory SHA256:
+`a03c7af289214495d2871956acaf4eec378a9a3868d4f06ef72f4c19d98116e0`;
+verification receipt SHA256:
+`a8994255f33d3bb5dc5da510d755d076b80028fc28d04c0363fffe0d116862c8`.
 
 **OBSERVED:** The source manifest selects **16,489 regular distribution files,
 21,193,180,456 bytes**, including 15,250 UPKs and 311 texture caches. The inventory

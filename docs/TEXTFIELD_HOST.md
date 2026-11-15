@@ -58,6 +58,13 @@ run through this host. A later explicit selected-MovieDef binding witness and
 the native String uppercase path are required before that check can proceed;
 source versions and the saved force-uppercase flag must remain unchanged.
 
+The subsequent [source/Environment increment](TEXTFIELD_SOURCE_ENV_VERSION.md)
+adds explicit selected-MovieDef admission and local-field adoption from that
+parent movie. It preserves the legacy gate and requires the caller's bounded
+ordinary-binding profile; a version number alone does not prove the native
+loader selected that binding. At the dev11 build checkpoint, original-label
+execution through this newly admitted route is still unverified.
+
 Sources are the owner's private executable/package studies cited above and
 original project modules. No outside implementation was copied. These checks
 do not establish native startup, rendered text updates, a functioning login
