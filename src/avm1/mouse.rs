@@ -497,7 +497,7 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{CodeId, HostCall, Limits};
+    use super::super::{CodeId, HostCall, HostCommand, Limits};
     use super::*;
 
     /// ABI-test-only recorder. It does not implement a native handler/window
@@ -510,6 +510,13 @@ mod tests {
     impl Host for AbiRecorder {
         fn call(&mut self, _call: HostCall<'_>) -> std::result::Result<Value, String> {
             Err("unexpected generic host call in Mouse ABI test".into())
+        }
+        fn command(
+            &mut self,
+            _target: ObjectId,
+            _command: HostCommand,
+        ) -> std::result::Result<(), String> {
+            Err("unexpected command in Mouse ABI test".into())
         }
         fn mouse_hide(&mut self, request: MouseHideRequest) -> std::result::Result<(), String> {
             self.requests.push(request);

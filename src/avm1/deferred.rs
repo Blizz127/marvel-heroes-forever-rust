@@ -35,6 +35,8 @@ pub enum BuiltinFactory {
     Point,
     /// Canonical native flash.geom.Rectangle zero-argument construction profile.
     Rectangle,
+    /// Canonical native global Mouse with an explicit user-event host boundary.
+    Mouse,
     /// Preserve the actual token; reject only when materialization is required.
     Unsupported,
 }
@@ -149,6 +151,13 @@ impl Vm {
                 "Rectangle factory requires exact flags-zero token",
             ));
         }
+        if matches!(factory, BuiltinFactory::Mouse)
+            && (name != "Mouse" || flags != 1 || namespace != self.global)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "Mouse factory requires exact global flags-one token",
+            ));
+        }
         self.deferred_namespace_profile(namespace)?;
         if self.descriptor(namespace, &key)?.is_some() {
             return self.fail(ErrorKind::Unsupported(
@@ -197,7 +206,7 @@ impl Vm {
         }
         let required_flags = match entry.factory {
             BuiltinFactory::ExternalInterface { .. } => 0,
-            BuiltinFactory::String => 1,
+            BuiltinFactory::String | BuiltinFactory::Mouse => 1,
             BuiltinFactory::Point | BuiltinFactory::Rectangle => 0,
             BuiltinFactory::Unsupported => {
                 return self.fail(ErrorKind::UnsupportedDeferredBuiltin(name.0.clone()));
@@ -207,6 +216,11 @@ impl Vm {
             self.point_namespace_profile(entry.namespace)?;
         } else if matches!(entry.factory, BuiltinFactory::Rectangle) {
             self.rectangle_namespace_profile(entry.namespace)?;
+        }
+        if matches!(entry.factory, BuiltinFactory::Mouse) && entry.namespace != self.global {
+            return self.fail(ErrorKind::Unsupported(
+                "Mouse requires current context global",
+            ));
         }
         self.deferred_namespace_profile(entry.namespace)?;
         if !matches!(
@@ -225,6 +239,7 @@ impl Vm {
         let previous_string_graph = self.string_objects;
         let previous_point_graph = self.point_objects;
         let previous_rectangle_graph = self.rectangle_objects;
+        let previous_mouse_graph = self.mouse_objects;
         let constructor = match entry.factory {
             BuiltinFactory::ExternalInterface { call_binding } => {
                 self.build_external_interface(call_binding)?.constructor
@@ -232,6 +247,7 @@ impl Vm {
             BuiltinFactory::String => self.build_string_graph()?.constructor,
             BuiltinFactory::Point => self.build_point_graph()?.constructor,
             BuiltinFactory::Rectangle => self.build_rectangle_graph()?.constructor,
+            BuiltinFactory::Mouse => self.build_mouse_graph()?.constructor,
             BuiltinFactory::Unsupported => unreachable!(),
         };
         let publication = if matches!(
@@ -258,6 +274,7 @@ impl Vm {
             self.string_objects = previous_string_graph;
             self.point_objects = previous_point_graph;
             self.rectangle_objects = previous_rectangle_graph;
+            self.mouse_objects = previous_mouse_graph;
             return Err(error);
         }
         // No registry mutation or callback occurs during this supported factory.
@@ -731,5 +748,131 @@ mod tests {
             assert!(vm.rectangle_objects.is_none());
             assert!(vm.builtin_registry[&text("Rectangle")].cached.is_none());
         }
+    }
+    #[test]
+    fn mouse_global_token_shape_context_and_cached_alias_are_explicit() {
+        let (mut vm, other) = setup();
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        for (namespace, name, flags) in [
+            (other, "Mouse", 1),
+            (vm.global(), "Mouse", 0),
+            (vm.global(), "mouse", 1),
+        ] {
+            assert!(
+                vm.register_deferred_builtin(namespace, name, BuiltinFactory::Mouse, flags)
+                    .is_err()
+            );
+            assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        }
+        let retained = token(
+            vm.register_deferred_builtin(vm.global(), "Mouse", BuiltinFactory::Mouse, 1)
+                .unwrap(),
+        );
+        assert_eq!(
+            vm.get(vm.global(), "Mouse").unwrap(),
+            Value::DeferredBuiltin(retained.clone())
+        );
+        assert!(vm.mouse_objects.is_none());
+        assert!(vm.resolve_deferred_builtin(&retained).is_err());
+        activate(&mut vm);
+        // The native successful graph needs its cached Array parent as well.
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        assert!(vm.resolve_deferred_builtin(&retained).is_err());
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        assert!(vm.mouse_objects.is_none());
+        vm.install_array_constructor().unwrap();
+        let constructor = vm.resolve_deferred_builtin(&retained).unwrap();
+        assert_eq!(vm.mouse_objects.unwrap().constructor, constructor);
+        assert_eq!(vm.own_flags(vm.global(), &text("Mouse")), 1);
+        assert_eq!(
+            vm.get(vm.global(), "Mouse").unwrap(),
+            Value::Object(constructor)
+        );
+        vm.set(vm.global(), "Mouse", Value::Bool(false)).unwrap();
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        assert_eq!(vm.resolve_deferred_builtin(&retained).unwrap(), constructor);
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        assert_eq!(vm.get(vm.global(), "Mouse").unwrap(), Value::Bool(false));
+        vm.current_target = Some(other);
+        assert!(vm.resolve_deferred_builtin(&retained).is_err());
+    }
+
+    #[test]
+    fn mouse_named_hide_materializes_then_rejects_unbound_host_without_undoing_graph() {
+        use super::super::{Program, RejectHost};
+        use std::sync::Arc;
+        let (mut vm, _) = setup();
+        vm.install_array_constructor().unwrap();
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        vm.register_deferred_builtin(vm.global(), "Mouse", BuiltinFactory::Mouse, 1)
+            .unwrap();
+        // Original opcode shape, synthetic bytes: Push0/Mouse, GetVariable,
+        // Pushhide, CallMethod. RejectHost is never an accepting cursor stub.
+        let bytes = [
+            0x96, 12, 0, 7, 0, 0, 0, 0, 0, b'M', b'o', b'u', b's', b'e', 0, 0x1c, 0x96, 6, 0, 0,
+            b'h', b'i', b'd', b'e', 0, 0x52, 0,
+        ];
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let error = vm.execute(code, vm.root(), &mut RejectHost).unwrap_err();
+        assert!(
+            matches!(error.kind, ErrorKind::Host(ref message) if message == "Mouse.hide user-event host is unbound")
+        );
+        assert_eq!(error.source_offset, Some(25));
+        assert_eq!(error.opcode, Some(0x52));
+        assert_eq!(vm.host_calls, 1);
+        let graph = vm.mouse_objects.unwrap();
+        assert_eq!(
+            vm.get(vm.global(), "Mouse").unwrap(),
+            Value::Object(graph.constructor)
+        );
+        assert_eq!(vm.own_flags(vm.global(), &text("Mouse")), 1);
+        assert_eq!(
+            vm.get(graph.constructor, "hide").unwrap(),
+            Value::Object(graph.hide)
+        );
+        assert_eq!(graph.listeners, graph.retained_listeners);
+        assert!(matches!(vm.objects[graph.listeners.0].kind, Kind::Array(0)));
+    }
+
+    #[test]
+    fn mouse_retained_array_and_native_aliases_reject_mutation_and_reflection() {
+        use super::super::RejectHost;
+        let (mut vm, _) = setup();
+        vm.install_array_constructor().unwrap();
+        activate(&mut vm);
+        let graph = vm.build_mouse_graph().unwrap();
+        let alias = vm.alloc(Kind::Plain, Some(graph.listeners)).unwrap();
+        let before = (vm.object_count(), vm.properties, vm.string_units);
+        for id in [
+            graph.constructor,
+            graph.prototype,
+            graph.hide,
+            graph.prototype_hide,
+            graph.listeners,
+            alias,
+        ] {
+            for key in ["0", "length", "__proto__", "newValue"] {
+                assert!(vm.set(id, key, Value::Number(1.0)).is_err());
+                assert!(
+                    vm.write_property(id, key, Value::Number(1.0), &mut RejectHost)
+                        .is_err()
+                );
+                assert!(vm.delete_member(id, &text(key)).is_err());
+            }
+            assert!(vm.enumerate_names(id).is_err());
+        }
+        for id in [
+            graph.constructor,
+            graph.prototype,
+            graph.hide,
+            graph.listeners,
+        ] {
+            assert!(vm.own_property_flags(id, "hide").is_err());
+            assert!(vm.own_enumerable_names(id).is_err());
+        }
+        assert_eq!((vm.object_count(), vm.properties, vm.string_units), before);
+        assert!(matches!(vm.objects[graph.listeners.0].kind, Kind::Array(0)));
     }
 }

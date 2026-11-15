@@ -29,6 +29,8 @@ mod focus_rect;
 mod geom_namespace;
 #[path = "initial_prototype.rs"]
 mod initial_prototype;
+#[path = "mouse.rs"]
+mod mouse;
 #[path = "point.rs"]
 mod point;
 #[path = "rectangle.rs"]
@@ -75,6 +77,7 @@ pub use initial_prototype::{
     InitialMovieClipPrototypeProfile, InitialMovieClipPrototypeReason,
     InitialMovieClipPrototypeSelection,
 };
+pub use mouse::MouseObjects;
 pub use point::PointObjects;
 pub use rectangle::RectangleObjects;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
@@ -449,6 +452,9 @@ enum Kind {
     PointObject(point::PointRole),
     RectangleConstructor,
     RectangleObject(rectangle::RectangleRole),
+    MouseConstructor,
+    MousePrototype,
+    MouseMethod(mouse::MouseMethod),
     StringConstructor,
     StringObject(string::StringState),
     StringMethod(string::StringMethod),
@@ -485,6 +491,8 @@ impl Kind {
                 | Self::ExternalInterfaceConstructor
                 | Self::PointConstructor
                 | Self::RectangleConstructor
+                | Self::MouseConstructor
+                | Self::MouseMethod(_)
                 | Self::StringConstructor
                 | Self::StringMethod(_)
                 | Self::AddProperty
@@ -570,6 +578,7 @@ pub struct Vm {
     string_objects: Option<StringObjects>,
     point_objects: Option<PointObjects>,
     rectangle_objects: Option<RectangleObjects>,
+    mouse_objects: Option<MouseObjects>,
     geom_namespace: Option<GeomNamespace>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
@@ -619,6 +628,7 @@ impl Vm {
             string_objects: None,
             point_objects: None,
             rectangle_objects: None,
+            mouse_objects: None,
             geom_namespace: None,
             code: Vec::new(),
             code_bytes: 0,
@@ -1049,6 +1059,21 @@ impl Vm {
         }
         self.fail(ErrorKind::Budget("geometry mutation prototype depth"))
     }
+    fn reject_mouse_mutation_chain(&self, mut id: ObjectId) -> Result<()> {
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            if self.is_mouse_native(id) || self.is_mouse_listener(id) {
+                return self.fail(ErrorKind::Unsupported(
+                    "Mouse native/retained listener mutation profile",
+                ));
+            }
+            match self.objects[id.0].prototype {
+                Some(parent) => id = parent,
+                None => return Ok(()),
+            }
+        }
+        self.fail(ErrorKind::Budget("Mouse mutation prototype depth"))
+    }
     fn is_string_native(&self, id: ObjectId) -> bool {
         self.objects.get(id.0).is_some_and(|object| {
             matches!(
@@ -1302,7 +1327,11 @@ impl Vm {
     /// Own stored members only; no prototype lookup and no getter execution.
     pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
         self.check_object(id)?;
-        if self.is_geometry_native(id) || self.is_geom_namespace(id) {
+        if self.is_geometry_native(id)
+            || self.is_geom_namespace(id)
+            || self.is_mouse_native(id)
+            || self.is_mouse_listener(id)
+        {
             return self.fail(ErrorKind::Unsupported(
                 "partial native own-member inspection",
             ));
@@ -1329,7 +1358,11 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
-        if self.is_geometry_native(id) || self.is_geom_namespace(id) {
+        if self.is_geometry_native(id)
+            || self.is_geom_namespace(id)
+            || self.is_mouse_native(id)
+            || self.is_mouse_listener(id)
+        {
             return self.fail(ErrorKind::Unsupported(
                 "partial native own-member inspection",
             ));
@@ -1421,6 +1454,7 @@ impl Vm {
             self.object_id(args[0].clone())?
         };
         self.reject_geometry_mutation_chain(target)?;
+        self.reject_mouse_mutation_chain(target)?;
         self.reject_geom_mutation_chain(target)?;
         let prototype = matches!(
             self.objects[target.0].kind,
@@ -1501,7 +1535,11 @@ impl Vm {
         let mut names = Vec::new();
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
-            if self.is_geom_namespace(id) || !matches!(self.objects[id.0].kind, Kind::Plain) {
+            if self.is_geom_namespace(id)
+                || self.is_mouse_native(id)
+                || self.is_mouse_listener(id)
+                || !matches!(self.objects[id.0].kind, Kind::Plain)
+            {
                 return self.fail(ErrorKind::Unsupported(
                     "enumeration on non-generic or partial native class",
                 ));
@@ -1558,6 +1596,7 @@ impl Vm {
         self.check_member_target(id, key)?;
         self.reject_string_mutation_chain(id)?;
         self.reject_geometry_mutation_chain(id)?;
+        self.reject_mouse_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if !matches!(self.objects[id.0].kind, Kind::Plain) {
             return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
@@ -1679,6 +1718,9 @@ impl Vm {
             if let Some(value) = self.rectangle_read(id, key)? {
                 return Ok(value);
             }
+            if let Some(value) = self.mouse_read(id, key)? {
+                return Ok(value);
+            }
             if let Some(value) = self.geom_namespace_member(id, key)? {
                 return Ok(value);
             }
@@ -1736,6 +1778,7 @@ impl Vm {
             self.check_object(id)?;
             if self.point_read(id, key)?.is_some()
                 || self.rectangle_read(id, key)?.is_some()
+                || self.mouse_read(id, key)?.is_some()
                 || self.geom_namespace_member(id, key)?.is_some()
             {
                 return Ok(true);
@@ -1774,6 +1817,9 @@ impl Vm {
                 return Ok(Some(Property::Data(value)));
             }
             if let Some(value) = self.rectangle_read(id, key)? {
+                return Ok(Some(Property::Data(value)));
+            }
+            if let Some(value) = self.mouse_read(id, key)? {
                 return Ok(Some(Property::Data(value)));
             }
             if let Some(value) = self.geom_namespace_member(id, key)? {
@@ -1867,6 +1913,7 @@ impl Vm {
         self.check_object(id)?;
         self.reject_string_mutation_chain(id)?;
         self.reject_geometry_mutation_chain(id)?;
+        self.reject_mouse_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
             return self.attached_text_field_write(field, key, value, host);
@@ -1964,6 +2011,7 @@ impl Vm {
         }
         self.reject_string_mutation_chain(id)?;
         self.reject_geometry_mutation_chain(id)?;
+        self.reject_mouse_mutation_chain(id)?;
         self.reject_geom_mutation_chain(id)?;
         if matches!(
             self.objects[id.0].kind,
@@ -2769,6 +2817,12 @@ impl Vm {
                     "direct Rectangle invocation profile",
                 ));
             }
+            Kind::MouseConstructor => {
+                return self.fail(ErrorKind::Unsupported("direct Mouse invocation profile"));
+            }
+            Kind::MouseMethod(method) => {
+                return self.invoke_mouse_method(id, method, args, host);
+            }
             Kind::StringConstructor => {
                 return self.fail(ErrorKind::Unsupported("direct String invocation profile"));
             }
@@ -2919,6 +2973,7 @@ impl Vm {
                 };
                 self.reject_string_mutation_chain(*receiver)?;
                 self.reject_geometry_mutation_chain(*receiver)?;
+                self.reject_mouse_mutation_chain(*receiver)?;
                 self.reject_geom_mutation_chain(*receiver)?;
                 if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
                     return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
@@ -3850,6 +3905,9 @@ impl Vm {
                             pc += 1;
                             continue;
                         }
+                        if matches!(self.objects[constructor.0].kind, Kind::MouseConstructor) {
+                            return self.fail(ErrorKind::Unsupported("Mouse construction profile"));
+                        }
                         if matches!(self.objects[constructor.0].kind, Kind::StringConstructor) {
                             return self.fail(ErrorKind::Unsupported(
                                 "explicit String construction profile",
@@ -4207,6 +4265,7 @@ impl Vm {
                                         | Kind::StringObject(_)
                                         | Kind::PointObject(_)
                                         | Kind::RectangleObject(_)
+                                        | Kind::MousePrototype
                                 ) {
                                     return self.fail(ErrorKind::Unsupported(
                                         "special prototype/super typeof semantics",
@@ -4224,6 +4283,8 @@ impl Vm {
                                         | Kind::ExternalInterfaceConstructor
                                         | Kind::PointConstructor
                                         | Kind::RectangleConstructor
+                                        | Kind::MouseConstructor
+                                        | Kind::MouseMethod(_)
                                         | Kind::StringConstructor
                                         | Kind::StringMethod(_)
                                         | Kind::AddProperty

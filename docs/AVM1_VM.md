@@ -2174,3 +2174,53 @@ it does not advance the original manager or install an accepting test host.
 
 Retained native core: `rea-mouse-hide/hide.bundle.json`, REA Evidence
 `ev_30c745945b9384dc927d1a5d495a0d81436e77df954f82d483c97a4801d894be`.
+
+### Deferred Mouse and guarded hide invocation
+
+The exact global `Mouse` token can now be registered with `BuiltinFactory::Mouse`
+and flags1. It remains deferred until the actual scoped receiver is resolved.
+First materialization requires its original global token and active explicitly
+bound context, uses cached Object/Function/Array parents and preserves the global
+flags. A cached token alias retains its native registry behavior after a public
+global replacement. Failed construction/publication does not publish a fabricated
+successful cache.
+
+The typed graph contains distinct callable/prototype and function identities,
+including the actual C.hide and four separate prototype Undefined callbacks.
+Its genuine empty Array is retained as both the `_listeners` value and internal
+listener identity. The separately retained internal callback has no invented
+named property. Exact canonical C8/P6 own reads are admitted by the finite native
+getter proof; unknown members and listener-Array reads reject explicitly. Native
+objects, methods and the retained Array are protected from public mutation,
+reflection and enumeration, including through ordinary-object aliases. Listener
+operations, show, internal callbacks and Mouse construction/direct invocation
+remain unsupported.
+
+Actual hide requires zero arguments, preserves the active target/origin, ignores
+method `this`, charges the host-call budget and invokes `Host::mouse_hide` with
+index0. It returns the proved Undefined only after supported host dispatch.
+Default-host rejection remains an error; it does not imply native handler absence
+or undo the already published Mouse graph. Four prototype callbacks return
+Undefined independently without emitting the actual hide event. Dispatch is by
+function identity, never by the spelling `hide`.
+
+OBSERVED: twelve focused Rust checks pass for exact graph/flags/identities,
+resource rejection, cached parents/token aliases, getter/mutation gates,
+receiver-independent ABI requests, explicit context, argument/budget/error
+handling and default-host rejection through synthetic named CallMethod. The ABI
+recorder is test-only; it establishes no window or cursor effect. The first test
+compile exposed a missing required Host::command implementation on that recorder;
+a rejecting test-only method fixed the harness. Production metadata compilation
+passes without warnings. No original manager advancement follows from these
+synthetic checks.
+
+Static authority: `REA_MOUSE_HIDE.md`, private verification SHA-256
+`26238131e33099d7d6f3083100470ec7b3ca07db40a625c7446df1b3d57a6b8c`,
+plus finite C/P receipts documented there. The separate native-host receipt
+`mouse-host/receipt.json` SHA-256
+`9ba87020394b02c314f453e17310941338efe826e9ce9f99c784ee5f91146797`
+identifies state4 ownership at MovieImpl+228 but leaves the actual installed
+handler and cursor effect unresolved. No unconditional OS cursor operation is
+inferred. The prior Plain GLOBAL `gfxExtensions` write also remains a diagnostic
+limit: the native setter has context, version-property and marker effects beyond
+storing a Boolean. The exact Mouse.hide read does not depend on that switch.
