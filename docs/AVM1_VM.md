@@ -1037,6 +1037,16 @@ One focused test verifies metadata, unchanged-global checks and argument gating;
 the five existing attached bridge tests also pass. This supersedes the old
 NewObject shortcut that created only the linked prototype metadata.
 
+**OBSERVED:** The next frozen attached-root probe passes Object 8509 and stops
+after 58 instructions at GetVariable 8704, whose original Push 8699 refers to
+pool index 8, `MovieClip`; Extends follows at 8705. Zero initializers complete.
+The same complete saved child fixture is retained, and no host, Selection or
+registry callback occurs. Evidence is in
+`avm1-attached-manager-init-increment2/receipt.json`. Exact `MovieClip` admission
+and unchanged-native-chain raw miss are now separately verified by
+`rea-prototype-function-miss/movieclip-extension.json`; the next increment admits
+that one name while retaining all preceding lookup and mutation guards.
+
 ## Indexed movie-property host seam
 
 GetProperty/SetProperty now use `Host::get_property` / `set_property`. Both have
