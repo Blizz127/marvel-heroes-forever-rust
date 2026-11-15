@@ -709,3 +709,8 @@ factory and preamble evidence with an independent comparison of all ten saved
 frontend components. Its original reader preserves unknown record words and
 unimplemented polymorphic branches. The ledger retains exact native/tool inputs
 privately; no third-party implementation or geometry behavior was copied.
+
+The dev19 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev19-linux/manifest.json`, SHA-256
+`7b839d6c672df00331859dba2e899a83fa850bf8cf1b78c473404bfc18cbe74d`.

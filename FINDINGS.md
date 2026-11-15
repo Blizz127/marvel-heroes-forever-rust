@@ -5,7 +5,19 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev19 integration in progress
+## 2026-11-15 dev19 diagnostic increment
+
+**VERIFIED combined build/startup:** clean tested source
+`4bc1827a07e983ecbd724bf26066f249844c7191` builds with the window feature in
+23.55 seconds without warnings. All 40 CLI/image checks pass, including ten
+original ModelComponents, four class-default intakes and explicit rejection
+cases. The isolated Rust window presents two frames with empty stderr; saved
+login and cursor pixels retain their prior identities. Binary SHA-256:
+`da50b5512ecbde1e5a0d84de789253d3971ade5ac5de91d6ee6c46389c4010d7`.
+Receipts: `evidence/dev19-build-result.json`,
+`evidence/build-0.1.0-dev.19-smoke.json` and
+`evidence/dev19-native-html/receipt.json`. No native-retail startup, login,
+gameplay or publication is established by these diagnostic checks.
 
 **VERIFIED bounded ModelComponent reader:** four focused tests, 105 independent
 checks and ten original components match 214 comparison rows across all 1,440
@@ -67,7 +79,8 @@ No renderer defaults follow. Receipt:
 `evidence/scale9-texture-load/final-index.json`, SHA-256
 `df9afdbbddf04acaad47ff708c40516daee12225a6cc10008dd4d0790dbc63f2`.
 
-Dev18 remains the latest staged package; no dev19 build/startup result is claimed.
+Private dev19 staging follows these focused checks. Zero Forever upgrades are
+finished, and all inherited service/access holds remain in force.
 
 **VERIFIED saved class-default preparation:** explicit archive namespaces and
 import bindings now produce checked class/default identities, parent chains,
