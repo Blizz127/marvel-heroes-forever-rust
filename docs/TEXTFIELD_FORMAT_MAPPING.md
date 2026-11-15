@@ -239,3 +239,84 @@ binary binding. No shared configuration or native prompt was used.
 The earlier Adobe SWF references remain credited by the format/parser docs.
 This increment uses the exact owned-binary contract for derived native state,
 not an SDK implementation or an assumed browser text engine.
+
+## Original conditional scalar helper
+
+`frontend::textfield_format::derive_fresh_html(&EditText, FreshHtmlInput)`
+returns a `runtime_text::FormatBinding` for the **actual document run pair**.
+It performs no host mutation, asset lookup, format interning, setter invocation,
+namespace installation or rendering. It requires the following explicit inputs:
+
+- `definition` and `domain`: the selected source reference and the existing
+  format-association domain. The field ID, text kind, bounds and source-span
+  arithmetic are checked. The caller still establishes the actual Scene/VM
+  lifetime and that this parsed field is the selected definition.
+- `snapshot`: current document text/run pair, last input, raw target/view flags
+  and definition HTML profile. The document must be nonempty printable ASCII
+  without markup/entities, equal to the last input, and use the definition HTML
+  run pair. HTML enable/parse bits must be set; parser bits and pending forced
+  rebuild must be clear. Current defaults may have a different handle pair.
+- `conditional`: explicit successful fresh replacement, successful ordinary
+  allocation, selected-definition and no-later-format-mutation assertions.
+  Every existing side path and the separate DocView content provider must be
+  explicitly absent; unknown and present reject. These assertions are not
+  derived from matching text, saved fields, invalidation bits or numeric IDs.
+- `font`: the declared `RuntimeFont`, an independently supplied final selected
+  `FontIdentity`, explicit final-selection assertion and a known retained or
+  normalized/reselected wrapper state. The source local movie/FontID and the
+  declared resolved identity are checked. Unknown wrapper/selection and
+  effective bold/italic reject. Matching the local reference **does not prove
+  native font selection**. A supplied English choice remains conditional.
+- `layout`: explicit effective flags and bounds. Bounds must equal the parsed
+  saved bounds because the renderer currently retains them. Unsupported
+  font-class/device/auto-size/password/wrapping/static profiles reject. The
+  recovered raw DocView wordWrap bit also must be clear, so an incompatible
+  raw state cannot be hidden by the supplied flag value. Accepted flags are
+  copied exactly; no public HTML or native target bits are cast into them.
+- Bounded, nonempty `provenance`, retained with a conditional-mapping prefix.
+
+The source requires an explicit FontID, height, RGBA and layout. Missing fields
+do not select native reset defaults. This increment excludes authored HTML,
+FontClass/device-font/was-static definitions and nonempty variable names. It
+derives exact height and RGBA, maps left/right/center alignment, and supplies
+the four proven inactive effects. It never takes these values from current
+defaults or accepts arbitrary caller-provided effect overrides.
+
+Paragraph conversion uses the actual binary32 multiplier `0x3d4ccccd` and
+truncation, then converts the native integer pixel value back to twips. As an
+explicit bounded implementation policy, a source value that changes through
+that conversion returns `Error::Quantization`; it is not silently rounded.
+Thus admitted margins are multiples of 20 through 65,520, native nonnegative
+indent through 32,760, and signed leading from -32,760 through 32,760. The
+native reader interprets the serialized indent word as signed; a negative
+value rejects because the current renderer's indent is unsigned. Justified
+and unknown alignments reject. Height is an exact UInt16 input, including zero;
+zero-height rendering behavior is left to the existing layout API.
+
+All unsupported checks precede binding construction. Text inspection is
+bounded by `MAX_TEXT_BYTES`; the only new allocation is provenance, bounded
+including its prefix by `MAX_RUNTIME_PROVENANCE_BYTES` and using `try_reserve`.
+Errors leave the input field and snapshot unchanged. No external access,
+recursion or mutation occurs. The downstream renderer must still verify the
+font route, decoded font, glyphs and layout support. Font loading/rounding and
+native pixel-parity limits above continue to apply.
+
+Focused validation is retained privately in `textfield-format-helper/`.
+Seven module tests cover run-versus-default identity, native flag separation,
+every side-path/condition gate, stale or malformed documents, font selection,
+bounds, signed indent/quantization and allocation-size admission. An original
+independent numeric oracle checks 33 hand cases and the complete serialized
+16-bit numeric domains; it distinguishes native conversion from the helper's
+stricter no-quantization/unsigned-indent policy. No full project suite or native
+client was run. The exact actual-source probe and final build/source receipts
+are recorded with that private evidence; they are controlled composition,
+not discovery of a retail font, locale or runtime profile.
+
+The actual-source probe checks 13 fields of the unchanged UISource definition,
+the explicit English candidate and all six supplied label codepoints. One
+positive mapping produces the native-derived 320-twip size, saved RGBA, center
+alignment, 40-twip leading and four inactive effects. Four negative cases reject
+a wrong final font, missing final-selection assertion, changed bounds and
+unknown wrapper state. Field, snapshot and input files remain unchanged.
+`LOG IN` is supplied post-replacement state in this probe; no saved script or
+VM is executed. The earlier original-script evidence remains a separate check.
