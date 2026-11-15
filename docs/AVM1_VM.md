@@ -1616,8 +1616,6 @@ unchanged event bits and independent focus/tab provenance. Private
 retains source/binary hashes and filtered results. These are synthetic checks;
 subsequent original-frame progress is measured separately.
 
-## Dedicated saved-action execution
-
 ## Explicit current-name snapshot
 
 `AttachedNameSnapshot { target, name }` binds a caller-established current String

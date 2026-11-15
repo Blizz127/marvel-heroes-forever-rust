@@ -267,12 +267,35 @@ pub enum HostResult {
     /// values. The host owns reflected-field selection and its input limits.
     ObjectFields(Vec<(Text, Value)>),
 }
+/// Exact typed receiver and current state for an admitted named `_visible`
+/// write. The host must prepare every fallible operation before returning its
+/// one-use commit. Source/parent associations are immutable after adoption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachedVisibilityRequest {
+    pub root: ObjectId,
+    pub context: ObjectId,
+    pub receiver: AttachedClipId,
+    pub owner: ObjectId,
+    pub target: DisplayTargetId,
+    pub expected_local: bool,
+    pub visible: bool,
+    pub origin: Option<CodeOrigin>,
+}
 pub trait Host {
     fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String>;
     /// Existing hosts retain their direct-value behavior. The VM materializes
     /// ObjectFields only after this callback returns, permitting setter reentry.
     fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
         self.call(call).map(HostResult::Value)
+    }
+    /// Preparation may reject but must not publish changed display state. The
+    /// borrowed closure publishes the admitted result once after the VM commits
+    /// its raw local bit, without callbacks, reentry or fallible work.
+    fn prepare_attached_visibility(
+        &mut self,
+        _request: AttachedVisibilityRequest,
+    ) -> std::result::Result<Box<dyn FnOnce() + '_>, String> {
+        Err("attached visibility host is unbound".into())
     }
     fn get_text_field_member(
         &mut self,
