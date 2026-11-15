@@ -608,3 +608,10 @@ records the owned native cache/global lookup and later registered-class
 preparation boundaries. No external implementation was copied for either
 increment, and controlled adopted prototypes remain distinct from fresh native
 construction.
+
+[Scale9 texture inputs](SCALE9_TEXTURE_INPUTS.md) records the exact owned tooltip
+reference/export and conditional native field layout through saved Engine/Core
+declarations and native property-link routines. The source ledger identifies
+all reused private files and REA records. Loaded-field preservation, active link
+mode and current resource state remain separate inputs; no renderer default or
+new external implementation follows from this static study.

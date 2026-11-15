@@ -200,13 +200,19 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 let model = marvel_heroes_forever::upk::model::ModelObject::parse_export(
                     package, index, &bytes,
                 )?;
+                let fields = &model.native_fields;
+                let counts: Vec<_> = model
+                    .arrays
+                    .iter()
+                    .chain(&fields.arrays)
+                    .map(|array| array.count)
+                    .collect();
                 println!(
-                    "VERIFIED Model prefix: 3 raw bulk arrays, counts {:?}, {} opaque trailing bytes",
-                    model.arrays.map(|array| array.count),
-                    model.unparsed_native_tail.length,
+                    "VERIFIED Model prefix: 8 raw bulk arrays, counts {:?}, {} opaque trailing bytes",
+                    counts, model.unparsed_native_tail.length,
                 );
                 println!("Seven preserved words: {:08x?}", model.record_c5c.words);
-                for array in &model.arrays {
+                for array in model.arrays.iter().chain(&fields.arrays) {
                     println!(
                         "{:?}: stride {}, {} records at export byte {}, {} stored bytes",
                         array.slot,
@@ -219,6 +225,13 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 println!(
                     "Native +0xd8 reference: {} at export byte {}",
                     model.link_d8.reference, model.link_d8.span.offset,
+                );
+                println!(
+                    "Additional records: +0xc8={}, +0x55c={}; native +0x60 Polys reference {} at export byte {}",
+                    fields.records_c8.records.len(),
+                    fields.records_55c.records.len(),
+                    fields.polys_link.reference,
+                    fields.polys_link.span.offset,
                 );
                 println!(
                     "Records and later containers remain uninterpreted. No geometry preparation or object execution performed."

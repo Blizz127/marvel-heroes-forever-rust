@@ -43,6 +43,16 @@ startup or native execution result.
 Dev16 remains the latest staged diagnostic package. The combined dev17 build,
 native startup, login and gameplay remain unverified.
 
+**VERIFIED later Model extension:** decoding now reaches native +0x19c, with
+eight bulk arrays, +0xc8 records, the bounded inline +0x55c table and the Polys
+reference retained. Five focused Model tests and both original-export byte
+comparisons pass across 311 record spans. Entry retains 92 opaque bytes and
+FrontEnd 56. Receipt:
+`evidence/model-tail-native/independent/product-check/verification.json`, SHA-256
+`f3a0cd90edc3a684a559cbb238a066368b9ca0c1095bcbc272f84d83fda0fbb6`.
+The CLI now reports the additional arrays and records; its next binary smoke
+remains pending. No geometry semantics or execution is inferred from raw words.
+
 ## 2026-11-15 dev16 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested code
