@@ -334,3 +334,8 @@ contracts from supplied runtime state and actual retail observations.
 [Standalone retail probe](NATIVE_STANDALONE_PROBE.md) records owner-documented
 launch arguments, Wine/tools ledger and a bounded offline black-window
 observation; it does not establish a functioning login screen.
+
+[Native Stage](STAGE_RUNTIME.md) records the owned executable's lazy callable,
+context-specific viewport state, member flags, listeners and resize behavior.
+Its private REA evidence and source ledger distinguish constructor initialization
+from loaded frontend state and explicitly retain unresolved runtime inputs.

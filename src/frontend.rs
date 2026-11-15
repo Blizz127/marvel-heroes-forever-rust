@@ -49,6 +49,8 @@ pub mod preview;
 pub mod scene_content;
 #[path = "frontend/selection.rs"]
 pub mod selection;
+#[path = "frontend/textfield_state.rs"]
+pub mod textfield_state;
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
