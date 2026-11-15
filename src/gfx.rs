@@ -22,6 +22,10 @@ pub mod scale9;
 pub mod native_scale9;
 #[path = "gfx/native_scale9_geometry.rs"]
 pub mod native_scale9_geometry;
+#[path = "gfx/native_scale9_fill.rs"]
+pub mod native_scale9_fill;
+#[path = "gfx/native_scale9_tessellation.rs"]
+pub mod native_scale9_tessellation;
 #[path = "gfx/scene.rs"]
 pub mod scene;
 #[path = "gfx/shapes.rs"]

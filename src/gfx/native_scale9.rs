@@ -175,6 +175,30 @@ impl Matrix2x4 {
         }
         Ok(Self { rows })
     }
+
+    /// Inline fill path 0x1400c31b2: `self * inverse`, with that caller's
+    /// scalar operation order. Unlike the general SIMD composition, linear
+    /// coefficients receive no additional +0 operation. Unused lanes are
+    /// written directly to positive zero without reading their inputs.
+    pub(super) fn compose_fill_inverse(self, inverse: Self) -> Result<Self> {
+        let [f, g] = self.rows;
+        let [i, j] = inverse.rows;
+        let rows = [
+            [
+                add(mul(f[0], i[0])?, mul(j[0], f[1])?)?,
+                add(mul(j[1], f[1])?, mul(i[1], f[0])?)?,
+                0.0,
+                add(add(mul(j[3], f[1])?, mul(i[3], f[0])?)?, f[3])?,
+            ],
+            [
+                add(mul(g[0], i[0])?, mul(j[0], g[1])?)?,
+                add(mul(j[1], g[1])?, mul(i[1], g[0])?)?,
+                0.0,
+                add(add(mul(j[3], g[1])?, mul(i[3], g[0])?)?, g[3])?,
+            ],
+        ];
+        Ok(Self { rows })
+    }
 }
 
 /// Ordered endpoints, including equality. Builder separately requires a positive

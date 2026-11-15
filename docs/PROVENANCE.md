@@ -737,3 +737,10 @@ no additional external implementation was read. [Bounded native rectangle
 tessellation](SCALE9_TESSELLATION.md) records exact owner-binary scan/triangle
 paths, independently checked native bytes and supplied-input oracle limits.
 Neither increment supplies current scene, material or renderer state.
+
+[Selected-fill matrix arithmetic](SCALE9_FILL_MATRIX.md) reuses the owned
+native paint/bounds/helper records and original finite Scale9 math. An independent
+instruction-derived scalar oracle freezes operation-order witnesses before code
+comparison; the ledger distinguishes those supplied inputs from live provider
+or image state. No external implementation, dependency, native execution or
+renderer default was introduced.

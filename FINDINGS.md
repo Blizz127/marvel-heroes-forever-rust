@@ -20,6 +20,16 @@ follow. See `docs/FRESH_TARGET_COMPLETION.md`; receipt:
 
 Dev19 is the latest built and staged diagnostic; dev20 has not been built.
 
+**VERIFIED native fill-matrix arithmetic:** explicit selected-fill bounds now
+produce the separate whole-fill affine, inverse, native inline composition and
+subsequent image-left composition. Five focused checks and ten independently
+frozen matrix cases pass in debug/optimized profiles. Three full positive-bounds
+cases also pass; the independent comparison matches all 320 checked words.
+Absent, empty-grid and identity-image branches remain distinct, including
+signed-zero effects. Native input selection and renderer admission remain open.
+Receipt: `evidence/scale9-fill-matrix/independent/product-comparison/receipt.json`,
+SHA-256 `045864c8e5a4a23cafa4f370df21d87a7b067d19f0075af3601cf3233dee5c2d`.
+
 **VERIFIED explicit Model binding:** one retained archive namespace now checks
 the complete ordered saved Level/Model/component relationships and maps both
 component and element node lists to exact Model record spans. Four focused
