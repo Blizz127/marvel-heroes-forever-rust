@@ -7,8 +7,8 @@
 //! values remain distinct; the host owns all actual text and format state.
 
 use super::{
-    text, AttachedClipId, AttachedTarget, CodeOrigin, DisplayTargetId, ErrorKind, Host, Kind,
-    LoadedMovieSourceId, ObjectId, Result, Text, Value, Vm,
+    AttachedClipId, AttachedTarget, CodeOrigin, DisplayTargetId, ErrorKind, Host, Kind,
+    LoadedMovieSourceId, ObjectId, Result, Text, Value, Vm, text,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -468,11 +468,12 @@ mod tests {
         assert_ne!(storage.object, info.owner);
         assert!(vm.objects[storage.object.0].properties.is_empty());
         assert!(vm.objects[storage.object.0].prototype.is_none());
-        assert!(vm
-            .attached_text_field_info(second)
-            .unwrap()
-            .storage
-            .is_none());
+        assert!(
+            vm.attached_text_field_info(second)
+                .unwrap()
+                .storage
+                .is_none()
+        );
     }
 
     #[test]
@@ -494,9 +495,10 @@ mod tests {
             read: Some(Value::Bool(false)),
             ..Backend::default()
         };
-        assert!(vm
-            .attached_text_field_read(id, &text("html"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("html"), &mut host)
+                .is_err()
+        );
         assert!(host.gets.is_empty());
         assert_eq!(vm.host_calls, 0);
         assert_eq!(
@@ -562,21 +564,24 @@ mod tests {
             ("htmlText", Value::String(vec![0].into())),
             ("Text", Value::string("x")),
         ] {
-            assert!(vm
-                .attached_text_field_write(id, text(key), value, &mut host)
-                .is_err());
+            assert!(
+                vm.attached_text_field_write(id, text(key), value, &mut host)
+                    .is_err()
+            );
         }
         assert!(vm.attached_text_field_info(id).unwrap().storage.is_none());
         vm.limits.host_calls = 0;
-        assert!(vm
-            .attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
+                .is_err()
+        );
         assert!(vm.attached_text_field_info(id).unwrap().storage.is_none());
         vm.limits.host_calls = 100;
         vm.limits.objects = vm.objects.len();
-        assert!(vm
-            .attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
+                .is_err()
+        );
         vm.limits.objects += 1;
         assert!(host.sets.is_empty());
         assert_eq!(vm.host_calls, 0);
@@ -613,9 +618,10 @@ mod tests {
                     ..spec
                 })
                 .unwrap();
-            assert!(vm
-                .attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
-                .is_err());
+            assert!(
+                vm.attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
+                    .is_err()
+            );
             assert!(vm.attached_text_field_info(id).unwrap().storage.is_none());
         }
         let id = vm
@@ -625,12 +631,14 @@ mod tests {
             })
             .unwrap();
         vm.current_target = None;
-        assert!(vm
-            .attached_text_field_read(id, &text("html"), &mut host)
-            .is_err());
-        assert!(vm
-            .attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("html"), &mut host)
+                .is_err()
+        );
+        assert!(
+            vm.attached_text_field_write(id, text("html"), Value::Bool(true), &mut host)
+                .is_err()
+        );
         assert!(host.sets.is_empty());
         assert!(host.gets.is_empty());
         assert_eq!(vm.host_calls, 0);
@@ -645,22 +653,26 @@ mod tests {
             ..Backend::default()
         };
         let before = vm.string_units;
-        assert!(vm
-            .attached_text_field_read(id, &text("html"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("html"), &mut host)
+                .is_err()
+        );
         host.read = Some(Value::Bool(true));
-        assert!(vm
-            .attached_text_field_read(id, &text("text"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("text"), &mut host)
+                .is_err()
+        );
         host.read = Some(Value::String(vec![0xdc00].into()));
-        assert!(vm
-            .attached_text_field_read(id, &text("text"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("text"), &mut host)
+                .is_err()
+        );
         host.read = Some(Value::string("é😀"));
         vm.limits.string_units = before + 2;
-        assert!(vm
-            .attached_text_field_read(id, &text("text"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("text"), &mut host)
+                .is_err()
+        );
         assert_eq!(vm.string_units, before);
         assert_eq!(vm.host_calls, 4);
         vm.limits.string_units = before + 3;
@@ -673,9 +685,10 @@ mod tests {
         assert!(vm.attached_text_field_info(id).unwrap().storage.is_none());
         assert_eq!(vm.host_calls, 5);
         vm.limits.host_calls = 5;
-        assert!(vm
-            .attached_text_field_read(id, &text("html"), &mut host)
-            .is_err());
+        assert!(
+            vm.attached_text_field_read(id, &text("html"), &mut host)
+                .is_err()
+        );
         assert_eq!(host.gets.len(), 5);
     }
 }

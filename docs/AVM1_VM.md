@@ -1190,6 +1190,82 @@ unsupported arguments, overlapping definition offsets in different programs,
 and call-origin restoration after cross-program accessor lookup. The integrating
 frontend still owns export association and later instance construction.
 
+## Explicit attached TextField snapshot and native member seam
+
+`adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established
+live case-4 snapshot. It creates a distinct `AttachedTextFieldId` and owner
+ObjectId; `Value::DisplayTextField` retains display-reference identity. Source
+movie/EditText ID/header version, parent clip, supplied opaque native prototype,
+raw target flags and watch state remain explicit. This API neither executes the
+native constructor nor establishes placement/lifecycle effects. It never creates
+a generic Object prototype for the field. `AttachedChild::TextField` preserves
+this type in the complete named-child snapshot; own storage, including a present
+Undefined, still shadows the child.
+
+`attached_text_field_info` exposes source, parent, environment_owner, target,
+target_flags_6a, prototype, watch_state, owner and optional storage directly.
+The first parent with target flag 0x400 must match the supplied environment owner.
+That ancestry is checked again on each request, since supported clip state updates
+can change the marker. The owner, receiver target and active script context are
+three separate facts. `TextFieldMemberRequest` additionally carries the inherited
+environment owner, original CodeOrigin/source offset and exact member.
+
+Only case-sensitive `text`, `html` and `htmlText` member operations are admitted.
+`Host::get_text_field_member` and `Host::set_text_field_member` reject by default.
+The integrating host must bind actual Scene/source identities and explicit native
+backend state. Html uses exact Bool; text/htmlText use bounded valid NUL-free
+UTF-16 Strings. The VM does not normalize text or fabricate native defaults.
+Unknown/present watch state rejects writes. Admitted writes allocate separate
+category-13 storage before calling the backend; backend rejection preserves this
+allocation and spent host-call budget. Engineering admission failures, including
+exhausted budgets, occur before allocation. Reads do not allocate storage and
+charge returned String units. All other field members, ordinary-object conversion,
+raw property inspection and use of the field as an execution Environment remain
+explicitly unsupported.
+
+**VERIFIED static:** the case-4 owner, lazy storage, actual parent Environment and
+member-slot contracts are grounded in `TEXTFIELD_RUNTIME.md` and its private
+`textfield-runtime/rea-attached-identity-member-bridges.json` and
+`rea-attached-text-accessors.json` evidence. In particular native receiver identity
+selects the field; the active caller does not substitute for it. This remains an
+adoption API, since the complete native construction hooks have not been modeled.
+The supplied opaque prototype is a host identity, not an invented VM object.
+
+A separate narrow native comparison proof admits live display tag 7 versus
+Undefined or Null under Equals2/StrictEquals, in either order: the result is false
+without comparison-side display resolution or primitive coercion. It does not
+admit display/display equality or general display conversions. The opcode still
+performs its ordinary operand cleanup. The privately retained
+`avm1-reference/textfield-null-equality.json` (SHA256
+`e9186d2c73e37d2586bf9a5e36ed688590b60084a64b5c527fc6d85527502801`)
+independently checks 117 native instructions/392 bytes and the original manager
+method's first field-versus-Undefined comparison at 94126. Its saved source is
+`MarvelGame-frontend_manager.gfx`, SHA256
+`04d6748bc4ed845a7692a180d57b0fcd327fbbde9d84afacc461d55ca6ab8da4`.
+
+**OBSERVED controlled Rust checks:** six module tests cover identity, ancestry,
+watch/context guards, budgets, exact Unicode values and backend-error storage
+retention. Two bytecode integration tests cover request receiver/environment/
+context separation, child shadowing, prohibited owner coercion, and both display
+kinds versus both null-like primitives in both operand orders. They use explicit
+synthetic same-version snapshots and a controlled routing host; they do not claim
+native text parsing or actual login execution. Results and tested source hashes
+are retained in `avm1-runtime/textfield-bridge-evidence.json`.
+
+The current bounded adoption profile still requires definition source header
+version equal to the VM profile. This blocks the actual imported UISource version
+11 button/field under login/manager version 15. Those source versions are retained
+accurately; no fixture may relabel the imported movie. Source-definition ownership
+versus inherited execution Environment is under separate native investigation.
+The original label update, which also calls unsupported String.toUpperCase on its
+actual force-caps path, has not run through this mixed-source bridge.
+
+Source licence/provenance for this increment: the two original project runtime
+and API studies above, the privately retained owned Gazillion/Marvel executable
+and GFX movie (proprietary, compatibility study only), and retained REA/Rizin
+static outputs (REA MIT/Rizin LGPL tooling). No extracted bytecode, assets or
+native member inventories are included in source or builds.
+
 ## Exact initialization timing reference
 
 Adobe SWF19, Chapter 5, SWF 6 action model, DoInitAction, printed page 108

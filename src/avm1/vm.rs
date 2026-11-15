@@ -9,15 +9,23 @@ use std::sync::Arc;
 mod attached;
 #[path = "attached_events.rs"]
 mod attached_events;
+#[path = "attached_textfield.rs"]
+mod attached_textfield;
 #[path = "deferred.rs"]
 mod deferred;
 #[path = "external_interface.rs"]
 mod external_interface;
+use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
     AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
+pub use attached_textfield::{
+    AttachedTextFieldId, AttachedTextFieldInfo, AttachedTextFieldSource, AttachedTextFieldSpec,
+    AttachedTextFieldStorageId, TextFieldMember, TextFieldMemberRequest, TextFieldPrototypeId,
+    TextFieldWatchState,
+};
 pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 pub use external_interface::ExternalInterfaceObjects;
 
@@ -44,6 +52,7 @@ pub enum Value {
     Object(ObjectId),
     /// A supported live display reference, distinct from its owner and storage.
     DisplayClip(AttachedClipId),
+    DisplayTextField(AttachedTextFieldId),
     /// Retained native tag11 name; factory/cache belong to the active context.
     DeferredBuiltin(DeferredBuiltinName),
 }
@@ -57,7 +66,10 @@ impl Value {
             Self::Bool(v) => *v,
             Self::Number(v) => *v != 0.0 && !v.is_nan(),
             Self::String(v) => !v.is_empty(),
-            Self::Object(_) | Self::DisplayClip(_) | Self::DeferredBuiltin(_) => true,
+            Self::Object(_)
+            | Self::DisplayClip(_)
+            | Self::DisplayTextField(_)
+            | Self::DeferredBuiltin(_) => true,
         }
     }
 }
@@ -106,6 +118,7 @@ pub enum ErrorKind {
     StackUnderflow,
     InvalidObject(ObjectId),
     InvalidAttachedClip(AttachedClipId),
+    InvalidAttachedTextField(AttachedTextFieldId),
     InvalidCode(CodeId),
     InvalidRegister(u8),
     InvalidBranch(i128),
@@ -236,6 +249,19 @@ pub trait Host {
     fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
         self.call(call).map(HostResult::Value)
     }
+    fn get_text_field_member(
+        &mut self,
+        request: TextFieldMemberRequest,
+    ) -> std::result::Result<Value, String> {
+        Err(format!("unbound TextField getter: {:?}", request.member))
+    }
+    fn set_text_field_member(
+        &mut self,
+        request: TextFieldMemberRequest,
+        _value: Value,
+    ) -> std::result::Result<(), String> {
+        Err(format!("unbound TextField setter: {:?}", request.member))
+    }
     fn command(
         &mut self,
         target: ObjectId,
@@ -318,6 +344,8 @@ enum Kind {
     MovieClip(MovieClipRole),
     AttachedOwner(AttachedClipId),
     BoundStorage(AttachedClipId),
+    AttachedTextFieldOwner(AttachedTextFieldId),
+    BoundTextFieldStorage(AttachedTextFieldId),
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
@@ -423,7 +451,8 @@ pub struct Vm {
     array_prototype: Option<ObjectId>,
     class_bases: BTreeMap<ObjectId, ClassBase>,
     attached: Vec<attached::AttachedClip>,
-    attached_targets: BTreeMap<DisplayTargetId, Option<AttachedClipId>>,
+    attached_targets: BTreeMap<DisplayTargetId, AttachedTarget>,
+    text_fields: Vec<attached_textfield::AttachedTextField>,
     attached_child_entries: usize,
 }
 impl Vm {
@@ -462,6 +491,7 @@ impl Vm {
             class_bases: BTreeMap::new(),
             attached: Vec::new(),
             attached_targets: BTreeMap::new(),
+            text_fields: Vec::new(),
             attached_child_entries: 0,
         };
         if !(7..=19).contains(&version) {
@@ -773,7 +803,10 @@ impl Vm {
     fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
         if matches!(
             self.objects[id.0].kind,
-            Kind::AttachedOwner(_) | Kind::BoundStorage(_)
+            Kind::AttachedOwner(_)
+                | Kind::BoundStorage(_)
+                | Kind::AttachedTextFieldOwner(_)
+                | Kind::BoundTextFieldStorage(_)
         ) {
             return self.fail(ErrorKind::Unsupported(
                 "attached owner/storage requires typed member route",
@@ -1035,6 +1068,14 @@ impl Vm {
     /// Own stored members only; no prototype lookup and no getter execution.
     pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
         self.check_object(id)?;
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::AttachedTextFieldOwner(_) | Kind::BoundTextFieldStorage(_)
+        ) {
+            return self.fail(ErrorKind::Unsupported(
+                "TextField raw own-member inspection",
+            ));
+        }
         let key = text(key);
         Ok(self.objects[id.0]
             .properties
@@ -1044,6 +1085,14 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::AttachedTextFieldOwner(_) | Kind::BoundTextFieldStorage(_)
+        ) {
+            return self.fail(ErrorKind::Unsupported(
+                "TextField raw own-member inspection",
+            ));
+        }
         Ok(self.objects[id.0]
             .properties
             .keys()
@@ -1265,7 +1314,10 @@ impl Vm {
                 self.check_object(*id)?;
                 if matches!(
                     self.objects[id.0].kind,
-                    Kind::AttachedOwner(_) | Kind::BoundStorage(_)
+                    Kind::AttachedOwner(_)
+                        | Kind::BoundStorage(_)
+                        | Kind::AttachedTextFieldOwner(_)
+                        | Kind::BoundTextFieldStorage(_)
                 ) {
                     return self.fail(ErrorKind::Unsupported(
                         "attached owner/storage is not an ordinary object value",
@@ -1274,12 +1326,14 @@ impl Vm {
                 Ok(())
             }
             Value::DisplayClip(id) => self.check_attached(*id),
+            Value::DisplayTextField(id) => self.attached_text_field_info(*id).map(|_| ()),
             _ => Ok(()),
         }
     }
     fn target_value(&self, id: ObjectId) -> Value {
         match self.objects[id.0].kind {
             Kind::AttachedOwner(clip) => Value::DisplayClip(clip),
+            Kind::AttachedTextFieldOwner(field) => Value::DisplayTextField(field),
             _ => Value::Object(id),
         }
     }
@@ -1295,6 +1349,7 @@ impl Vm {
         let value = self.materialize_value(value)?;
         match value {
             Value::DisplayClip(id) => self.attached_owner(id),
+            Value::DisplayTextField(id) => self.attached_text_field_owner(id),
             value => self.object_id(value),
         }
     }
@@ -1466,6 +1521,9 @@ impl Vm {
     }
     fn read_member(&mut self, id: ObjectId, key: &Text, host: &mut impl Host) -> Result<Value> {
         self.check_object(id)?;
+        if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
+            return self.attached_text_field_read(field, key, host);
+        }
         if matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
             return self.get_key(id, key);
         }
@@ -1486,6 +1544,9 @@ impl Vm {
         host: &mut impl Host,
     ) -> Result<()> {
         self.check_object(id)?;
+        if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
+            return self.attached_text_field_write(field, key, value, host);
+        }
         if matches!(
             self.objects[id.0].kind,
             Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
@@ -1755,9 +1816,9 @@ impl Vm {
             Value::Null => self.fail(ErrorKind::Unsupported(
                 "unverified AVM1 null-to-number conversion",
             )),
-            Value::Object(_) | Value::DisplayClip(_) => self.fail(ErrorKind::Unsupported(
-                "object primitive coercion requires valueOf/toString",
-            )),
+            Value::Object(_) | Value::DisplayClip(_) | Value::DisplayTextField(_) => self.fail(
+                ErrorKind::Unsupported("object primitive coercion requires valueOf/toString"),
+            ),
             Value::String(s) => {
                 if s.is_empty() || s.iter().any(|u| *u > 127) {
                     return self.fail(ErrorKind::Unsupported(
@@ -1824,9 +1885,9 @@ impl Vm {
                 }
                 self.allocate_text(format!("{v:.0}").encode_utf16().collect())
             }
-            Value::Object(_) | Value::DisplayClip(_) => self.fail(ErrorKind::Unsupported(
-                "object primitive coercion requires valueOf/toString",
-            )),
+            Value::Object(_) | Value::DisplayClip(_) | Value::DisplayTextField(_) => self.fail(
+                ErrorKind::Unsupported("object primitive coercion requires valueOf/toString"),
+            ),
         }
     }
     fn variable(&mut self, frame: &Frame, key: &Text, host: &mut impl Host) -> Result<Value> {
@@ -2019,9 +2080,14 @@ impl Vm {
     ) -> Result<Execution> {
         self.reset_execution();
         self.check_object(target)?;
-        if matches!(self.objects[target.0].kind, Kind::BoundStorage(_)) {
+        if matches!(
+            self.objects[target.0].kind,
+            Kind::BoundStorage(_)
+                | Kind::BoundTextFieldStorage(_)
+                | Kind::AttachedTextFieldOwner(_)
+        ) {
             return self.fail(ErrorKind::Unsupported(
-                "bound storage is not an execution target",
+                "bound storage/TextField owner is not an execution Environment target",
             ));
         }
         let program = self
@@ -2337,6 +2403,11 @@ impl Vm {
                 return Ok(Value::Bool(accepted));
             }
             Kind::AddProperty => {
+                if matches!(this, Value::DisplayClip(_) | Value::DisplayTextField(_)) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "attached display addProperty profile",
+                    ));
+                }
                 if args
                     .iter()
                     .skip(1)
@@ -2702,7 +2773,7 @@ impl Vm {
         }
     }
     fn truth_value(&self, value: &Value) -> Result<bool> {
-        if matches!(value, Value::DisplayClip(_)) {
+        if matches!(value, Value::DisplayClip(_) | Value::DisplayTextField(_)) {
             return self.fail(ErrorKind::Unsupported(
                 "attached display Boolean conversion",
             ));
@@ -2718,6 +2789,18 @@ impl Vm {
         }
         a == b
     }
+    fn display_null_pair(a: &Value, b: &Value) -> bool {
+        matches!(
+            (a, b),
+            (
+                Value::DisplayClip(_) | Value::DisplayTextField(_),
+                Value::Undefined | Value::Null
+            ) | (
+                Value::Undefined | Value::Null,
+                Value::DisplayClip(_) | Value::DisplayTextField(_)
+            )
+        )
+    }
     fn equal(&mut self, a: &Value, b: &Value) -> Result<bool> {
         if matches!(a, Value::DeferredBuiltin(_)) {
             return Ok(matches!(b, Value::DeferredBuiltin(_)));
@@ -2730,7 +2813,14 @@ impl Vm {
             }
             return Ok(false);
         }
-        if matches!(a, Value::DisplayClip(_)) || matches!(b, Value::DisplayClip(_)) {
+        // Native null-like classification returns before display coercion or
+        // resolution for tag7 versus tag0/1. Ordinary Value cleanup is separate.
+        if Self::display_null_pair(a, b) {
+            return Ok(false);
+        }
+        if matches!(a, Value::DisplayClip(_) | Value::DisplayTextField(_))
+            || matches!(b, Value::DisplayClip(_) | Value::DisplayTextField(_))
+        {
             return self.fail(ErrorKind::Unsupported(
                 "attached display equality semantics",
             ));
@@ -3232,8 +3322,12 @@ impl Vm {
                         let value = if instruction.opcode == 0x66 {
                             if !matches!(a, Value::DeferredBuiltin(_))
                                 && !matches!(b, Value::DeferredBuiltin(_))
-                                && (matches!(a, Value::DisplayClip(_))
-                                    || matches!(b, Value::DisplayClip(_)))
+                                && !Self::display_null_pair(&a, &b)
+                                && (matches!(a, Value::DisplayClip(_) | Value::DisplayTextField(_))
+                                    || matches!(
+                                        b,
+                                        Value::DisplayClip(_) | Value::DisplayTextField(_)
+                                    ))
                             {
                                 return self.fail(ErrorKind::Unsupported(
                                     "attached display strict equality semantics",
@@ -3364,7 +3458,7 @@ impl Vm {
                             Value::Bool(_) => "boolean",
                             Value::Number(_) => "number",
                             Value::String(_) => "string",
-                            Value::DisplayClip(_) => {
+                            Value::DisplayClip(_) | Value::DisplayTextField(_) => {
                                 return self.fail(ErrorKind::Unsupported(
                                     "attached display typeof semantics",
                                 ));
@@ -4122,6 +4216,197 @@ mod tests {
         let mut bytes = push(&[Value::string(name)]);
         bytes.push(0x1c);
         bytes
+    }
+    fn typed_field_fixture() -> (Vm, AttachedClipId, AttachedClipId, AttachedTextFieldId) {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        vm.install_movie_clip_constructor().unwrap();
+        let mut make_clip = |target, parent, marked| {
+            vm.create_attached_movie_clip(AttachedClipSpec {
+                target: DisplayTargetId(target),
+                source: AttachedClipSource {
+                    movie: LoadedMovieSourceId(1),
+                    sprite_id: 1,
+                    header_version: 15,
+                },
+                parent,
+                event_state: AttachedEventState {
+                    target_flags: 0x5200_0180 | if marked { 0x400 } else { 0 },
+                    load_flags: 0,
+                    source_flags: 0,
+                },
+            })
+            .unwrap()
+        };
+        let root = make_clip(1, None, true);
+        let caller = make_clip(2, Some(root), false);
+        vm.adopt_attached_root(root).unwrap();
+        // Entirely synthetic same-version routing fixture, not UISource11.
+        let field = vm
+            .adopt_attached_text_field(AttachedTextFieldSpec {
+                target: DisplayTargetId(3),
+                source: AttachedTextFieldSource {
+                    movie: LoadedMovieSourceId(2),
+                    edit_text_id: 1,
+                    header_version: 15,
+                },
+                parent: root,
+                environment_owner: root,
+                target_flags_6a: 0x5200_0180,
+                prototype: TextFieldPrototypeId(1),
+                watch_state: TextFieldWatchState::Absent,
+            })
+            .unwrap();
+        vm.set_attached_children(
+            root,
+            vec![
+                AttachedChild::Clip {
+                    name: text("gfx"),
+                    clip: caller,
+                },
+                AttachedChild::TextField {
+                    name: text("localizedText_tf"),
+                    field,
+                },
+            ],
+        )
+        .unwrap();
+        vm.set_attached_children(caller, vec![]).unwrap();
+        vm.set(
+            vm.global(),
+            "fixtureField",
+            vm.attached_text_field_value(field).unwrap(),
+        )
+        .unwrap();
+        (vm, root, caller, field)
+    }
+
+    #[test]
+    fn typed_text_field_opcodes_preserve_receiver_environment_and_shadowing() {
+        #[derive(Default)]
+        struct FieldHost(Vec<(TextFieldMemberRequest, Option<Value>)>);
+        impl Host for FieldHost {
+            fn call(&mut self, _: HostCall<'_>) -> std::result::Result<Value, String> {
+                Err("unexpected native call".into())
+            }
+            fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+                Err("unexpected command".into())
+            }
+            fn get_text_field_member(
+                &mut self,
+                request: TextFieldMemberRequest,
+            ) -> std::result::Result<Value, String> {
+                self.0.push((request, None));
+                Ok(Value::string("controlled read"))
+            }
+            fn set_text_field_member(
+                &mut self,
+                request: TextFieldMemberRequest,
+                value: Value,
+            ) -> std::result::Result<(), String> {
+                self.0.push((request, Some(value)));
+                Ok(())
+            }
+        }
+        let (mut vm, root, caller, field) = typed_field_fixture();
+        assert_eq!(
+            vm.read_attached_member(root, "localizedText_tf").unwrap(),
+            AttachedMember::Present(Value::DisplayTextField(field))
+        );
+        let get_field = || {
+            let mut bytes = variable_bytes("_global");
+            bytes.extend(push(&[Value::string("fixtureField")]));
+            bytes.push(0x4e);
+            bytes
+        };
+        let mut bytes = get_field();
+        bytes.extend(push(&[Value::string("html"), Value::Bool(true)]));
+        bytes.push(0x4f);
+        bytes.extend(get_field());
+        bytes.extend(push(&[Value::string("text")]));
+        bytes.push(0x4e);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let caller_owner = vm.attached_owner(caller).unwrap();
+        let mut host = FieldHost::default();
+        let result = vm.execute(code, caller_owner, &mut host).unwrap();
+        assert_eq!(result.stack, vec![Value::string("controlled read")]);
+        assert_eq!(result.host_calls, 2);
+        let info = vm.attached_text_field_info(field).unwrap();
+        assert!(info.storage.is_some());
+        for (request, _) in &host.0 {
+            assert_eq!(request.field, field);
+            assert_eq!(request.owner, info.owner);
+            assert_eq!(request.target, info.target);
+            assert_eq!(request.source, info.source);
+            assert_eq!(request.context, Some(caller_owner));
+            assert_eq!(request.environment_owner, vm.attached_owner(root).unwrap());
+            assert_ne!(request.context, Some(request.environment_owner));
+        }
+        assert_eq!(host.0[0].0.member, TextFieldMember::Html);
+        assert_eq!(host.0[0].1, Some(Value::Bool(true)));
+        assert_eq!(host.0[1].0.member, TextFieldMember::Text);
+        assert!(vm.get(info.owner, "text").is_err());
+        assert!(vm.set(info.owner, "text", Value::string("x")).is_err());
+        assert!(
+            vm.set(vm.global(), "forged", Value::Object(info.owner))
+                .is_err()
+        );
+        assert!(vm.execute(code, info.owner, &mut host).is_err());
+        vm.write_attached_member(root, "localizedText_tf", Value::Undefined)
+            .unwrap();
+        assert_eq!(
+            vm.read_attached_member(root, "localizedText_tf").unwrap(),
+            AttachedMember::Present(Value::Undefined)
+        );
+        assert_eq!(
+            vm.attached_text_field_info(field).unwrap().storage,
+            info.storage
+        );
+        assert_eq!(host.0.len(), 2);
+    }
+
+    #[test]
+    fn typed_display_null_comparisons_do_not_coerce_or_dispatch() {
+        let (mut vm, root, caller, _) = typed_field_fixture();
+        vm.set(vm.global(), "fixtureClip", vm.attached_value(root).unwrap())
+            .unwrap();
+        let caller_owner = vm.attached_owner(caller).unwrap();
+        for alias in ["fixtureField", "fixtureClip"] {
+            for opcode in [0x49, 0x66] {
+                for null in [Value::Undefined, Value::Null] {
+                    for reverse in [false, true] {
+                        let mut load = variable_bytes("_global");
+                        load.extend(push(&[Value::string(alias)]));
+                        load.push(0x4e);
+                        let mut bytes = if reverse {
+                            push(&[null.clone()])
+                        } else {
+                            vec![]
+                        };
+                        bytes.extend(load);
+                        if !reverse {
+                            bytes.extend(push(&[null.clone()]));
+                        }
+                        bytes.push(opcode);
+                        let code = vm
+                            .register(Arc::new(Program::parse(&bytes).unwrap()))
+                            .unwrap();
+                        let result = vm.execute(code, caller_owner, &mut RejectHost).unwrap();
+                        assert_eq!(result.stack, vec![Value::Bool(false)]);
+                        assert_eq!(result.host_calls, 0);
+                    }
+                }
+            }
+        }
+        let mut bytes = variable_bytes("_global");
+        bytes.extend(push(&[Value::string("fixtureField")]));
+        bytes.extend([0x4e, 0x4c, 0x49]); // General display/display still gated.
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        assert!(vm.execute(code, caller_owner, &mut RejectHost).is_err());
     }
     #[test]
     fn deferred_scalars_and_token_equality_do_not_materialize() {

@@ -1,7 +1,8 @@
 //! Explicit live source MovieClip owners. No Scene IDs or implicit attachment.
 //! Native evidence and profile limits are recorded in ATTACHED_MOVIECLIP.md.
 use super::{
-    AttachedEventState, ErrorKind, Kind, ObjectId, Property, Result, Text, Value, Vm, text,
+    AttachedEventState, AttachedTextFieldId, ErrorKind, Kind, ObjectId, Property, Result, Text,
+    Value, Vm, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,6 +39,10 @@ pub enum AttachedChild {
         name: Text,
         clip: AttachedClipId,
     },
+    TextField {
+        name: Text,
+        field: AttachedTextFieldId,
+    },
     /// Retains a known named child whose receiver category is not implemented.
     /// A matching name rejects rather than falling through to the prototype.
     Unsupported {
@@ -71,7 +76,14 @@ pub struct AttachedInfo {
 #[derive(Debug, Clone)]
 enum ChildTarget {
     Clip(AttachedClipId),
+    TextField(AttachedTextFieldId),
     Unsupported(DisplayTargetId),
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AttachedTarget {
+    Clip(AttachedClipId),
+    TextField(AttachedTextFieldId),
+    Unsupported,
 }
 enum PrototypeMember {
     Missing,
@@ -159,7 +171,8 @@ impl Vm {
             children: None,
             mouse_event_marker: false,
         });
-        self.attached_targets.insert(spec.target, Some(id));
+        self.attached_targets
+            .insert(spec.target, AttachedTarget::Clip(id));
         self.loaded_movie_targets
             .insert(owner, spec.source.header_version);
         Ok(id)
@@ -282,6 +295,15 @@ impl Vm {
                     unsupported_targets.insert(target);
                     (name, target, ChildTarget::Unsupported(target))
                 }
+                AttachedChild::TextField { name, field } => {
+                    let info = self.attached_text_field_info(field)?;
+                    if info.parent != id {
+                        return self.fail(ErrorKind::Unsupported(
+                            "attached TextField child parent mismatch",
+                        ));
+                    }
+                    (name, info.target, ChildTarget::TextField(field))
+                }
             };
             units = units.saturating_add(name.len());
             if units > self.limits.string_units.saturating_sub(self.string_units) {
@@ -302,7 +324,8 @@ impl Vm {
         self.string_units += units;
         self.attached_child_entries += names.len();
         for target in unsupported_targets {
-            self.attached_targets.insert(target, None);
+            self.attached_targets
+                .insert(target, AttachedTarget::Unsupported);
         }
         self.attached[id.0].children = Some(names);
         Ok(())
@@ -533,6 +556,11 @@ impl Vm {
                 return self.fail(ErrorKind::Unsupported(
                     "attached named child receiver category",
                 ));
+            }
+            Some(ChildTarget::TextField(field)) => {
+                if self.attached_text_field_info(*field)?.target_flags_6a & 0x180 == 0x180 {
+                    return Ok(AttachedMember::Present(Value::DisplayTextField(*field)));
+                }
             }
             None => {}
         }
