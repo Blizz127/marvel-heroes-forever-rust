@@ -111,6 +111,23 @@ pub struct PrototypeReader<'a> {
 }
 
 impl PrototypeReader<'_> {
+    /// Read validated directory metadata without decoding a prototype body.
+    pub fn record_by_id(&self, id: u64) -> Option<&PrototypeRecord> {
+        self.record(*self.by_id.get(&id)?)
+    }
+
+    /// Blueprint identity uses its serialized default-prototype ID.
+    pub fn blueprint(&self, id: u64) -> Option<&Blueprint> {
+        self.schemas.blueprint(id)
+    }
+
+    /// Declared member size, available before loading for cumulative budgets.
+    pub fn member_uncompressed_size(&self, id: u64) -> Option<usize> {
+        let record = self.record_by_id(id)?;
+        let member = format!("Calligraphy/{}", record.path);
+        Some(self.archive.entry(&member)?.uncompressed_size as usize)
+    }
+
     pub fn record(&self, index: usize) -> Option<&PrototypeRecord> {
         match self.directory.records.get(index)? {
             DirectoryRecord::Prototype(record) => Some(record),
