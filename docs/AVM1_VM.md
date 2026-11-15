@@ -496,25 +496,43 @@ raw lookup/assignment paths. Missing native members stop instead of returning
 invented values. Generic subclass-prototype writes remain generic; assigning its
 `onLoad` does not invoke an inherited MovieClip assignment hook.
 
-**Current allocation gate:** Assigning a generic Tween prototype to a fresh native
-MovieClip instance invokes an additional member visitor. It may set an internal
-mouse-event-name marker based on own and inherited stored keys. Subclass allocation
-stops before creating a receiver until the complete input membership and marker
-behavior are grounded. The ordered original manager probe completes 52 initializers
-and then reports this gate at NewMethod 323687, CodeId 52. It retains one real
-Selection listener. Direct zero-argument MovieClip allocation is independently
-checked; no native executable or display instance was run.
+**VERIFIED static allocation hook:** A fresh instance's marker starts false.
+Assigning a category-11 prototype skips visitation. Assigning a generic prototype
+visits every own and inherited stored key, including hidden members, without
+reading values or evaluating getters; any of the twelve native mouse-event names
+sets the marker. The complete native MovieClip/Object prototype inventory contains
+53 stored entries and none of those names. The VM can therefore determine the
+marker from all retained script-added keys without inventing native method behavior.
+A native baseline method that has not been implemented remains unreadable; both
+member reads and existence lookup stop explicitly instead of yielding undefined
+or false. Instance mutation and future event dispatch remain separate contracts.
+
+**OBSERVED:** The original Tween initializer at 321958 now completes all 153
+instructions with a typed unbound MovieClip receiver. Its `super()` returns the
+same instance; its own hidden constructor remains the original Tween function with
+flags 3. The allocation marker is false. All six original function objects are
+copied onto MovieClip.prototype, and the original comma-selector call sets flags 1
+on `tween__start`, `tween__to`, and `tween__run`; the other three retain flags 0.
+
+The ordered original manager probe now completes **118 initializers**, retaining
+one real Selection listener. It next stops at Enumerate2 750939 in CodeId 113,
+called by initializer 118 at 757488, because native enumeration order with multiple
+visible names remains unsupported. The new state is original Rust script execution,
+not an original-client runtime or display-instance parity claim.
 
 Evidence is joined in `rea-movieclip-constructor/combined-proof-receipt.json`,
 `rea-movieclip-binding/finding-summary.json`, `rea-script-allocation/finding-summary.json`
-and the research lane's `docs/REA_MOVIECLIP_CONSTRUCTOR.md`. The initial joined
-receipt covers 30 complete static records and 6,692 PE-matched instruction spans;
-the additional read/visitor algorithm is retained in
-`rea-script-allocation/instance-read-receipt.json`. The complete native inherited
-event-key inventory remains a separate dependency before subclass construction.
-`run-init-order-movieclip.rs`, `init-order-movieclip.tsv`,
-`vm-tests-movieclip.txt` and `movieclip-runtime-evidence.json` retain the private
-original-script probe and 28 passing focused implementation checks.
+and the research lane's `docs/REA_MOVIECLIP_CONSTRUCTOR.md`. The read/visitor
+algorithm is retained in `rea-script-allocation/instance-read-receipt.json`.
+Closed inventories are
+`rea-movieclip-prototype-inventory/movieclip-prototype-inventory.json` and
+`rea-object-prototype-inventory/object-prototype-inventory.json`; they include
+later native bootstrap preservation and distinguish subsequent script writes.
+`run-init-order-movieclip-events.rs`, `init-order-movieclip-events.tsv`,
+`vm-tests-movieclip-events.txt` and `movieclip-event-startup-evidence.json` retain
+the private original-script probe and 28 passing focused implementation checks.
+Earlier `movieclip-runtime-evidence.json` preserves the superseded 52-initializer
+gated foundation measurement.
 
 ## Exact own-name property flags
 

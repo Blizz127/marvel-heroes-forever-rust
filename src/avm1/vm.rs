@@ -730,11 +730,6 @@ impl Vm {
         let clip = self.movie_clip_constructor;
         let selects_clip = clip.is_some_and(|id| selected == Value::Object(id));
         if has_movie_clip || selects_clip || clip == Some(constructor) {
-            if clip != Some(constructor) {
-                return self.fail(ErrorKind::Unsupported(
-                    "MovieClip subclass prototype-assignment hook",
-                ));
-            }
             let Some(clip) = clip else {
                 return self.fail(ErrorKind::Unsupported("uninstalled MovieClip allocator"));
             };
@@ -758,6 +753,7 @@ impl Vm {
                             "modified MovieClip constructor prototype",
                         ));
                     }
+                    let event_names = self.movie_clip_prototype_event_marker(prototype.unwrap())?;
                     let object =
                         self.alloc(Kind::MovieClip(MovieClipRole::UnboundInstance), prototype)?;
                     self.raw_member(
@@ -766,7 +762,7 @@ impl Vm {
                         Property::Data(Value::Object(constructor)),
                         3,
                     )?;
-                    self.movie_clip_event_names.insert(object, false);
+                    self.movie_clip_event_names.insert(object, event_names);
                     return Ok(object);
                 }
                 if depth == self.limits.prototype_depth {
@@ -807,6 +803,9 @@ impl Vm {
             // Native category11 prototype assignment skips the visitor. Fresh marker=0.
             return Ok(false);
         }
+        // REA's complete native MovieClip/Object prototype inventories contain no
+        // matching event names. Unimplemented baseline methods stay unreadable;
+        // this scan includes every stored script-added key on the retained chain.
         let names = [
             "onPress",
             "onRelease",
@@ -3395,7 +3394,7 @@ mod tests {
             vm.get(tween_proto, "__constructor__").unwrap(),
             Value::Object(movie_clip)
         );
-        for name in ["MovieClip"] {
+        for name in ["MovieClip", "Tween"] {
             let mut code = push(&[Value::Number(0.0), Value::string(name)]);
             code.push(0x40);
             let result = execute(&mut vm, &code).unwrap();
@@ -3406,6 +3405,10 @@ mod tests {
             assert_eq!(
                 vm.movie_clip_role(instance).unwrap(),
                 Some(MovieClipRole::UnboundInstance)
+            );
+            assert_eq!(
+                vm.movie_clip_has_mouse_event_names(instance).unwrap(),
+                Some(false)
             );
             let expected = if name == "Tween" { tween } else { movie_clip };
             assert_eq!(
@@ -3438,6 +3441,24 @@ mod tests {
         ]);
         wrong_args.push(0x40);
         assert!(execute(&mut vm, &wrong_args).is_err());
+        // The allocated receiver retains its computed marker across the pure super call.
+        vm.raw_member(
+            tween_proto,
+            text("onPress"),
+            Property::Data(Value::Undefined),
+            1,
+        )
+        .unwrap();
+        let mut marked_new = push(&[Value::Number(0.0), Value::string("Tween")]);
+        marked_new.push(0x40);
+        let marked = execute(&mut vm, &marked_new).unwrap();
+        let Value::Object(marked) = marked.stack[0] else {
+            panic!()
+        };
+        assert_eq!(
+            vm.movie_clip_has_mouse_event_names(marked).unwrap(),
+            Some(true)
+        );
         // A public rewrite controls allocation; hidden superclass alone must not grant type11.
         vm.set(tween_proto, "constructor", Value::Object(tween))
             .unwrap();
