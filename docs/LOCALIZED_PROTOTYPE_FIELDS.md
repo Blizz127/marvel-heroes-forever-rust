@@ -183,6 +183,29 @@ schema relationships that have not been established here.
 
 ## Evidence and provenance
 
+**VERIFIED original-resource preparation:** All 27 selected frontend keys resolve
+through this profile. A frozen independent raw-byte oracle agrees on 54 effective
+references and their layer/prototype/member/group/field origins, all chain lengths
+and tooltip flags. All display references originate in children. The Help button's
+zero tooltip comes from the default layer; the other 26 are explicit child zeros.
+A separate raw STR2 scan agrees on all 54 returned text byte strings, including
+the present empty zero-ID entry. No locale fallback was needed in these cases.
+
+Twelve focused boundary cases cover exact missing members, explicit inheritance,
+zero replacing a nonzero parent, absent stored fields, foreign binding/contributors,
+duplicate assignments/identities, mixin copies, cycles, wrong scalar types and
+parent budgets. These are controlled fixture changes, not native executions.
+The private harness's initial missing Rust borrow-lifetime annotation was corrected
+without changing product code; both attempts remain recorded.
+
+Receipt: `evidence/localized-prototype-check/verification.json`, SHA-256
+`4fc44546dc6902b16a5eea86ade5700166586fd3658b1b99af3a98fd5b493dbb`.
+Independent oracle comparison:
+`evidence/localized-prototype-oracle-comparison/comparison.json`, SHA-256
+`569a31f10dce34e0b62ab8663269e23e98338d99f0e7a481c549fe8b738b83f1`.
+These checks do not install a native callback, allocate its VM result object or
+update an actual displayed label.
+
 All retained binaries, package members, disassembly, raw text and probes remain
 under `~/.local/share/marvel-heroes-forever-rust/evidence/`. The only repository
 change for this investigation is this document.
