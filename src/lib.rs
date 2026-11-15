@@ -16,6 +16,7 @@ pub mod prototype_values;
 #[cfg(feature = "renderer")]
 pub mod render;
 pub mod sip;
+pub mod skeletal_mesh;
 pub mod static_mesh;
 pub mod texture;
 pub mod texture_cache;

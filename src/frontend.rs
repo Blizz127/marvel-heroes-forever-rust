@@ -26,6 +26,8 @@ pub mod display_state;
 pub mod host;
 #[path = "frontend/library.rs"]
 pub mod library;
+#[path = "frontend/pointer.rs"]
+pub mod pointer;
 #[cfg(feature = "renderer")]
 #[path = "frontend/preview.rs"]
 pub mod preview;

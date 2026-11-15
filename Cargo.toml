@@ -1,6 +1,6 @@
 [package]
 name = "marvel-heroes-forever"
-version = "0.1.0-dev.5"
+version = "0.1.0-dev.6"
 edition = "2024"
 rust-version = "1.88"
 publish = false

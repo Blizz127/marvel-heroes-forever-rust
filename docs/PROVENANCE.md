@@ -215,3 +215,16 @@ remain provenance; registration does not instantiate a class.
 REA Function/apply registration, receiver and empty-argument evidence, with
 closure/frame boundaries kept explicit. It supplies evidence for future VM work;
 documentation alone does not claim those paths are implemented.
+
+[Native Array prototype](REA_ARRAY.md), [display action lifecycle](REA_DISPLAY_LIFECYCLE.md)
+and [MovieClip callback](REA_MOVIECLIP_CONSTRUCTOR.md) register additional bounded
+REA evidence from the owned executable. The callback alone does not establish
+native allocation, and the lifecycle findings do not establish complete startup.
+[Skeletal mesh geometry](SKELETAL_MESH.md) records the exact read-only MIT UEViewer
+source files, owner asset hashes and independent raw-field checks used for the
+original bounded skeletal reader. Animation and skinning are separate work.
+[Localization runtime trace](FRONTEND_LOCALIZATION_RUNTIME.md) records exact
+owned script/native callback, export linkage and prototype-ID formatting evidence.
+It does not replace the unresolved native callback aggregate or startup path.
+[Persistent pointer controller](FRONTEND_POINTER.md) composes the existing
+original VM and display bridge, with the same Adobe/private-script provenance.
