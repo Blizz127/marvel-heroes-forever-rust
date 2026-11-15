@@ -24,6 +24,14 @@ current-frame TextField composition adapter is reserved for the next increment.
 No new original constructor, native frontend, login or gameplay success is
 claimed; there are still zero finished Forever upgrades.
 
+**VERIFIED private staging, 12:26 UTC:** `builds/0.1.0-dev.16` contains 380
+original-only selected files. Every manifest size/hash and the complete file set
+match; packaged version and Original-preset readback pass. Clean packaged source
+is `f7867a214104e11461fa8ff91d61808094016299`, differing from the tested code only
+in documentation. Receipt: `evidence/build-0.1.0-dev.16-package-validation.json`.
+This supersedes dev15's Rust diagnostic staging. Publication and owner-device
+validation remain unconfirmed; the retail client remains separate.
+
 **VERIFIED integration:** the window-feature type check after underscore
 admission and the test-only import correction passes without warnings at
 `3411f2bdbe9cd4b73d1f31d8d41cfa00b6c066cb` (private
