@@ -453,3 +453,15 @@ interpret the existing diagnostic blend state, not copied into game logic.
 [Saved handler table](SAVED_HANDLER_TABLE.md) implements ordered, per-owner
 source-wrapper handles from the registered native event contracts. Its supported
 mask profile and focused synthetic checks do not establish lifecycle delivery.
+
+The [fresh HTML scalar-format helper](TEXTFIELD_FORMAT_MAPPING.md) now implements
+the qualified owned-binary derivation in original Rust. It preserves explicit
+final-font, effective-layout and current-state inputs; conditional checks do not
+observe native font selection or enable unsupported formatting paths.
+
+[Attached visibility](ATTACHED_VISIBILITY.md) registers the owned native getter,
+setter, render-node effects and conditional scheduling work. A renderer Boolean
+alone is not presented as that complete setter. [Scale9 rendering](SCALE9_RENDERING.md)
+extends owned-binary evidence to hierarchy, region transforms and fill mapping,
+while retaining final coordinate/resource-binding gaps and the older helper's
+inferred status.

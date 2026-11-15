@@ -61,6 +61,8 @@ pub mod stage_state;
 pub mod startup_map;
 #[path = "frontend/textfield_state.rs"]
 pub mod textfield_state;
+#[path = "frontend/textfield_format.rs"]
+pub mod textfield_format;
 #[path = "frontend/textfield_host.rs"]
 pub mod textfield_host;
 
