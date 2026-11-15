@@ -514,3 +514,8 @@ adds the native simple-name target route; it also registers the studied Microsof
 CRT `strchr` documentation (CC BY 4.0), used only to interpret delimiter search.
 [MovieClip autoSize](ATTACHED_AUTOSIZE_FALLTHROUGH.md) records the concrete
 case-3 ordinary-property fallback separately from TextField layout behavior.
+
+[Saved scene handler binding](SAVED_SCENE_HANDLERS.md) uses the owned AS2
+placement-loader evidence to retain each original record's source, mask and
+installation identity. Its 34-handler original-data check executes no scripts;
+runtime state, delivery and constructor scheduling remain separate requirements.
