@@ -127,3 +127,15 @@ are retained in `evidence/avm1-runtime/saved-runtime-first-checks.json`, SHA256
 `5e70bf086f7397109f605a31895964436baa53988d093fd286064a15cf51260e`.
 This is synthetic runtime verification; no original saved handler or native
 event comparison was run for this increment.
+
+Five additional opcode checks pass on frozen `7f233ca`: DefineLocal's target
+normal-write route and global isolation, DefineLocal2 conversion without
+declaration, persistent registers and out-of-bank semantics, branch-selected
+first pool with ignored later undecodable strings, and partial state retained on
+the supplied stack ceiling. These use an explicitly synthetic authenticated-
+profile fixture; they do not assert any native initial state. Private
+`evidence/saved-opcode-checks/retry-7f233ca/receipt.json`, SHA256
+`bf406110c9ed08758c135d45cd4a11df066bbdf642983272d66dce086323eace`,
+records the compile/run success and frozen hashes. The earlier `890e681` test
+assertion compilation failure is preserved separately; no tests ran in that
+attempt. The clone-compatible assertion fix changed no VM runtime behavior.
