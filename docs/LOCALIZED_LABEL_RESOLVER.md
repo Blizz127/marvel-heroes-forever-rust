@@ -81,6 +81,24 @@ The exact resource must pass the existing `localized_prototype::resolve`
 class/schema, parent, field and budget checks before a public result exists.
 There is deliberately no public unchecked-label-to-ID success API.
 
+## Explicit callback resource backend
+
+`frontend::localized_callback::LocalizationCallback` combines this resolver with
+an explicitly selected `LocaleCatalog`. `resolve_call` accepts the saved wrapper's
+exact `GetLocalizedObjectDataByLabel` name and one nonempty NUL-free ASCII String
+label, then returns the VM's fresh-object field description through
+`LocalizedObjectData::into_host_result`. It does not install ExternalInterface,
+select an Environment/movie, or manufacture an Unreal receiver. The integrating
+host must establish those associations before routing a request here.
+
+The backend checks request and UTF-16 input bounds before conversion or lookup.
+Unsupported callbacks, argument types, labels, resources and text-formatting
+paths return explicit errors. There is no invented failure object or fallback.
+It retains only the last successfully resolved resource, including configuration
+and field origins. Rejected requests preserve that record. Its `resolved` counter
+means successful resource preparation; subsequent VM allocation and ordinary
+setters may still fail and are not counted as completed script invocations.
+
 ## Budgets and errors
 
 `Limits` exposes SIP index/member budgets, total decoded metadata bytes,

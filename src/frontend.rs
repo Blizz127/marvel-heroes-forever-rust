@@ -30,6 +30,8 @@ pub mod host;
 pub mod init_ledger;
 #[path = "frontend/library.rs"]
 pub mod library;
+#[path = "frontend/localized_callback.rs"]
+pub mod localized_callback;
 #[path = "frontend/localized_data.rs"]
 pub mod localized_data;
 #[path = "frontend/localized_label.rs"]
