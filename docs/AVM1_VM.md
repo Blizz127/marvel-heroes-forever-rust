@@ -2082,3 +2082,41 @@ installation, unallocated storage, the distinct later-setter hook and unchanged
 source/parent/target admission. A production metadata compile also passes without
 warnings. These checks are synthetic and do not establish retail lifecycle timing
 or current adopted-instance defaults.
+
+### Bounded Rectangle construction
+
+`install_flash_geom_point_rectangle` adds the verified Rectangle token alongside
+Point during the same fresh namespace transaction; the existing Point-only API
+retains its earlier scope. Both names remain deferred until the original opcode
+resolves the selected value in the active bound context. Rectangle publication
+uses its checked retained namespace and caches its own constructor/prototype
+identities. Unknown namespace entries remain explicit boundaries.
+
+Rectangle has separate callable, prototype and instance roles. Zero-argument
+NewMethod checks its current canonical public links and creates a distinct
+instance with own `__proto__`, x, y, width, height and `__constructor__`, in the
+native insertion order and flags. The four fields initially contain positive
+zero. The existing Number category represents native Integer zero; native tag
+identity and allocation counts are not reproduced by this representation.
+
+Its prototype's seven stored zero placeholders (left, top, right, bottom,
+topLeft, bottomRight, size) are distinguished from instance computed properties.
+Reading those computed names on an instance still rejects. Fifteen native
+prototype methods remain omitted, so unknown reads, raw reflection, enumeration,
+all writes, changed graph links and unsupported invocation/construction forms
+reject rather than fabricate absence or success. Point and Rectangle constructors
+or instances cannot substitute for one another. Factory and publication failures
+restore unexposed Rust graph/counter/cache state; this is an engineering policy,
+not native out-of-memory continuation.
+
+The static authority is `REA_RECTANGLE_CONSTRUCTION.md`, private verification
+`rea-rectangle-construction/verification.json` SHA-256
+`85102e75375831dc691e1a78aec6c5c79b4f7ca3996846d0f68479408c89d35e`.
+
+OBSERVED: 26 distinct focused Rust checks pass across Rectangle graph/instance,
+Point regression, deferred registry and namespace/opcode paths; production
+metadata compilation passes without warnings. The negative opcode fixture first
+incorrectly expected executed Push strings to consume no string budget; its
+assertion now preserves and checks that normal charge while requiring no new
+object/property allocation. No runtime behavior changed for that correction.
+Original manager replay is a separate evidence step, not implied by these tests.

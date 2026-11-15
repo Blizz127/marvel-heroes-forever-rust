@@ -704,6 +704,92 @@ mod tests {
     }
 
     #[test]
+    fn rectangle_opcode_and_direct_call_forms_outside_newmethod_zero_reject() {
+        use super::super::{Program, RejectHost};
+        use std::sync::Arc;
+        fn push(values: &[Value]) -> Vec<u8> {
+            let mut payload = Vec::new();
+            for value in values {
+                match value {
+                    Value::Number(number) => {
+                        payload.push(7);
+                        payload.extend((*number as i32).to_le_bytes());
+                    }
+                    Value::String(name) => {
+                        payload.push(0);
+                        payload.extend(String::from_utf16(name).unwrap().bytes());
+                        payload.push(0);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            let mut bytes = vec![0x96];
+            bytes.extend((payload.len() as u16).to_le_bytes());
+            bytes.extend(payload);
+            bytes
+        }
+        for named_method in [false, true] {
+            let mut vm = base();
+            let graph = vm.build_rectangle_graph().unwrap();
+            vm.set(
+                vm.global(),
+                "TestRectangle",
+                Value::Object(graph.constructor),
+            )
+            .unwrap();
+            let holder = vm.object().unwrap();
+            vm.set(holder, "R", Value::Object(graph.constructor))
+                .unwrap();
+            vm.set(vm.global(), "Holder", Value::Object(holder))
+                .unwrap();
+            let mut bytes = if named_method {
+                let mut bytes = push(&[
+                    Value::Number(3.0),
+                    Value::Number(1.0),
+                    Value::string("Holder"),
+                ]);
+                bytes.push(0x1c);
+                bytes.extend(push(&[Value::string("R")]));
+                bytes.push(0x53);
+                bytes
+            } else {
+                let mut bytes = push(&[Value::Number(0.0), Value::string("TestRectangle")]);
+                bytes.push(0x40);
+                bytes
+            };
+            bytes.push(0);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            let before = counts(&vm);
+            let error = vm.execute(code, vm.root(), &mut RejectHost).unwrap_err();
+            assert_eq!(
+                error.kind,
+                ErrorKind::Unsupported("Rectangle construction requires zero-argument NewMethod")
+            );
+            // Rejected construction creates no graph/instance fields. Executed
+            // Push strings still consume their normal per-run string budget.
+            let after = counts(&vm);
+            assert_eq!((after.0, after.1), (before.0, before.1));
+            assert_eq!(after.2 - before.2, if named_method { 7 } else { 13 });
+            assert_eq!(vm.rectangle_objects, Some(graph));
+            let error = vm
+                .call(
+                    Value::Object(graph.constructor),
+                    Value::Undefined,
+                    &[],
+                    &mut RejectHost,
+                )
+                .unwrap_err();
+            assert_eq!(
+                error.kind,
+                ErrorKind::Unsupported("direct Rectangle invocation profile")
+            );
+            assert_eq!(counts(&vm), after);
+        }
+    }
+
+    #[test]
     fn rectangle_and_point_roles_and_constructors_cannot_substitute_for_each_other() {
         let mut vm = base();
         let rectangle = vm.build_rectangle_graph().unwrap();
