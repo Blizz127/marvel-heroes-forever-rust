@@ -968,6 +968,23 @@ The static contracts are in `docs/ATTACHED_MOVIECLIP.md`,
 `docs/ATTACHED_MEMBER_NAMES.md`, `rea-prototype-function-miss/finding-summary.json`
 and the retained event-wrapper receipts cited by `attached_events.rs`.
 
+**OBSERVED controlled attached-root boundary:** The original manager's saved first
+root frame has exactly three named local sprite placements: `escapeMenuFadeIn_mc`
+(sprite 32/depth 1), `manager_mc` (sprite 29/depth 3), and `cursor_mc`
+(sprite 27/depth 5). A separate probe creates these explicit source identities,
+adopts a fresh attached root before host setup/compilation, and freezes the complete
+unique named-child snapshot. All four targets use declared raw-state fixtures;
+placement callbacks, class construction, frame actions and child events are not run.
+
+The first initializer (tag 379, sprite 33, source 7239+5138) stops after 12
+instructions at NewObject 8509 because the exact attached-name profile does not
+yet admit `Object`. Original pool 7239 index 2 and Push 8493 establish that operand.
+Zero initializers complete, no host/class/Selection calls occur, and root storage
+remains absent. Private `avm1-attached-manager-init/receipt.json` and
+`rejected-operand.json` retain the frozen source hashes, complete child accounting
+and parsed operand evidence. This is distinct from the earlier 452-initializer
+Plain-root diagnostic; neither fixture establishes native startup parity.
+
 ## Indexed movie-property host seam
 
 GetProperty/SetProperty now use `Host::get_property` / `set_property`. Both have
