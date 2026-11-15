@@ -282,3 +282,24 @@ The binary SHA-256 is
 Receipts: `evidence/build-0.1.0-dev.4-smoke.json` and
 `evidence/build-0.1.0-dev.4-package-validation.json`. This is private staging,
 not confirmed launcher publication, owner-device testing or retail parity.
+
+**VERIFIED (private dev.5 staging):** All nine focused final checks pass. Supported
+original text yields 232 glyph fills in the saved login snapshot; the integrated
+image matches the independent adapter bytes. The original manager MouseMove
+handler executes 14 instructions/six host calls and moves its actual cursor to
+the supplied (100,200) pixel position, with nonwhite pixels bounded by
+(100,200)–(142,238). Reusable GPU resources preserve image bytes, and the final
+native preview presents two frames. These are diagnostic checks, not native
+retail visual or input comparisons.
+
+**OBSERVED:** The final initializer CLI completes 52 original manager initializers
+and retains exactly one Selection listener. It stops at source323687 with
+unsupported super/parent preload after 8,669 instructions; it does not execute
+the remaining initializers, ordinary frame actions or full startup.
+
+All 271 packaged files verify; notices cover 114 crates and 217 texts. Clean
+source commit: `477f2bb29cae43fc5e22cf69e1a11317e20736ac`. Binary SHA-256:
+`8715ccb6c7c43fd538d87b583193116a65e5085e436d4eeb72e5b631592f0efc`.
+Receipts: `evidence/build-0.1.0-dev.5-smoke.json` and
+`evidence/build-0.1.0-dev.5-package-validation.json`. No original game data is
+packaged. Private staging remains distinct from publisher-channel delivery.
