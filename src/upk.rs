@@ -9,11 +9,14 @@ use std::path::Path;
 
 #[path = "upk/lzo.rs"]
 mod lzo;
+#[path = "upk/objects.rs"]
+pub mod objects;
 
 pub const PACKAGE_TAG: u32 = 0x9e2a_83c1;
 pub const FILE_VERSION: u16 = 868;
 pub const LICENSEE_VERSION: u16 = 3;
 pub const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
+pub const MAX_EXPORT_BYTES: usize = 64 * 1024 * 1024;
 const MAX_TABLE_ENTRIES: usize = 1_000_000;
 const MAX_STRING_BYTES: usize = 1024 * 1024;
 const MAX_GENERATIONS: usize = 4096;
@@ -252,6 +255,92 @@ pub struct Package {
     pub exports: Vec<Export>,
 }
 
+/// Binds parsed metadata to its original stored bytes for checked payload reads.
+/// Reading exports does not deserialize their class-specific native payloads.
+pub struct PackageArchive {
+    package: Package,
+    stored: Vec<u8>,
+}
+
+impl PackageArchive {
+    pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::parse(read_package(path)?)
+    }
+
+    pub fn parse(stored: Vec<u8>) -> io::Result<Self> {
+        let package = Package::parse(&stored)?;
+        Ok(Self { package, stored })
+    }
+
+    pub fn package(&self) -> &Package {
+        &self.package
+    }
+
+    pub fn read_export(&self, index: usize) -> io::Result<Vec<u8>> {
+        let export = self
+            .package
+            .exports
+            .get(index)
+            .ok_or_else(|| invalid("export index is out of bounds"))?;
+        self.read_range(export.serial_offset, export.serial_size)
+    }
+
+    /// Read at most 64 MiB in the logical package address space.
+    ///
+    /// For compressed packages, only ranges covered by compression-map chunks
+    /// are accepted. The stored summary is longer than its logical counterpart;
+    /// this API deliberately does not invent a reconstructed summary prefix.
+    pub fn read_range(&self, offset: usize, length: usize) -> io::Result<Vec<u8>> {
+        if length > MAX_EXPORT_BYTES {
+            return Err(invalid("logical range exceeds the 64 MiB read limit"));
+        }
+        let summary = &self.package.summary;
+        let logical_size = summary.chunks.last().map_or(self.stored.len(), |chunk| {
+            chunk.logical_offset + chunk.logical_size
+        });
+        let end = checked_end(offset, length, logical_size)?;
+        if length == 0 {
+            return Ok(Vec::new());
+        }
+        if summary.compression_flags == 0 && summary.chunks.is_empty() {
+            return Ok(self.stored[offset..end].to_vec());
+        }
+        if summary.compression_flags != 2 {
+            return Err(unsupported("logical range codec is unsupported"));
+        }
+        let mut output = Vec::with_capacity(length);
+        let mut position = offset;
+        for chunk in &summary.chunks {
+            let chunk_end = chunk.logical_offset + chunk.logical_size;
+            if chunk_end <= position {
+                continue;
+            }
+            if position == end {
+                break;
+            }
+            if chunk.logical_offset > position {
+                return Err(unsupported(
+                    "logical range is not covered by compressed chunks",
+                ));
+            }
+            let take = (end - position).min(chunk_end - position);
+            let stored_end =
+                checked_end(chunk.stored_offset, chunk.stored_size, self.stored.len())?;
+            output.extend_from_slice(&decode_chunk_range(
+                &self.stored[chunk.stored_offset..stored_end],
+                chunk.logical_size,
+                position - chunk.logical_offset,
+                take,
+            )?);
+            position += take;
+        }
+        if position != end {
+            return Err(invalid("incomplete logical range coverage"));
+        }
+        Ok(output)
+    }
+}
+
 impl Package {
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         Self::parse(&read_package(path)?)
@@ -350,6 +439,30 @@ impl Package {
             format!("{base}_{}", name.number - 1)
         })
     }
+
+    /// Resolve the local name of an import/export reference, without loading
+    /// another package. Zero is the null object reference.
+    pub fn resolve_object_name(&self, index: i32) -> Option<String> {
+        let name = if index > 0 {
+            self.exports.get(index as usize - 1)?.object_name
+        } else if index < 0 {
+            self.imports
+                .get(index.unsigned_abs() as usize - 1)?
+                .object_name
+        } else {
+            return None;
+        };
+        self.resolve_name(name)
+    }
+
+    pub fn export_class_name(&self, index: usize) -> Option<String> {
+        let class_index = self.exports.get(index)?.class_index;
+        if class_index == 0 {
+            Some("Class".to_owned())
+        } else {
+            self.resolve_object_name(class_index)
+        }
+    }
 }
 
 fn decode_metadata_header(summary: &Summary, bytes: &[u8]) -> io::Result<Vec<u8>> {
@@ -386,6 +499,16 @@ fn decode_metadata_header(summary: &Summary, bytes: &[u8]) -> io::Result<Vec<u8>
 /// metadata. Export payload blocks remain unexamined; this is not file integrity
 /// validation and is deliberately separate from the private pin's SHA-256.
 fn decode_chunk_prefix(bytes: &[u8], logical_size: usize, needed: usize) -> io::Result<Vec<u8>> {
+    decode_chunk_range(bytes, logical_size, 0, needed)
+}
+
+fn decode_chunk_range(
+    bytes: &[u8],
+    logical_size: usize,
+    offset: usize,
+    needed: usize,
+) -> io::Result<Vec<u8>> {
+    let requested_end = checked_end(offset, needed, logical_size)?;
     let mut input = Cursor::new(bytes);
     if input.u32()? != PACKAGE_TAG {
         return Err(invalid("invalid compressed chunk tag"));
@@ -398,7 +521,7 @@ fn decode_chunk_prefix(bytes: &[u8], logical_size: usize, needed: usize) -> io::
     }
     let stored_total = input.nonnegative("compressed payload size")?;
     let logical_total = input.nonnegative("decompressed chunk size")?;
-    if logical_total != logical_size || needed > logical_total {
+    if logical_total != logical_size {
         return Err(invalid("compression envelope disagrees with chunk map"));
     }
     let count = logical_total.div_ceil(block_size);
@@ -426,13 +549,23 @@ fn decode_chunk_prefix(bytes: &[u8], logical_size: usize, needed: usize) -> io::
         return Err(invalid("compression block totals disagree with envelope"));
     }
     let mut output = Vec::with_capacity(needed);
+    let mut logical_position = 0usize;
     for (stored, logical) in blocks {
         if output.len() == needed {
             break;
         }
-        let decoded = lzo::decompress(input.take(stored)?, logical)?;
-        let take = (needed - output.len()).min(logical);
-        output.extend_from_slice(&decoded[..take]);
+        let payload = input.take(stored)?;
+        let block_end = logical_position + logical;
+        if block_end > offset && logical_position < requested_end {
+            let decoded = lzo::decompress(payload, logical)?;
+            let start = offset.saturating_sub(logical_position);
+            let end = logical.min(requested_end - logical_position);
+            output.extend_from_slice(&decoded[start..end]);
+        }
+        logical_position = block_end;
+    }
+    if output.len() != needed {
+        return Err(invalid("compression blocks do not cover logical read"));
     }
     Ok(output)
 }
@@ -632,7 +765,7 @@ mod tests {
     }
 
     // Constructed format fixture; no retail asset bytes are embedded in tests.
-    fn fixture() -> Vec<u8> {
+    pub(super) fn fixture() -> Vec<u8> {
         let mut bytes = Vec::new();
         word(&mut bytes, PACKAGE_TAG);
         word(
@@ -804,5 +937,77 @@ mod tests {
         assert!(decode_chunk_prefix(&bytes, 5, 4).is_err());
         bytes.push(0);
         assert!(decode_chunk_prefix(&bytes, 4, 4).is_err());
+    }
+
+    #[test]
+    fn archive_payload_access_checks_bounds_and_binding() {
+        let bytes = fixture();
+        let archive = PackageArchive::parse(bytes.clone()).unwrap();
+        let export = &archive.package().exports[0];
+        assert_eq!(archive.read_export(0).unwrap(), &[7, 8, 9]);
+        assert_eq!(
+            archive.read_range(export.serial_offset + 1, 2).unwrap(),
+            &[8, 9]
+        );
+        assert_eq!(
+            archive.package().export_class_name(0).as_deref(),
+            Some("Object")
+        );
+        assert_eq!(
+            archive.package().resolve_object_name(-1).as_deref(),
+            Some("Object")
+        );
+        assert!(archive.read_export(1).is_err());
+        assert!(archive.read_range(bytes.len(), 1).is_err());
+        assert!(archive.read_range(usize::MAX, 2).is_err());
+        assert!(archive.read_range(0, MAX_EXPORT_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn logical_ranges_cross_compressed_block_boundaries() {
+        fn literals(data: &[u8]) -> Vec<u8> {
+            let mut output = Vec::new();
+            if data.len() <= 238 {
+                output.push(data.len() as u8 + 17);
+            } else {
+                output.push(0);
+                let mut extension = data.len() - 18;
+                while extension > 255 {
+                    output.push(0);
+                    extension -= 255;
+                }
+                output.push(extension as u8);
+            }
+            output.extend_from_slice(data);
+            output.extend_from_slice(&[17, 0, 0]);
+            output
+        }
+        let first = literals(&vec![b'a'; 0x20000]);
+        let second = literals(&[b'b'; 17]);
+        let mut bytes = Vec::new();
+        for value in [
+            PACKAGE_TAG,
+            0x20000,
+            (first.len() + second.len()) as u32,
+            0x20011,
+            first.len() as u32,
+            0x20000,
+            second.len() as u32,
+            17,
+        ] {
+            word(&mut bytes, value);
+        }
+        bytes.extend_from_slice(&first);
+        bytes.extend_from_slice(&second);
+        assert_eq!(
+            decode_chunk_range(&bytes, 0x20011, 0x1fffd, 9).unwrap(),
+            b"aaabbbbbb"
+        );
+        assert_eq!(
+            decode_chunk_range(&bytes, 0x20011, 0x2000f, 2).unwrap(),
+            b"bb"
+        );
+        assert!(decode_chunk_range(&bytes, 0x20011, 0x20010, 2).is_err());
+        assert!(decode_chunk_range(&bytes[..bytes.len() - 1], 0x20011, 0, 1).is_err());
     }
 }
