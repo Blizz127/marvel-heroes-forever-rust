@@ -46,6 +46,14 @@ Linux notices cover 121 dependencies/231 files, manifest SHA256
 This original-code diagnostic bundles no game assets and exposes zero finished
 upgrades. No Rust launcher publication route has been confirmed.
 
+**VERIFIED private staging:** `builds/0.1.0-dev.12` contains 346 selected
+original/dependency-notice files from clean packaged commit
+`6bf3a89773b653d1bad095138ad6a36daaa2eb0a`. All file sizes/hashes, the complete
+file set and executable version passed readback checks. Receipt:
+`evidence/build-0.1.0-dev.12-package-validation.json`. This supersedes dev11's
+Rust diagnostic intake only; the retail launcher tile is unaffected. No
+publication or playable-client claim is made.
+
 ## 2026-11-15 dev11 diagnostic increment
 
 **VERIFIED Rust execution:** tested source
