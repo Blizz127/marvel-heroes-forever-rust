@@ -2018,3 +2018,28 @@ Nine focused Rust checks pass for graph identities/metadata, source-independent
 current context, fresh NewMethod results, deferred publication, unchanged retained
 tokens, resource rejection and explicit unknown/mutation gates. Native/script
 retail execution has not been claimed from these synthetic checks.
+
+### Original manager Point execution frontier
+
+OBSERVED controlled run on frozen `0cd414d`: all 452 selected initializers still
+complete in 49,244 instructions. The original manager frame executes 226
+instructions, including NewMethod Point at 168736 and movieSize assignment at
+168737, before explicitly rejecting Rectangle at NewMethod 168768, CodeId24.
+The new Point is Object15915 with supported x/y reads both zero, constructor15913
+and prototype15914. The geometry namespace starts with a retained Point token and
+publishes that constructor when the original code materializes it.
+
+This probe adds exactly the explicit root builtin-context association and proved
+fresh flash.geom/Point setup to the prior controlled fixture. It retains the
+synthetic current root name, supplied raw target words, complete saved child
+snapshot and minimal-global-model limitations. It uses generic diagnostic frame
+execution, not saved Environment calls or native retail execution. No Rectangle
+stub, visibility profile, retry or lifecycle completion is asserted. Raw Point and
+namespace descriptor inspection remains unsupported separately from execution.
+
+Private `avm1-attached-manager-frame-action-increment9/receipt.json` SHA-256:
+`853e24d433968440095219c79e347f0566c9acc550e3eadfa05d7bfd7b3291cf`.
+The independent source-only appendix is `static-context/receipt.json`, SHA-256
+`90088ce1f8a161802d39ff94355ec1bb99442d79453f92798895ceba886cef83`.
+The receipt explicitly corrects an inherited stdout label that claimed no new
+globals; that stale label is not evidence against the recorded namespace setup.
