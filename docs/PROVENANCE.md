@@ -580,3 +580,8 @@ defaults. The [current display projection](FRONTEND_DISPLAY_STATE.md) is origina
 host integration using existing Scene/DisplayState/TextFieldHost definitions and
 the already registered SHA-2 dependency. Its new checks use synthetic data;
 no outside implementation, new native execution or third-party source was used.
+
+[Model and Polys prefixes](UPK_MODEL_POLYS.md) records the owned build's 868/3
+serializer/bulk-array evidence, paired original-byte validation, preserved opaque
+tails and original-code source ledger. No new third-party implementation source
+was read or copied; serialized polygons and later Model containers remain open.
