@@ -1274,6 +1274,108 @@ mod tests {
     }
 
     #[test]
+    fn named_script_write_commits_real_frontend_host_and_vm_visibility_together() {
+        use crate::{
+            attached_name_profile::{ExpectedProfile, NativeNameProfile},
+            avm1::{Program, vm::AttachedVisibilityBaseProfile},
+            frontend::host::FrontendHost,
+        };
+        use std::sync::Arc;
+        let (mut vm, state, clips) = visibility_fixture();
+        // Synthetic authenticated-profile plumbing; no private native inventory
+        // is embedded. The native ID7 mapping has separate owned-binary evidence.
+        let mut inventory = format!(
+            "MHF-ATTACHED-NAMES\t1\nbuild\t1.52.0.1700\nsource-sha256\t{}\ncounts\t117\t44\t9\n",
+            "ab".repeat(32)
+        );
+        for id in 0..117 {
+            let alias = id <= 21 || (110..=115).contains(&id);
+            let key = if id == 7 {
+                "_visible".to_owned()
+            } else {
+                format!("{}test{id:03}", if alias { "_" } else { "" })
+            };
+            inventory.push_str(&format!("standard\t{id}\t{}\t{key}\n", u8::from(alias)));
+        }
+        for (role, count, prefix) in [("movieclip", 42, true), ("object", 8, false)] {
+            let mut keys = vec!["constructor".to_owned()];
+            if prefix {
+                keys.push("__proto__".to_owned());
+            }
+            keys.extend((0..count).map(|id| format!("{role}{id:03}")));
+            keys.sort();
+            for key in keys {
+                inventory.push_str(&format!("{role}\t{key}\n"));
+            }
+        }
+        let profile = NativeNameProfile::parse_verified(
+            inventory.as_bytes(),
+            &ExpectedProfile {
+                build: "1.52.0.1700",
+                source_sha256: [0xab; 32],
+                inventory_sha256: [0x51; 32],
+            },
+            |_| Ok([0x51; 32]),
+        )
+        .unwrap();
+        vm.install_attached_name_profile(Arc::new(profile)).unwrap();
+        let receiver = clips[1];
+        let owner = vm.attached_owner(receiver).unwrap();
+        vm.bind_attached_target_status(receiver, 0x5a5a_0140)
+            .unwrap();
+        vm.bind_attached_visibility_policy(clips[0], false).unwrap();
+        vm.bind_attached_visibility_profile(
+            receiver,
+            AttachedVisibilityBaseProfile::OrdinarySuccessfulAllocationProjection,
+        )
+        .unwrap();
+        let mut host = FrontendHost::install(&mut vm, 15).unwrap();
+        host.attach_display(state).unwrap();
+        // This is an artificial script that exercises the real SetMember seam,
+        // not an original constructor, panel hide workaround or rendered probe.
+        let mut bytes = vec![0x96, 6, 0, 0, b't', b'h', b'i', b's', 0, 0x1c];
+        let mut payload = vec![0];
+        payload.extend(b"_visible\0");
+        payload.extend([5, 0]);
+        bytes.push(0x96);
+        bytes.extend((payload.len() as u16).to_le_bytes());
+        bytes.extend(payload);
+        let setter_offset = 500 + bytes.len();
+        bytes.extend([0x4f, 0]);
+        let code = vm
+            .register(Arc::new(Program::parse_at(&bytes, 500).unwrap()))
+            .unwrap();
+        let before = vm.attached_event_state(receiver).unwrap();
+        vm.execute(code, owner, &mut host).unwrap();
+        assert_eq!(
+            vm.attached_event_state(receiver).unwrap().target_flags,
+            before.target_flags & !0x4000
+        );
+        assert_eq!(
+            vm.attached_target_status(receiver).unwrap(),
+            Some(0x5a5a_0140)
+        );
+        assert!(vm.attached_info(receiver).unwrap().storage.is_none());
+        let display = host.display().unwrap();
+        assert!(!display.nodes[1].local_visible && !display.nodes[1].effective_visible);
+        assert!(display.nodes[2].local_visible && !display.nodes[2].effective_visible);
+        assert!(display.nodes[3].effective_visible);
+        assert_eq!(display.stats().revision, 1);
+        assert_eq!(display.traces().len(), 1);
+        assert_eq!(
+            display.traces()[0].request.origin.unwrap().source_offset,
+            setter_offset
+        );
+        assert_eq!(
+            vm.attached_visibility_info(receiver)
+                .unwrap()
+                .unwrap()
+                .last_write,
+            display.traces()[0].request.origin
+        );
+    }
+
+    #[test]
     fn inverse_respects_rotated_nonuniform_ancestors_and_pixel_boundary() {
         let mut state = state();
         // Child-local (60,-40) -> parent-local (70,-20) -> stage (160,340).

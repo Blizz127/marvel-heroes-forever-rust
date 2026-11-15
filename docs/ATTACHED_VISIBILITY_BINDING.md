@@ -349,3 +349,31 @@ Installed REA skill/native-guide instructions govern handling of the retained
 evidence; their licence was not independently inspected. No SDK, external
 implementation, web source, configuration or account data was consulted, and
 no proprietary bytes enter this repository document.
+
+## Integrated VM and frontend host transaction
+
+**VERIFIED Rust integration, 2026-11-15:** `FrontendHost` now implements the
+borrowed prepared-write contract through `DisplayState`. Preparation checks
+root, context, receiver, source, target, parent and current local visibility,
+then reserves and computes the affected effective visibility before returning
+the commit closure. The VM updates raw bit 14 before invoking that closure.
+Descendant local flags, unrelated branches and all matrices remain unchanged.
+Generic Visible writes to attached-bound nodes reject instead of bypassing the
+transaction. Explicit per-root policy and per-receiver base-path profiles remain
+required; allocation projection is not a native allocator implementation.
+
+Seven focused DisplayState checks and twelve VM binding checks passed in their
+respective increments. The additional
+`named_script_write_commits_real_frontend_host_and_vm_visibility_together`
+check executes synthetic `this._visible=false` through the actual VM,
+`FrontendHost` and attached `DisplayState`. It verifies coherent raw/local/
+effective state, unchanged shared status, no ordinary property storage, and
+matching instruction provenance in both VM and host traces. It passed after
+correcting two fixture errors: an API argument type and unintended overlap in
+the artificial native-name inventory. Both failures are retained privately.
+
+Receipts are under `evidence/attached-visibility-host/`: `focused-checks.json`,
+`script-host-initial-compile.json`, `script-host-focused-check.json` and
+`script-host-final-check.json`. These checks do not establish execution of an
+original visibility-writing constructor, successful native allocation, or new
+rendered pixels. The earlier whole-scene rendering failure remains recorded.
