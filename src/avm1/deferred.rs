@@ -28,6 +28,8 @@ pub enum BuiltinFactory {
     ExternalInterface {
         call_binding: u32,
     },
+    /// Bounded canonical native String graph and primitive-call boxing profile.
+    String,
     /// Preserve the actual token; reject only when materialization is required.
     Unsupported,
 }
@@ -110,6 +112,13 @@ impl Vm {
                 "ExternalInterface factory requires exact name and flags zero",
             ));
         }
+        if matches!(factory, BuiltinFactory::String)
+            && (name != "String" || namespace != self.global || flags != 1)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "String factory requires exact flags-one global token",
+            ));
+        }
         self.deferred_namespace_profile(namespace)?;
         if self.descriptor(namespace, &key)?.is_some() {
             return self.fail(ErrorKind::Unsupported(
@@ -156,40 +165,50 @@ impl Vm {
             self.check_object(cached)?;
             return Ok(cached);
         }
-        let BuiltinFactory::ExternalInterface { call_binding } = entry.factory else {
-            return self.fail(ErrorKind::UnsupportedDeferredBuiltin(name.0.clone()));
+        let required_flags = match entry.factory {
+            BuiltinFactory::ExternalInterface { .. } => 0,
+            BuiltinFactory::String => 1,
+            BuiltinFactory::Unsupported => {
+                return self.fail(ErrorKind::UnsupportedDeferredBuiltin(name.0.clone()));
+            }
         };
         self.deferred_namespace_profile(entry.namespace)?;
         if !matches!(
             self.objects[entry.namespace.0].properties.get(&name.0),
             Some(Property::Data(Value::DeferredBuiltin(original))) if original == name
-        ) || self.own_flags(entry.namespace, &name.0) != 0
+        ) || self.own_flags(entry.namespace, &name.0) != required_flags
         {
             return self.fail(ErrorKind::Unsupported(
-                "ExternalInterface requires original flags-zero namespace token",
+                "native factory requires original namespace token and flags",
             ));
         }
 
         let object_count = self.objects.len();
         let property_count = self.properties;
         let string_units = self.string_units;
-        let graph = self.build_external_interface(call_binding)?;
-        if let Err(error) = self.set_key(
-            entry.namespace,
-            name.0.clone(),
-            Value::Object(graph.constructor),
-        ) {
+        let previous_string_graph = self.string_objects;
+        let constructor = match entry.factory {
+            BuiltinFactory::ExternalInterface { call_binding } => {
+                self.build_external_interface(call_binding)?.constructor
+            }
+            BuiltinFactory::String => self.build_string_graph()?.constructor,
+            BuiltinFactory::Unsupported => unreachable!(),
+        };
+        if let Err(error) =
+            self.set_key(entry.namespace, name.0.clone(), Value::Object(constructor))
+        {
             // Under the admitted own-data profile setter errors precede its
             // write. No host/reentrant factory runs between the guard and write.
             self.objects.truncate(object_count);
             self.properties = property_count;
             self.string_units = string_units;
+            self.string_objects = previous_string_graph;
             return Err(error);
         }
         // No registry mutation or callback occurs during this supported factory.
         // Reacquire only after publication; a failed build is never cached.
-        self.builtin_registry.get_mut(&name.0).unwrap().cached = Some(graph.constructor);
-        Ok(graph.constructor)
+        self.builtin_registry.get_mut(&name.0).unwrap().cached = Some(constructor);
+        Ok(constructor)
     }
 
     fn deferred_namespace_profile(&self, namespace: ObjectId) -> Result<()> {

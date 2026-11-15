@@ -17,6 +17,8 @@ mod attached_textfield;
 mod deferred;
 #[path = "external_interface.rs"]
 mod external_interface;
+#[path = "string.rs"]
+mod string;
 use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
@@ -35,6 +37,7 @@ pub use attached_textfield::{
 };
 pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 pub use external_interface::ExternalInterfaceObjects;
+pub use string::StringObjects;
 
 pub type Text = Arc<[u16]>;
 pub fn text(value: &str) -> Text {
@@ -348,6 +351,9 @@ enum Kind {
     MovieClipConstructor,
     ExternalInterfaceConstructor,
     ExternalInterfacePrototype,
+    StringConstructor,
+    StringObject(string::StringState),
+    StringMethod(string::StringMethod),
     MovieClip(MovieClipRole),
     AttachedOwner(AttachedClipId),
     BoundStorage(AttachedClipId),
@@ -375,6 +381,8 @@ impl Kind {
                 | Self::FunctionConversion
                 | Self::MovieClipConstructor
                 | Self::ExternalInterfaceConstructor
+                | Self::StringConstructor
+                | Self::StringMethod(_)
                 | Self::AddProperty
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
@@ -394,6 +402,7 @@ enum Property {
 #[derive(Debug, Clone, Copy)]
 enum NativeMarker {
     ExternalAvailable,
+    StringLength,
 }
 #[derive(Debug, Clone, Copy)]
 struct ClassBase {
@@ -432,6 +441,7 @@ pub struct Vm {
     loaded_movie_targets: BTreeMap<ObjectId, u8>,
     builtin_registry: BTreeMap<Text, deferred::BuiltinEntry>,
     builtin_targets: BTreeMap<ObjectId, ()>,
+    string_objects: Option<StringObjects>,
     code: Vec<Arc<Program>>,
     code_bytes: usize,
     objects: Vec<Object>,
@@ -472,6 +482,7 @@ impl Vm {
             loaded_movie_targets: BTreeMap::new(),
             builtin_registry: BTreeMap::new(),
             builtin_targets: BTreeMap::new(),
+            string_objects: None,
             code: Vec::new(),
             code_bytes: 0,
             objects: Vec::new(),
@@ -861,6 +872,29 @@ impl Vm {
         }
         Ok(())
     }
+    fn is_string_native(&self, id: ObjectId) -> bool {
+        self.objects.get(id.0).is_some_and(|object| {
+            matches!(
+                object.kind,
+                Kind::StringConstructor | Kind::StringObject(_) | Kind::StringMethod(_)
+            )
+        }) || self
+            .string_objects
+            .is_some_and(|graph| graph.from_char_code == id)
+    }
+    fn reject_string_mutation_chain(&self, mut id: ObjectId) -> Result<()> {
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            if self.is_string_native(id) {
+                return self.fail(ErrorKind::Unsupported("String native mutation profile"));
+            }
+            match self.objects[id.0].prototype {
+                Some(parent) => id = parent,
+                None => return Ok(()),
+            }
+        }
+        self.fail(ErrorKind::Budget("String mutation prototype depth"))
+    }
     fn array_parent(&self) -> Result<Option<ObjectId>> {
         if let Some(constructor) = self.array_constructor {
             if self.get(constructor, "prototype")?
@@ -1091,6 +1125,11 @@ impl Vm {
     /// Own stored members only; no prototype lookup and no getter execution.
     pub fn own_property_flags(&self, id: ObjectId, key: &str) -> Result<Option<u8>> {
         self.check_object(id)?;
+        if self.is_string_native(id) {
+            return self.fail(ErrorKind::Unsupported(
+                "partial String native own-member inspection",
+            ));
+        }
         if matches!(
             self.objects[id.0].kind,
             Kind::AttachedTextFieldOwner(_) | Kind::BoundTextFieldStorage(_)
@@ -1108,6 +1147,11 @@ impl Vm {
     /// Inspection order is lexical, not a claim about native hash enumeration.
     pub fn own_enumerable_names(&self, id: ObjectId) -> Result<Vec<Text>> {
         self.check_object(id)?;
+        if self.is_string_native(id) {
+            return self.fail(ErrorKind::Unsupported(
+                "partial String native own-member inspection",
+            ));
+        }
         if matches!(
             self.objects[id.0].kind,
             Kind::AttachedTextFieldOwner(_) | Kind::BoundTextFieldStorage(_)
@@ -1296,6 +1340,7 @@ impl Vm {
     }
     fn delete_member(&mut self, id: ObjectId, key: &Text) -> Result<bool> {
         self.check_object(id)?;
+        self.reject_string_mutation_chain(id)?;
         if !matches!(self.objects[id.0].kind, Kind::Plain) {
             return self.fail(ErrorKind::Unsupported("delete on non-generic object class"));
         }
@@ -1410,6 +1455,9 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if self.is_string_native(id) {
+                return self.string_member(id, key);
+            }
             let object = &self.objects[id.0];
             self.check_member_target(id, key)?;
             native_member_context |= matches!(object.kind, Kind::MovieClip(_));
@@ -1426,6 +1474,9 @@ impl Vm {
                     Property::Data(value) => Ok(value.clone()),
                     Property::NativeMarker(NativeMarker::ExternalAvailable) => self.fail(
                         ErrorKind::Unsupported("ExternalInterface.available active handler query"),
+                    ),
+                    Property::NativeMarker(NativeMarker::StringLength) => self.fail(
+                        ErrorKind::Unsupported("String length marker requires typed receiver"),
                     ),
                     Property::Accessor { .. } => self.fail(ErrorKind::Unsupported(
                         "accessor requires executable property access",
@@ -1456,6 +1507,10 @@ impl Vm {
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if self.is_string_native(id) {
+                self.string_member(id, key)?;
+                return Ok(true);
+            }
             let object = &self.objects[id.0];
             self.check_member_target(id, key)?;
             native_member_context |= matches!(object.kind, Kind::MovieClip(_));
@@ -1482,6 +1537,9 @@ impl Vm {
     fn descriptor(&self, mut id: ObjectId, key: &Text) -> Result<Option<Property>> {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if self.is_string_native(id) {
+                return Ok(Some(Property::Data(self.string_member(id, key)?)));
+            }
             let object = &self.objects[id.0];
             if let Kind::Array(length) = object.kind {
                 if key.as_ref() == text("length").as_ref() {
@@ -1532,6 +1590,8 @@ impl Vm {
                         | Kind::FunctionConversion
                         | Kind::MovieClipConstructor
                         | Kind::ExternalInterfaceConstructor
+                        | Kind::StringConstructor
+                        | Kind::StringMethod(_)
                         | Kind::AddProperty
                         | Kind::RegisterClass
                         | Kind::SetPropertyFlags
@@ -1567,6 +1627,7 @@ impl Vm {
         host: &mut impl Host,
     ) -> Result<()> {
         self.check_object(id)?;
+        self.reject_string_mutation_chain(id)?;
         if let Kind::AttachedTextFieldOwner(field) = self.objects[id.0].kind {
             return self.attached_text_field_write(field, key, value, host);
         }
@@ -1650,6 +1711,7 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        self.reject_string_mutation_chain(id)?;
         if matches!(
             self.objects[id.0].kind,
             Kind::ExternalInterfaceConstructor | Kind::ExternalInterfacePrototype
@@ -2332,6 +2394,12 @@ impl Vm {
                 return self.fail(ErrorKind::UnsupportedNativeFunction(name));
             }
             Kind::Script(function) => function,
+            Kind::StringConstructor => {
+                return self.fail(ErrorKind::Unsupported("direct String invocation profile"));
+            }
+            Kind::StringMethod(method) => {
+                return self.invoke_string_method(method, this, args);
+            }
             Kind::FunctionMethod(method) => {
                 if !self.callable(&this) {
                     return self.fail(ErrorKind::UnboundCall);
@@ -2454,6 +2522,7 @@ impl Vm {
                 let (Value::Object(receiver), Value::String(name)) = (&this, &args[0]) else {
                     return Ok(Value::Bool(false));
                 };
+                self.reject_string_mutation_chain(*receiver)?;
                 if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
                     return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
                 }
@@ -3135,6 +3204,7 @@ impl Vm {
                         let method = self.pop(frame)?;
                         let mut receiver = self.pop(frame)?;
                         let args = self.args(frame)?;
+                        let mut primitive_string = false;
                         let callable = if matches!(method, Value::Undefined)
                             || matches!(&method,Value::String(s) if s.is_empty())
                         {
@@ -3147,9 +3217,25 @@ impl Vm {
                         } else {
                             receiver = self.materialize_value(receiver)?;
                             let key = self.to_text(&method)?;
+                            if let Value::String(input) = &receiver {
+                                let object = self.box_string_for_named_call(input.clone())?;
+                                receiver = Value::Object(object);
+                                primitive_string = true;
+                            }
                             let object = self.member_owner(receiver.clone())?;
                             self.read_member(object, &key, host)?
                         };
+                        // This native receiver branch accepts an actual tag8
+                        // method only. Generic invoke would otherwise resolve a
+                        // returned deferred tag11, which is a different route.
+                        if primitive_string
+                            && !matches!(&callable, Value::Object(id)
+                            if self.objects[id.0].kind.function_value())
+                        {
+                            return self.fail(ErrorKind::Unsupported(
+                                "primitive String method requires exact function value",
+                            ));
+                        }
                         let value = self.invoke(callable, receiver, &args, host)?;
                         self.push(frame, value)?;
                     }
@@ -3174,6 +3260,11 @@ impl Vm {
                         let args = self.args(frame)?;
                         let callable = self.materialize_value(callable)?;
                         let constructor = self.object_id(callable.clone())?;
+                        if matches!(self.objects[constructor.0].kind, Kind::StringConstructor) {
+                            return self.fail(ErrorKind::Unsupported(
+                                "explicit String construction profile",
+                            ));
+                        }
                         if matches!(self.objects[constructor.0].kind, Kind::FunctionConversion) {
                             return self.fail(ErrorKind::Unsupported(
                                 "Function dynamic construction profile",
@@ -3501,6 +3592,7 @@ impl Vm {
                                     Kind::FunctionPrototype
                                         | Kind::ConstructorSuper { .. }
                                         | Kind::MovieClip(_)
+                                        | Kind::StringObject(_)
                                 ) {
                                     return self.fail(ErrorKind::Unsupported(
                                         "special prototype/super typeof semantics",
@@ -3516,6 +3608,8 @@ impl Vm {
                                         | Kind::FunctionConversion
                                         | Kind::MovieClipConstructor
                                         | Kind::ExternalInterfaceConstructor
+                                        | Kind::StringConstructor
+                                        | Kind::StringMethod(_)
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
@@ -4582,6 +4676,151 @@ mod tests {
             execute(&mut vm, &reversed).unwrap().stack,
             vec![Value::Bool(false)]
         );
+    }
+
+    #[test]
+    fn primitive_string_call_uses_deferred_graph_and_fresh_typed_boxes() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        let token = vm
+            .register_deferred_builtin(vm.global(), "String", BuiltinFactory::String, 1)
+            .unwrap();
+        vm.set(vm.global(), "retainedStringToken", token.clone())
+            .unwrap();
+        let count = vm.object_count();
+        let mut bytes = push(&[
+            Value::Number(0.0),
+            Value::string("aBc! 019"),
+            Value::string("toUpperCase"),
+        ]);
+        bytes.push(0x52);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        for iteration in 0..2 {
+            let result = vm.execute(code, vm.root(), &mut RejectHost).unwrap();
+            assert_eq!(result.stack, vec![Value::string("ABC! 019")]);
+            assert_eq!(result.host_calls, 0);
+            assert_eq!(vm.object_count(), count + 5 + iteration);
+            assert_eq!(vm.get(vm.global(), "retainedStringToken").unwrap(), token);
+            assert_eq!(
+                vm.own_property_flags(vm.global(), "String").unwrap(),
+                Some(1)
+            );
+        }
+        let graph = vm.string_objects.unwrap();
+        assert_eq!(
+            vm.get(vm.global(), "String").unwrap(),
+            Value::Object(graph.constructor)
+        );
+        assert!(
+            vm.call(
+                Value::Object(graph.constructor),
+                Value::Undefined,
+                &[Value::string("a")],
+                &mut RejectHost
+            )
+            .is_err()
+        );
+        let mut new = push(&[Value::Number(0.0), Value::string("String")]);
+        new.push(0x40);
+        assert!(execute(&mut vm, &new).is_err());
+        let mut member = push(&[Value::string("a"), Value::string("toUpperCase")]);
+        member.push(0x4e);
+        assert!(execute(&mut vm, &member).is_err());
+    }
+
+    #[test]
+    fn string_native_roles_gate_mutation_unknowns_and_ancestor_fallback() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let graph = vm.build_string_graph().unwrap();
+        for id in [
+            graph.constructor,
+            graph.prototype,
+            graph.to_upper_case,
+            graph.from_char_code,
+        ] {
+            assert!(vm.get(id, "unmodeled").is_err());
+            assert!(vm.has_key(id, &text("unmodeled")).is_err());
+            assert!(vm.descriptor(id, &text("unmodeled")).is_err());
+            assert!(vm.read_property(id, "unmodeled", &mut RejectHost).is_err());
+            assert!(vm.set(id, "x", Value::Undefined).is_err());
+            assert!(
+                vm.write_property(id, "x", Value::Undefined, &mut RejectHost)
+                    .is_err()
+            );
+            assert!(vm.own_property_flags(id, "unmodeled").is_err());
+            assert!(vm.own_enumerable_names(id).is_err());
+        }
+        let inherited = vm.alloc(Kind::Plain, Some(graph.prototype)).unwrap();
+        assert_eq!(
+            vm.get(inherited, "toUpperCase").unwrap(),
+            Value::Object(graph.to_upper_case)
+        );
+        assert!(
+            vm.read_property(inherited, "unmodeled", &mut RejectHost)
+                .is_err()
+        );
+        assert!(vm.set(inherited, "x", Value::Undefined).is_err());
+        assert!(vm.enumerate_names(inherited).is_err());
+        assert!(vm.delete_member(inherited, &text("x")).is_err());
+        let add_property = vm.get(vm.object_prototype.unwrap(), "addProperty").unwrap();
+        assert!(
+            vm.call(
+                add_property,
+                Value::Object(inherited),
+                &[
+                    Value::string("x"),
+                    Value::Object(graph.to_upper_case),
+                    Value::Null
+                ],
+                &mut RejectHost
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn primitive_string_call_rejects_method_tokens_without_factory_effects() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        vm.bind_builtin_context_target(vm.root()).unwrap();
+        let graph = vm.build_string_graph().unwrap();
+        vm.set(vm.global(), "String", Value::Object(graph.constructor))
+            .unwrap();
+        let token = vm
+            .register_deferred_builtin(
+                vm.global(),
+                "UnsupportedMethod",
+                BuiltinFactory::Unsupported,
+                1,
+            )
+            .unwrap();
+        vm.raw_member(
+            graph.prototype,
+            text("toUpperCase"),
+            Property::Data(token),
+            1,
+        )
+        .unwrap();
+        let count = vm.object_count();
+        let mut bytes = push(&[
+            Value::Number(0.0),
+            Value::string("abc"),
+            Value::string("toUpperCase"),
+        ]);
+        bytes.push(0x52);
+        let error = execute(&mut vm, &bytes).unwrap_err();
+        // Unsupported graph mutation is detected before any box or alternate
+        // factory is invoked. It is not reported as native mutation behavior.
+        assert!(matches!(
+            error.kind,
+            ErrorKind::Unsupported("String canonical graph metadata")
+        ));
+        assert_eq!(vm.object_count(), count);
+        assert_eq!(vm.host_calls, 0);
     }
     #[test]
     fn deferred_receiver_resolution_caches_without_rewriting_retained_tokens() {

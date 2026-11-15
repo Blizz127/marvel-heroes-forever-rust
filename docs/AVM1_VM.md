@@ -1190,6 +1190,72 @@ unsupported arguments, overlapping definition offsets in different programs,
 and call-origin restoration after cross-program accessor lookup. The integrating
 frontend still owns export association and later instance construction.
 
+## Typed native String boxing and bounded ASCII uppercase
+
+`BuiltinFactory::String` registers the exact GLOBAL.String token with flags 1.
+It uses the existing explicitly associated active context and deferred cache;
+raw reads and retained aliases stay tokens. Materialization publishes the native
+callable through the ordinary setter, preserving existing descriptor flags.
+A failed unpublished graph/publication restores heap/property/string counters
+and its canonical String cache. `build_string_graph()` is separately available
+for explicit eager integration; it does not install a global binding or context.
+
+The typed graph has distinct callable, prototype, method and temporary wrapper
+roles. String.prototype retains the native `[type Object]` payload and cached
+Object parent; its callable/methods retain cached Function parents. The supported
+uppercase method is an identity-bearing native function. `fromCharCode` also has
+an explicit callable identity and flags 7, with invocation unsupported. Thirteen
+other native prototype methods are intentionally omitted from this bounded graph;
+unknown reads, presence/descriptor lookup, mutation and reflection therefore
+reject rather than report missing. These guards also apply during prototype
+traversal through a Plain object. The sparse graph and retained temporary arena
+are not native allocation-count or garbage-collection parity.
+
+Only named CallMethod on a primitive NUL-free ASCII String uses the new boxing
+route. It checks the active context, current data-only parentless GLOBAL.String
+and raw GLOBAL.Object identities, actual public prototype/constructor metadata,
+cached parents and resolver/accessor history. A modified or alternative graph
+rejects. A fresh category-8 wrapper retains the input payload and the proved own
+metadata insertion order: `__proto__` flags 3, native `length` marker flags 0,
+`__constructor__` flags 3. The final normal lookup must supply an actual function
+value; this primitive branch does not materialize a returned deferred method.
+
+The native uppercase intrinsic accepts the typed wrapper, zero arguments in
+this initial profile, and code units 1..127 (or an empty string). It maps only
+ASCII a–z to A–Z, preserves all other admitted units, and returns a primitive
+String without modifying the input or box. Output allocation is bounded before
+a fallible reserve and charged once. Native argc is actually ignored; the zero
+argument limit is an explicit implementation slice. No host callback or external
+execution is fabricated. General primitive member coercion, explicit construction,
+direct String() invocation, borrowed/prototype method receivers, other methods,
+NUL and non-ASCII behavior remain unsupported.
+
+Canonical `length` reads compute the admitted ASCII payload's length only under
+the proved marker/miss route. The prototype has no own length marker: an inherited
+ordinary override or accessor rejects instead of being ignored. Non-ASCII native
+length counts encoded scalars, so this is not a general UTF-16 length rule.
+
+**VERIFIED static:** `STRING_NATIVE_METHODS.md` joins the native constructor,
+current-global boxing, exact primitive-call method admission, graph/marker state,
+callback and all 128 ASCII mapping inputs. Private combined receipt
+`rea-string-uppercase/combined-proof-receipt.json`, SHA256
+`c0a824584a7fc3ec2c6ec04a601b8739144827eb0b1e02c4a3c80c51f028c6b8`,
+records 17 new REA observations with independently checked instruction/data bytes.
+Source rights remain the owned proprietary executable/movie and original project
+static analysis; no external VM implementation or extracted method inventory is
+included here.
+
+**OBSERVED controlled Rust checks:** six module tests cover graph/metadata,
+current globals/context, deferred reuse, fresh boxes, ASCII/control/chunk edges,
+unknowns, graph edits and bounded allocation. Three bytecode/integration tests
+cover repeated calls, publication flags and retained tokens, direct/other-opcode
+rejection, ancestor mutation/reflection gates and no alternate factory execution
+for an unproved replaced-method token. Seven existing deferred-registry checks
+exercise the preserved ExternalInterface/unsupported-token behavior. Reports and
+tested module hashes are in `avm1-runtime/string-bridge-evidence.json`. The owned
+94251 call-snippet diagnostic is separate; these tests do not claim the full
+label update, native loading or retail UI parity.
+
 ## Optional verified attached-name inventory
 
 `install_attached_name_profile(Arc<NativeNameProfile>)` installs one immutable,
