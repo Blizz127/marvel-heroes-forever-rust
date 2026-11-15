@@ -107,8 +107,11 @@ path bytes, configuration `ValueLimits`, and per-result localized prototype
 `ValueLimits`. Each configuration object is additionally limited to one layer.
 Metadata sizes/counts are checked before decompression or record parsing;
 prototype parse budgets are derived from the corresponding `ValueLimits`,
-followed by the existing cumulative value/parent accounting. Results do not
-accumulate inside the resolver; callers control retained result lifetimes.
+followed by the existing cumulative value/parent accounting. Successful prepared
+prototypes now have a bounded instance-local cache (64 entries and 256 KiB of
+accounted storage by default); callers still control retained result lifetimes.
+See [LOCALIZED_LABEL_CACHE.md](LOCALIZED_LABEL_CACHE.md) for cache policy,
+request validation, statistics and measured original-data checks.
 
 The error surface is `io::Result`. Unsupported input or an unproved profile
 uses `Unsupported`; absent resources use `NotFound`; malformed or ambiguous
