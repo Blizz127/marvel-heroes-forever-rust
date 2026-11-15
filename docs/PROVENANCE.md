@@ -216,6 +216,10 @@ REA Function/apply registration, receiver and empty-argument evidence, with
 closure/frame boundaries kept explicit. Its selected callable-conversion and
 empty-apply-list profiles now support the original bounded VM; other contracts
 remain gated as recorded in `AVM1_VM.md`.
+[Script Function conversion](REA_SCRIPT_FUNCTION_CONVERSION.md) binds the actual
+DefineFunction2 interface and its callable getter. It preserves function-object
+identity while clearing the wrapper's auxiliary frame reference; arbitrary
+captured closures remain outside the admitted conversion profile.
 
 [Native Array prototype](REA_ARRAY.md), [display action lifecycle](REA_DISPLAY_LIFECYCLE.md)
 and [MovieClip callback](REA_MOVIECLIP_CONSTRUCTOR.md) register additional bounded
