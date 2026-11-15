@@ -5,6 +5,28 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev17 integration in progress
+
+**VERIFIED component preparation:** the new current-frame adapter combines the
+retained display snapshot with every bound TextField, including unchanged and
+hidden fields. Four focused composition checks pass. One unchanged original
+saved-login CPU comparison matches the existing path across all 147 nodes and
+the complete prepared metadata/payload representation. No original handler,
+GPU frame or native client ran for that comparison. Receipt:
+`evidence/current-scene/check2/verification.json`, SHA-256
+`6a4f098f38aa2949b090f3b59406b21415da6ed34803bb69361a6cda966404b5`.
+
+**VERIFIED component construction:** deferred `flash.geom.Point` registration,
+typed constructor/prototype/instance identities and zero-argument construction
+are integrated. Nine focused checks and production metadata compilation pass
+at the component revision; unsupported namespace members remain explicit.
+The next original manager replay is separate. Receipt:
+`evidence/avm1-runtime/point-checks.json`, SHA-256
+`75a97225e7b27a08d6180121114b1ecdb8a1cd14c17f4933f2e06471f423c37d`.
+
+Dev16 remains the latest staged diagnostic package. The combined dev17 build,
+native startup, login and gameplay remain unverified.
+
 ## 2026-11-15 dev16 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested code

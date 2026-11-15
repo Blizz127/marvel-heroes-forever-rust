@@ -599,3 +599,12 @@ The dev16 Linux/window notice collection contains 121 registry dependencies and
 `2c9eaee7e1cda2c5a10ac8b66bd3287f716639e18fd71af33511331505620c4a`.
 The original-only private package excludes retail binaries, assets, extracted
 data and captures.
+
+[Current-frame preparation](CURRENT_SCENE.md) composes original display,
+TextField, font/layout and scene-content modules. Its real-file comparison uses
+the already registered private frontend, manager and font pins without script
+or GPU execution. [Fresh MovieClip prototype selection](FRESH_MOVIECLIP_PROTOTYPE.md)
+records the owned native cache/global lookup and later registered-class
+preparation boundaries. No external implementation was copied for either
+increment, and controlled adopted prototypes remain distinct from fresh native
+construction.
