@@ -2,9 +2,13 @@
 //! No MovieClip construction, path lookup, event dispatch, or startup execution.
 
 use crate::avm1::vm::{
-    Host, HostCall, HostCommand, MovieProperty, ObjectId, PropertyRequest, Value,
+    AttachedClipId, Host, HostCall, HostCommand, LoadedMovieSourceId, MovieProperty, ObjectId,
+    PropertyRequest, Value, Vm,
 };
-use crate::gfx::scene::{Affine, NodeId, NodeKind, Scene, SceneNode};
+use crate::gfx::{
+    CharacterKind,
+    scene::{Affine, MovieId, NodeId, NodeKind, Scene, SceneNode},
+};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -41,6 +45,18 @@ pub enum DisplayError {
         reason: &'static str,
     },
     InvalidNode(NodeId),
+    InvalidMovie(MovieId),
+    UnboundSource(LoadedMovieSourceId),
+    SourceBindingConflict {
+        source: LoadedMovieSourceId,
+        movie: MovieId,
+    },
+    InvalidAttached(String),
+    UnboundAttached(AttachedClipId),
+    AttachedMismatch {
+        clip: AttachedClipId,
+        reason: &'static str,
+    },
     UnboundObject(ObjectId),
     BindingConflict {
         object: ObjectId,
@@ -105,6 +121,10 @@ pub struct DisplayState {
     nodes: Vec<DisplayNode>,
     bindings: BTreeMap<ObjectId, NodeId>,
     node_bindings: BTreeMap<NodeId, ObjectId>,
+    movie_versions: BTreeMap<MovieId, u8>,
+    source_bindings: BTreeMap<LoadedMovieSourceId, MovieId>,
+    movie_sources: BTreeMap<MovieId, LoadedMovieSourceId>,
+    attached_bindings: BTreeMap<AttachedClipId, NodeId>,
     pointer_stage_twips: Option<[f64; 2]>,
     traces: Vec<PropertyTrace>,
     limits: Limits,
@@ -121,6 +141,12 @@ impl DisplayState {
         }
         let mut items = 0usize;
         let mut bytes = 0usize;
+        charge(
+            &mut items,
+            scene.movies.len(),
+            limits.max_source_items,
+            "source movies",
+        )?;
         for (id, source) in scene.nodes.iter().enumerate() {
             if source.id != id {
                 return Err(malformed(id, "node identity differs from arena index"));
@@ -283,6 +309,14 @@ impl DisplayState {
             nodes,
             bindings: BTreeMap::new(),
             node_bindings: BTreeMap::new(),
+            movie_versions: scene
+                .movies
+                .iter()
+                .map(|(&id, movie)| (id, movie.header.version))
+                .collect(),
+            source_bindings: BTreeMap::new(),
+            movie_sources: BTreeMap::new(),
+            attached_bindings: BTreeMap::new(),
             pointer_stage_twips: None,
             traces: Vec::new(),
             limits,
@@ -327,6 +361,76 @@ impl DisplayState {
         }
         self.bindings.insert(object, node);
         self.node_bindings.insert(node, object);
+        Ok(())
+    }
+
+    /// Explicit association of a loaded source identity with this Scene's movie.
+    /// Neither numeric identity is a file name or an implicit cross-VM alias.
+    pub fn bind_movie_source(&mut self, source: LoadedMovieSourceId, movie: MovieId) -> Result<()> {
+        if !self.movie_versions.contains_key(&movie) {
+            return Err(DisplayError::InvalidMovie(movie));
+        }
+        if self.source_bindings.get(&source) == Some(&movie) {
+            return Ok(());
+        }
+        if self.source_bindings.contains_key(&source) || self.movie_sources.contains_key(&movie) {
+            return Err(DisplayError::SourceBindingConflict { source, movie });
+        }
+        self.source_bindings.insert(source, movie);
+        self.movie_sources.insert(movie, source);
+        Ok(())
+    }
+
+    /// Bind an already-created live attached MovieClip after checking its source,
+    /// definition, version and parent against this Scene. Parent bindings must
+    /// precede child bindings. This creates no clip or native lifecycle state.
+    pub fn bind_attached(&mut self, vm: &Vm, clip: AttachedClipId, node: NodeId) -> Result<()> {
+        let info = vm
+            .attached_info(clip)
+            .map_err(|error| DisplayError::InvalidAttached(error.to_string()))?;
+        let source = &self.node(node)?.source;
+        let mismatch = |reason| DisplayError::AttachedMismatch { clip, reason };
+        let (movie, sprite) = match &source.kind {
+            NodeKind::Root => (source.placement_movie, 0),
+            kind => {
+                let definition = kind
+                    .definition()
+                    .ok_or_else(|| mismatch("unresolved scene definition"))?;
+                if definition.kind != CharacterKind::Sprite {
+                    return Err(mismatch("scene definition is not a MovieClip sprite"));
+                }
+                (definition.movie_id, definition.character_id)
+            }
+        };
+        let mapped = self
+            .source_bindings
+            .get(&info.source.movie)
+            .ok_or(DisplayError::UnboundSource(info.source.movie))?;
+        if *mapped != movie
+            || info.source.sprite_id != sprite
+            || self.movie_versions.get(&movie) != Some(&info.source.header_version)
+        {
+            return Err(mismatch("loaded source, sprite or header version differs"));
+        }
+        match (source.parent, info.parent) {
+            (None, None) => {}
+            (Some(parent), Some(parent_clip))
+                if self.attached_bindings.get(&parent_clip) == Some(&parent) => {}
+            _ => {
+                return Err(mismatch(
+                    "attached parent does not match the bound scene parent",
+                ));
+            }
+        }
+        if self
+            .attached_bindings
+            .get(&clip)
+            .is_some_and(|&bound| bound != node)
+        {
+            return Err(mismatch("attached clip is already bound to another node"));
+        }
+        self.bind_object(info.owner, node)?;
+        self.attached_bindings.insert(clip, node);
         Ok(())
     }
 
@@ -375,6 +479,11 @@ impl DisplayState {
                 .get(object)
                 .copied()
                 .ok_or(DisplayError::UnboundObject(*object)),
+            Value::DisplayClip(clip) => self
+                .attached_bindings
+                .get(clip)
+                .copied()
+                .ok_or(DisplayError::UnboundAttached(*clip)),
             _ => Err(DisplayError::UnsupportedTarget),
         }
     }

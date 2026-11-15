@@ -40,6 +40,22 @@ attachments reject. Receipt: `evidence/dev9-bootstrap-handoff/display-host-recei
 The cursor association is still an explicit Plain-object diagnostic; this does
 not establish native MovieClip allocation or complete event ordering.
 
+The separate attached-clip route uses `bind_movie_source` to associate an explicit
+loaded-source ID with one of the Scene's movies. `bind_attached` then checks an
+existing VM clip's source, sprite ID and header version against the resolved
+Scene definition. It accepts only the Scene root or a Sprite, and requires the
+attached parent to be bound to the exact Scene parent first. Source and node
+identities cannot be rebound. A successful binding associates both the VM owner
+and its distinct `DisplayClip` reference with that node; generic Object bindings
+do not implicitly authorize display references.
+
+This route allocates no VM clip, installs no child snapshot and chooses no raw
+event-state defaults. It consumes the explicit typed state described in
+[the attached MovieClip contract](ATTACHED_MOVIECLIP.md). A property request still
+requires a bound execution context, including requests with an explicit display
+reference. Invalid IDs, unresolved/non-Sprite definitions, missing source maps
+and mismatched parents fail before changing bindings.
+
 The state validates the complete preorder tree, parent/child agreement, source
 identity indices, depth, mask-reference range, finite matrices, and agreement
 between raw placements and their saved derived transform/visibility. It rejects
