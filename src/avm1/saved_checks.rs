@@ -15,7 +15,9 @@ fn profile() -> Arc<NativeNameProfile> {
     );
     for id in 0..117 {
         let alias = id <= 21 || (110..=115).contains(&id);
-        let name = if id == 17 {
+        let name = if id == 0 {
+            "_x".to_owned()
+        } else if id == 17 {
             "_focusrect".to_owned()
         } else if id == 48 {
             "autoSize".to_owned()
