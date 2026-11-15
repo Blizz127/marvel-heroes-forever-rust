@@ -222,6 +222,68 @@ An earlier probe of another large dispatch table is retained for audit but was
 not established as AVM1 and is not used for this conclusion. Private candidate
 JSON files remain explicitly ordinary-file discovery evidence.
 
+## Native `ASSetPropFlags` follow-up
+
+An independent helper performed four bounded REA calls in a separate session,
+then exported/reset that session. Its complete private findings, source register
+and limits are in `evidence/rea-asflags-native/finding-summary.json`; all four
+records are retained in `evidence/rea-asflags-native/final.bundle.json`.
+
+**OBSERVED (REA):** The pointer pair at `0x142adca70` references the literal
+`ASSetPropFlags` at `0x14250d588` and code at `0x1401cb620`. The latter spans
+three unwind fragments through `0x1401cba6c`, with 303 decoded instructions.
+**INFERRED:** This is the native function binding. The registration consumer and
+a live invocation were not traced.
+
+**VERIFIED (static instruction behavior):**
+
+- The set and clear arguments are converted to integers and each reduced to its
+  low three bits. The selected-member setter argument and the all-members-style
+  visitor callback both compute `(old_flags & ~clear_mask) | set_mask`. Setting
+  wins when set and clear masks overlap. Old high bits survive in that argument.
+- For exactly three arguments, the clear mask defaults to zero unless the
+  environment byte at offset `0xf0` equals five, in which case it defaults to
+  seven. That field's name and initialization, including any relation to SWF
+  version, have not been recovered. It must not silently be treated as the
+  movie's version byte.
+- Selector tag `5` is converted to a string and split using an ASCII comma.
+  Tag `6` obtains an object: internal object kind `7` supplies indexed elements,
+  and kind `8` takes the string-conversion/comma-splitting path. Other selected
+  tags/kinds return without mutation. Semantic names such as string, object,
+  array and boxed string are inferred from those operations.
+- Selector tag `1` invokes a member visitor with numeric option `0x0c`.
+  The motivating startup call supplies `[prototype, null, 1]`, supporting the
+  null-selector interpretation; the visitor's inherited/hidden-member scope
+  remains unverified. For selected indexed names, the flags setter is called
+  only when a member lookup reports success, and null element slots are skipped.
+- The native routine does not directly access a return slot. This does **not**
+  establish the caller's default return value as `undefined`.
+
+For the motivating three-argument startup call, the static mask calculation sets
+bit zero on members reached by the visitor while preserving other flags when
+that environment byte is not five. If it is five, the calculation clears the
+other low bits as well. This study does not independently assign public names
+such as `dontEnum`, `dontDelete` or `readOnly` to those bits.
+
+The inspected conversion helpers fast-return the signed 32-bit payload for
+internal tag `4`. Their other paths map zero and exponent-all-ones floating
+values to zero, truncate finite in-range values, and call additional math
+helpers for large magnitudes. Complete coercion, comma/whitespace edge cases,
+invalid calls with fewer than three arguments, visitor scope, symbolic flag
+effects, and default return behavior remain outside the verified contract.
+
+| Result | Evidence ID |
+| --- | --- |
+| Complete native body | `ev_3dc579930d25232b639ea0820bfafe3a0b26a1620c7c5f900a88a65eefbc5b5f` |
+| Visitor callback, mask conversion helpers and related bounded instructions | `ev_3efb471712a41c834644763cee836639f11b77969f6fd3966d5e67b22f9fb910` |
+| Exact comma and numeric constant bytes | `ev_42ab3e81cdfe1ee82ce645aa6c664ab830f55832984c8ea011404133adc38c0e` |
+| Paired binding pointers and initial native fragment | `ev_a17441906ca8554599741d498b0e1e59075bda5a7a4e76b09c5cd7e1bee6f635` |
+
+All four calls completed with untruncated output and unchanged target hashes.
+The helper used only the same private executable, installed REA/Rizin tooling
+and mandatory REA guidance already registered below; it wrote no client source,
+changed no configuration and ran no original executable.
+
 ## Study provenance
 
 | Source | Licence/status | Use |
