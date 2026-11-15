@@ -4,6 +4,7 @@ use super::{
     AttachedEventState, AttachedFocusRectState, AttachedNameClass, AttachedTextFieldId,
     BaselineMembership, BaselineOwners, CodeOrigin, ErrorKind, Kind, NativeNameProfile, ObjectId,
     Property, Result, Text, UnsupportedName, Value, Vm, text,
+    InitialMovieClipPrototypeProfile, InitialMovieClipPrototypeSelection,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -116,6 +117,9 @@ pub struct AttachedInfo {
     pub owner: ObjectId,
     pub storage: Option<AttachedStorageId>,
     pub prototype: Option<ObjectId>,
+    /// Historical selection at this initial allocation, independent of later
+    /// prototype assignments and their lazy-storage effects.
+    pub initial_prototype_selection: Option<InitialMovieClipPrototypeSelection>,
     pub child_snapshot_installed: bool,
     pub mouse_event_marker: bool,
     pub event_state: AttachedEventState,
@@ -152,6 +156,7 @@ pub(super) struct AttachedClip {
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
+    initial_prototype_selection: Option<InitialMovieClipPrototypeSelection>,
     children: Option<BTreeMap<Text, ChildTarget>>,
     mouse_event_marker: bool,
 }
@@ -244,7 +249,7 @@ impl Vm {
                 "attached loaded movie version profile",
             ));
         }
-        self.create_attached_in_binding(spec, None)
+        self.create_attached_in_binding(spec, None, None)
     }
     /// Explicit bounded local/imported-export adoption. The FINAL selected
     /// resource pair must remain the eligible, successfully resolved direct
@@ -262,12 +267,51 @@ impl Vm {
                 "attached binding execution version outside 7..19",
             ));
         }
-        self.create_attached_in_binding(spec, Some(binding))
+        self.create_attached_in_binding(spec, Some(binding), None)
+    }
+    /// Select the initial prototype from the explicitly associated cached
+    /// context, then allocate the owner with that exact pointer (including null).
+    /// This does not use the later prototype setter or allocate bound storage.
+    /// Raw supplied target flags remain snapshots, not fresh native defaults.
+    pub fn create_attached_movie_clip_with_initial_prototype(
+        &mut self,
+        spec: AttachedClipSpec,
+        profile: InitialMovieClipPrototypeProfile,
+    ) -> Result<AttachedClipId> {
+        if spec.source.header_version != self.movie_version
+            || spec
+                .parent
+                .map(|id| self.attached_info(id))
+                .transpose()?
+                .is_some_and(|parent| parent.environment_header_version != self.movie_version)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached loaded movie version profile",
+            ));
+        }
+        self.create_attached_in_binding(spec, None, Some(profile))
+    }
+    /// Same initial selection with the separately established final native
+    /// resource-pair witness. Source MovieDef and Environment version remain
+    /// independent of function origin and placing-parent version.
+    pub fn create_attached_movie_clip_with_binding_and_initial_prototype(
+        &mut self,
+        spec: AttachedClipSpec,
+        binding: AttachedMovieBinding,
+        profile: InitialMovieClipPrototypeProfile,
+    ) -> Result<AttachedClipId> {
+        if !(7..=19).contains(&spec.source.header_version) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached binding execution version outside 7..19",
+            ));
+        }
+        self.create_attached_in_binding(spec, Some(binding), Some(profile))
     }
     fn create_attached_in_binding(
         &mut self,
         spec: AttachedClipSpec,
         binding: Option<AttachedMovieBinding>,
+        initial_profile: Option<InitialMovieClipPrototypeProfile>,
     ) -> Result<AttachedClipId> {
         // DWORD+6a overlaps byte+6d: this concrete case-3 owner lives at+148,
         // so its encoded quarter-byte owner offset is52, not an event default.
@@ -295,25 +339,33 @@ impl Vm {
             parent = self.attached[id.0].spec.parent;
             depth += 1;
         }
-        let (Some(constructor), Some(prototype)) =
-            (self.movie_clip_constructor, self.movie_clip_prototype)
-        else {
-            return self.fail(ErrorKind::Unsupported(
-                "attached source requires native MovieClip",
-            ));
-        };
-        for (owner, key, expected) in [
-            (self.global, "MovieClip", constructor),
-            (constructor, "prototype", prototype),
-        ] {
-            if !matches!(self.objects[owner.0].properties.get(&text(key)),
-                Some(Property::Data(Value::Object(actual))) if *actual == expected)
-            {
+        let initial_selection = initial_profile
+            .map(|profile| self.select_initial_movie_clip_prototype(profile))
+            .transpose()?;
+        let prototype = if let Some(selection) = &initial_selection {
+            selection.selected()
+        } else {
+            let (Some(constructor), Some(prototype)) =
+                (self.movie_clip_constructor, self.movie_clip_prototype)
+            else {
                 return self.fail(ErrorKind::Unsupported(
-                    "attached modified MovieClip binding/prototype",
+                    "attached source requires native MovieClip",
                 ));
+            };
+            for (owner, key, expected) in [
+                (self.global, "MovieClip", constructor),
+                (constructor, "prototype", prototype),
+            ] {
+                if !matches!(self.objects[owner.0].properties.get(&text(key)),
+                    Some(Property::Data(Value::Object(actual))) if *actual == expected)
+                {
+                    return self.fail(ErrorKind::Unsupported(
+                        "attached modified MovieClip binding/prototype",
+                    ));
+                }
             }
-        }
+            Some(prototype)
+        };
         let id = AttachedClipId(self.attached.len());
         let owner = self.alloc(Kind::AttachedOwner(id), None)?;
         self.attached.push(AttachedClip {
@@ -329,7 +381,8 @@ impl Vm {
             visibility_last_write: None,
             owner,
             storage: None,
-            prototype: Some(prototype),
+            prototype,
+            initial_prototype_selection: initial_selection,
             children: None,
             mouse_event_marker: false,
         });
@@ -384,6 +437,7 @@ impl Vm {
             owner: clip.owner,
             storage: clip.storage.map(|id| AttachedStorageId(id.0)),
             prototype: clip.prototype,
+            initial_prototype_selection: clip.initial_prototype_selection,
             child_snapshot_installed: clip.children.is_some(),
             mouse_event_marker: clip.mouse_event_marker,
             event_state: clip.spec.event_state,
@@ -2026,6 +2080,131 @@ mod tests {
             .unwrap();
         vm.execute(code, vm.root(), &mut RejectHost).unwrap().value
     }
+    #[test]
+    fn initial_prototype_selection_stores_null_or_object_without_later_storage_hook() {
+        for choose_object in [false, true] {
+            let mut vm = vm();
+            let context = vm.root();
+            vm.bind_builtin_context_target(context).unwrap();
+            let holder = vm.object().unwrap();
+            let selected = vm.object().unwrap();
+            vm.set(selected, "onPress", Value::Bool(true)).unwrap();
+            vm.set(
+                holder,
+                "prototype",
+                if choose_object {
+                    Value::Object(selected)
+                } else {
+                    Value::Undefined
+                },
+            )
+            .unwrap();
+            vm.set(vm.global(), "MovieClip", Value::Object(holder))
+                .unwrap();
+            assert!(vm.create_attached_movie_clip(spec(80, None)).is_err());
+            let before = (vm.object_count(), vm.properties, vm.string_units);
+            let clip = vm
+                .create_attached_movie_clip_with_initial_prototype(
+                    spec(80, None),
+                    InitialMovieClipPrototypeProfile {
+                        context_target: context,
+                    },
+                )
+                .unwrap();
+            let info = vm.attached_info(clip).unwrap();
+            assert_eq!(info.prototype, choose_object.then_some(selected));
+            assert!(info.storage.is_none());
+            assert!(!info.mouse_event_marker);
+            assert_eq!(
+                (vm.object_count(), vm.properties, vm.string_units),
+                (before.0 + 1, before.1, before.2)
+            );
+            let selection = info.initial_prototype_selection.unwrap();
+            assert_eq!(selection.selected(), choose_object.then_some(selected));
+            assert_eq!(selection.fallback(), vm.movie_clip_prototype);
+            // A later setter is observably different: it creates storage and
+            // runs the prototype event-name hook. Initial selection did neither.
+            vm.set_attached_prototype(clip, Some(selected)).unwrap();
+            let after = vm.attached_info(clip).unwrap();
+            assert!(after.storage.is_some());
+            assert!(after.mouse_event_marker);
+            assert_eq!(
+                after.initial_prototype_selection.unwrap().selected(),
+                selection.selected()
+            );
+        }
+    }
+
+    #[test]
+    fn initial_prototype_binding_preserves_source_versions_and_allocation_gates() {
+        let mut vm = vm();
+        let context = vm.root();
+        let profile = InitialMovieClipPrototypeProfile {
+            context_target: context,
+        };
+        let before = (
+            vm.object_count(),
+            vm.attached.len(),
+            vm.loaded_movie_targets.len(),
+        );
+        assert!(
+            vm.create_attached_movie_clip_with_initial_prototype(spec(90, None), profile)
+                .is_err()
+        );
+        assert_eq!(
+            (
+                vm.object_count(),
+                vm.attached.len(),
+                vm.loaded_movie_targets.len()
+            ),
+            before
+        );
+        vm.bind_builtin_context_target(context).unwrap();
+        let root = vm
+            .create_attached_movie_clip_with_initial_prototype(spec(90, None), profile)
+            .unwrap();
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        let mut imported = spec(91, Some(root));
+        imported.source.movie = LoadedMovieSourceId(11);
+        imported.source.header_version = 11;
+        assert!(
+            vm.create_attached_movie_clip_with_initial_prototype(imported, profile)
+                .is_err()
+        );
+        let child = vm
+            .create_attached_movie_clip_with_binding_and_initial_prototype(
+                imported,
+                AttachedMovieBinding::LocalSourceOrImportedLocalExport,
+                profile,
+            )
+            .unwrap();
+        let info = vm.attached_info(child).unwrap();
+        assert_eq!(info.source.header_version, 11);
+        assert_eq!(info.environment_header_version, 11);
+        assert_eq!(info.environment_movie, LoadedMovieSourceId(11));
+        assert_eq!(info.parent, Some(root));
+        assert!(info.storage.is_none());
+        assert_eq!(vm.loaded_movie_targets.get(&info.owner), Some(&11));
+        assert!(
+            vm.create_attached_movie_clip_with_binding_and_initial_prototype(
+                imported,
+                AttachedMovieBinding::LocalSourceOrImportedLocalExport,
+                profile,
+            )
+            .is_err()
+        );
+        vm.set_attached_children(root, vec![]).unwrap();
+        imported.target = DisplayTargetId(92);
+        assert!(
+            vm.create_attached_movie_clip_with_binding_and_initial_prototype(
+                imported,
+                AttachedMovieBinding::LocalSourceOrImportedLocalExport,
+                profile,
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn identity_root_adoption_and_storage_are_explicit() {
         let mut vm = vm();

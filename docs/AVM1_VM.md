@@ -2043,3 +2043,42 @@ The independent source-only appendix is `static-context/receipt.json`, SHA-256
 `90088ce1f8a161802d39ff94355ec1bb99442d79453f92798895ceba886cef83`.
 The receipt explicitly corrects an inherited stdout label that claimed no new
 globals; that stale label is not evidence against the recorded namespace setup.
+
+### Initial MovieClip prototype selection
+
+The additive `create_attached_movie_clip_with_initial_prototype` and
+`create_attached_movie_clip_with_binding_and_initial_prototype` APIs select the
+initial owner prototype synchronously from an explicitly bound builtin context.
+They acquire the already available cached MovieClip fallback first, then retain
+raw presence through current GLOBAL.MovieClip and its prototype. A missing global,
+a global value that converts to null, or a missing prototype selects the cached
+fallback. A present prototype that converts to null selects null; an admitted
+object/function value retains its identity. The earlier strict creation APIs keep
+their existing canonical-global/prototype checks.
+
+This route stores the selected pointer directly in the fresh owner with storage
+still absent. It does not invoke the later prototype setter or its storage/event
+hook. `AttachedInfo.initial_prototype_selection` records the historical selection,
+including fallback, outcome and explicit context identity; later assignments do
+not rewrite that record. Source and Environment version/binding admission remain
+separate, including the explicitly established source11/parent15 route. Target
+flags, parent/children state, owner-offset validation and all other current-state
+snapshots remain supplied; this is not complete native fresh construction.
+
+The bounded selector accepts modeled ordinary raw data hits, but rejects selected
+accessors, markers, deferred factories, resolver history, opaque super values,
+unknown native getter profiles and missing values through incomplete native
+inventories. It never turns the partial Object/Function/geometry model into an
+absence witness. An unavailable cache is unsupported, because the current field
+cannot distinguish uncached from native cached-null. The selector is internal;
+callers cannot reuse its historical result as an allocation certificate.
+
+VERIFIED static authority is `FRESH_MOVIECLIP_PROTOTYPE.md`, private receipt
+`fresh-movieclip-prototype/analysis/receipt.json` SHA-256
+`b50ac7935fd9cc0f9ee272494d874e1840b75c64419816256fc5049fb9fc29bc`.
+OBSERVED: ten focused Rust checks pass for the presence decision table, explicit
+context/cache gates, guarded native/descriptor cases, direct null/custom pointer
+installation, unallocated storage, the distinct later-setter hook and unchanged
+source/parent/target admission. A production metadata compile also passes without
+warnings. These checks are synthetic and do not establish retail lifecycle timing
+or current adopted-instance defaults.

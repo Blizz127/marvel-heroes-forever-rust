@@ -27,6 +27,8 @@ mod external_interface;
 mod focus_rect;
 #[path = "geom_namespace.rs"]
 mod geom_namespace;
+#[path = "initial_prototype.rs"]
+mod initial_prototype;
 #[path = "point.rs"]
 mod point;
 #[cfg(test)]
@@ -67,6 +69,10 @@ use execution_store::{ExecutionStore, RegisterBank, StoreError};
 pub use external_interface::ExternalInterfaceObjects;
 pub use focus_rect::AttachedFocusRectState;
 pub use geom_namespace::GeomNamespace;
+pub use initial_prototype::{
+    InitialMovieClipPrototypeProfile, InitialMovieClipPrototypeReason,
+    InitialMovieClipPrototypeSelection,
+};
 pub use point::PointObjects;
 pub use saved_runtime::{SavedActionInfo, SavedEnvironmentId, SavedExecution};
 pub use saved_state::{SavedActionId, SavedActionSource, SavedEnvironmentState, SavedMode};
