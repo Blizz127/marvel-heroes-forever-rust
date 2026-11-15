@@ -1,8 +1,9 @@
 //! Conditional native primary tessellation for one admitted rectangular contour.
 //!
-//! This expands the recovered zero-tolerance, non-AA scan/monotone branches. It
-//! is not general polygon tessellation or runtime Scale9 admission. All source
-//! points have already passed through the caller-selected point transform.
+//! This expands recovered non-AA scan/monotone branches when the supplied
+//! nonnegative tolerance leaves both source Y rows unchanged. It is not general
+//! polygon tessellation or runtime Scale9 admission. All source points have
+//! already passed through the caller-selected point transform.
 
 use super::native_scale9::Point;
 use super::native_scale9_geometry::PrimarySource;
@@ -10,7 +11,9 @@ use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RectangleProfile {
-    /// Actual primary option copied to T+0x1c. Only numerical zero is supported.
+    /// Actual primary option copied to T+0x1c. Finite nonnegative values are
+    /// admitted only when native Y coalescing leaves the two rows unchanged.
+    /// Subnormal-sensitive arithmetic remains unsupported.
     pub relative_tolerance: f32,
     /// Actual half-width passed to fed60. Only numerical zero is supported.
     pub antialias_half_width: f32,
@@ -30,7 +33,9 @@ pub enum TessellationError {
 impl fmt::Display for TessellationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::UnsupportedProfile => "rectangle replay requires zero tolerance and non-AA width",
+            Self::UnsupportedProfile => {
+                "rectangle replay requires finite nonnegative tolerance and non-AA width"
+            }
             Self::UnsupportedSource => {
                 "rectangle replay requires one exact five-point rectangular path"
             }
@@ -220,17 +225,25 @@ fn triangle3(tags: [u32; 3], positions: &[Point; 4]) -> Result<[u32; 3]> {
 /// along the rectangle, remain above native sentinels, and pass finite IEEE
 /// binary32/nearest/no-subnormal-sensitive intermediate checks.
 ///
-/// The zero options are explicit supplied native-role inputs, not inferred from
-/// a scene or default renderer configuration. No native allocation failure,
+/// The options are explicit supplied native-role inputs, not inferred from
+/// a scene or default renderer configuration. Nonnegative relative tolerance
+/// is admitted only if native111130 preserves both Y rows. The selected exact
+/// endpoint branches bypass X interpolation tolerance; no X epsilon is added.
+/// See docs/SCALE9_TOLERANCE.md for the positive-option branch closure.
+/// No native allocation failure,
 /// general contour, AA, UV, normalization or GPU format behavior is emulated.
 /// Source state is borrowed and never changed. Output storage is fixed-size.
 pub fn tessellate_rectangle(
     source: &PrimarySource,
     profile: RectangleProfile,
 ) -> Result<RectangleMesh> {
-    if profile.relative_tolerance != 0.0 || profile.antialias_half_width != 0.0 {
+    if !profile.relative_tolerance.is_finite()
+        || profile.relative_tolerance < 0.0
+        || profile.antialias_half_width != 0.0
+    {
         return Err(TessellationError::UnsupportedProfile);
     }
+    checked(profile.relative_tolerance)?;
     let points: &[Point; 5] = source
         .points()
         .try_into()
@@ -345,7 +358,7 @@ pub fn tessellate_rectangle(
 mod tests {
     use super::*;
     use crate::gfx::native_scale9::{Matrix2x4, NativeScale9Context, RectF32};
-    use crate::gfx::native_scale9_geometry::{export_triangle_indices, StyleSide};
+    use crate::gfx::native_scale9_geometry::{StyleSide, export_triangle_indices};
 
     const PROFILE: RectangleProfile = RectangleProfile {
         relative_tolerance: 0.0,
@@ -396,11 +409,12 @@ mod tests {
                 .map(|c| (c.source_vertex, c.direction, c.edge_range)),
             [(1, 1, [0, 0]), (4, -1, [1, 1])]
         );
-        assert!(mesh
-            .trace
-            .chains
-            .iter()
-            .all(|c| c.slope.to_bits() == 0 && c.styles == [0, 1]));
+        assert!(
+            mesh.trace
+                .chains
+                .iter()
+                .all(|c| c.slope.to_bits() == 0 && c.styles == [0, 1])
+        );
         assert_eq!(mesh.trace.ordered_chain_indices, [1, 0]);
         assert_eq!(mesh.trace.scan_bands, [[0.0, 4.0], [4.0, 4.0]]);
         assert_eq!(
@@ -451,7 +465,7 @@ mod tests {
         let input = source(&p, 1, true);
         for profile in [
             RectangleProfile {
-                relative_tolerance: 1e-6,
+                relative_tolerance: -1e-6,
                 ..PROFILE
             },
             RectangleProfile {
@@ -475,6 +489,129 @@ mod tests {
         assert_eq!(
             tessellate_rectangle(&source(&p, 1, false), PROFILE),
             Err(TessellationError::UnsupportedStyles)
+        );
+    }
+
+    #[test]
+    fn positive_tolerance_retains_saved_and_translated_rectangle_rows() {
+        let profile = RectangleProfile {
+            relative_tolerance: f32::from_bits(0x3727_c5ac),
+            ..PROFILE
+        };
+        for bounds in [
+            [0.0, 0.0, 1280.0, 1280.0],
+            [3.0, 7.0, 11.0, 13.0],
+            [-6.0, -9.0, -2.0, -1.0],
+        ] {
+            let input = source(&points(bounds), 1, true);
+            let before = (input.points().to_vec(), input.paths().to_vec());
+            let mesh = tessellate_rectangle(&input, profile).unwrap();
+            assert_eq!(mesh.trace.retained_y_indices, [0, 2]);
+            assert_eq!(mesh.triangles, [[0, 1, 2], [3, 2, 1]]);
+            let [xl, yl, xr, yh] = bounds;
+            assert_eq!(
+                mesh.vertices.map(|v| v.position),
+                [[xl, yl], [xr, yl], [xl, yh], [xr, yh]]
+            );
+            assert_eq!(
+                (input.points(), input.paths()),
+                (before.0.as_slice(), before.1.as_slice())
+            );
+        }
+    }
+
+    #[test]
+    fn native_y_threshold_is_strict_and_merge_rejection_preserves_source() {
+        for (bounds, equality_bits) in [
+            ([0.0, 1.0, 6.0, 2.0], 0x3f00_0000),
+            ([0.0, -2.0, 6.0, -1.0], 0x3f80_0000),
+        ] {
+            let input = source(&points(bounds), 1, true);
+            let before = (input.points().to_vec(), input.paths().to_vec());
+            let below = RectangleProfile {
+                relative_tolerance: f32::from_bits(equality_bits - 1),
+                ..PROFILE
+            };
+            assert!(tessellate_rectangle(&input, below).is_ok());
+            for bits in [equality_bits, equality_bits + 1] {
+                let profile = RectangleProfile {
+                    relative_tolerance: f32::from_bits(bits),
+                    ..PROFILE
+                };
+                assert_eq!(
+                    tessellate_rectangle(&input, profile),
+                    Err(TessellationError::UnsupportedBranch)
+                );
+                assert_eq!(
+                    (input.points(), input.paths()),
+                    (before.0.as_slice(), before.1.as_slice())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn exact_endpoint_x_is_not_coalesced_by_interpolation_epsilon() {
+        let xl = 10000.0_f32;
+        let xr = f32::from_bits(xl.to_bits() + 1);
+        let input = source(&points([xl, 10000.0, xr, 10001.0]), 1, true);
+        let profile = RectangleProfile {
+            relative_tolerance: f32::from_bits(0x3727_c5ac),
+            ..PROFILE
+        };
+        assert!(xr - xl < 10000.0 * profile.relative_tolerance);
+        let mesh = tessellate_rectangle(&input, profile).unwrap();
+        assert_eq!(mesh.vertices[0].position[0].to_bits(), xl.to_bits());
+        assert_eq!(mesh.vertices[1].position[0].to_bits(), xr.to_bits());
+        assert_eq!(mesh.triangles, [[0, 1, 2], [3, 2, 1]]);
+    }
+
+    #[test]
+    fn tolerance_underflow_overflow_and_nonfinite_profiles_remain_explicit() {
+        let input = source(&points([0.0, 1.0, 6.0, 2.0]), 1, true);
+        for relative_tolerance in [f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+            assert_eq!(
+                tessellate_rectangle(
+                    &input,
+                    RectangleProfile {
+                        relative_tolerance,
+                        ..PROFILE
+                    },
+                ),
+                Err(TessellationError::UnsupportedProfile)
+            );
+        }
+        assert_eq!(
+            tessellate_rectangle(
+                &input,
+                RectangleProfile {
+                    relative_tolerance: f32::from_bits(1),
+                    ..PROFILE
+                },
+            ),
+            Err(TessellationError::SubnormalSensitive)
+        );
+        let small_y = source(&points([0.0, 0.0, 6.0, f32::MIN_POSITIVE]), 1, true);
+        assert_eq!(
+            tessellate_rectangle(
+                &small_y,
+                RectangleProfile {
+                    relative_tolerance: 0.5,
+                    ..PROFILE
+                },
+            ),
+            Err(TessellationError::SubnormalSensitive)
+        );
+        let large_y = source(&points([0.0, 0.0, 6.0, 1e30]), 1, true);
+        assert_eq!(
+            tessellate_rectangle(
+                &large_y,
+                RectangleProfile {
+                    relative_tolerance: 1e30,
+                    ..PROFILE
+                },
+            ),
+            Err(TessellationError::NonFinite)
         );
     }
 
