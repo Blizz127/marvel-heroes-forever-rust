@@ -64,6 +64,40 @@ impl Default for Limits {
     }
 }
 
+/// Optional retention policy, fixed with the resolver's source and parse limits.
+/// Accounted storage is PrototypeValues' decoded-storage charge, not heap/RSS;
+/// the entry cap also bounds retained indexes and per-entry overhead. Either
+/// zero limit disables admission. Caller-retained results have independent lives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CacheLimits {
+    pub max_entries: usize,
+    pub max_accounted_storage_bytes: usize,
+}
+
+impl Default for CacheLimits {
+    fn default() -> Self {
+        Self {
+            max_entries: 64,
+            max_accounted_storage_bytes: 256 * 1024,
+        }
+    }
+}
+
+/// Saturating counters for prototype preparation/retention, not VM invocations.
+/// Rejected request preambles do not count as hits or misses. A miss can fail
+/// preparation; only fully validated successes may be admitted. Source-value
+/// statistics retained inside a prepared result are not current-call I/O counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheStatistics {
+    pub hits: u64,
+    pub misses: u64,
+    pub preparations: u64,
+    pub admissions: u64,
+    pub uncached_successes: u64,
+    pub retained_entries: usize,
+    pub accounted_storage_bytes: usize,
+}
+
 /// Explicit source data behind the configured directory; no inferred defaults.
 pub struct Configuration {
     globals: PrototypeValues,
@@ -110,7 +144,7 @@ pub struct ResolvedLabel {
     pub hash_bytes: Vec<u8>,
     pub prototype_id: u64,
     configuration: Arc<Configuration>,
-    prototype: PreparedPrototype,
+    prototype: Arc<PreparedPrototype>,
 }
 
 impl ResolvedLabel {
@@ -132,16 +166,35 @@ pub struct ConfiguredLabels<R = BufReader<File>> {
     by_id: HashMap<u64, usize>,
     configuration: Arc<Configuration>,
     limits: Limits,
+    cache_limits: CacheLimits,
+    prepared: HashMap<u64, Arc<PreparedPrototype>>,
+    cache_statistics: CacheStatistics,
 }
 
 impl ConfiguredLabels<BufReader<File>> {
     pub fn open(path: impl AsRef<Path>, limits: Limits) -> io::Result<Self> {
         Self::from_reader(BufReader::new(File::open(path)?), limits)
     }
+
+    pub fn open_with_cache_limits(
+        path: impl AsRef<Path>,
+        limits: Limits,
+        cache_limits: CacheLimits,
+    ) -> io::Result<Self> {
+        Self::from_reader_with_cache_limits(BufReader::new(File::open(path)?), limits, cache_limits)
+    }
 }
 
 impl<R: Read + Seek> ConfiguredLabels<R> {
     pub fn from_reader(reader: R, limits: Limits) -> io::Result<Self> {
+        Self::from_reader_with_cache_limits(reader, limits, CacheLimits::default())
+    }
+
+    pub fn from_reader_with_cache_limits(
+        reader: R,
+        limits: Limits,
+        cache_limits: CacheLimits,
+    ) -> io::Result<Self> {
         let mut archive = SipArchive::from_reader_with_limits(reader, limits.sip)?;
         let mut metadata_bytes = 0;
         let directory = read_directory(
@@ -266,11 +319,22 @@ impl<R: Read + Seek> ConfiguredLabels<R> {
             by_id,
             configuration,
             limits,
+            cache_limits,
+            prepared: HashMap::new(),
+            cache_statistics: CacheStatistics::default(),
         })
     }
 
     pub fn configuration(&self) -> &Configuration {
         &self.configuration
+    }
+
+    pub fn cache_limits(&self) -> CacheLimits {
+        self.cache_limits
+    }
+
+    pub fn cache_statistics(&self) -> CacheStatistics {
+        self.cache_statistics
     }
 
     /// Resolve exact native-derived membership, then the existing typed scalar
@@ -299,19 +363,33 @@ impl<R: Read + Seek> ConfiguredLabels<R> {
                 "flagged localized resource is outside the supported profile",
             ));
         }
-        let schemas = SchemaSet::new(&self.blueprints, &self.directory).map_err(decode)?;
-        let mut source = Source {
-            archive: &mut self.archive,
-            schemas,
-            directory: &self.directory,
-            by_id: &self.by_id,
-            limits: self.limits.localized_prototype,
+        // Only immutable successes from this source and fixed limits are reused.
+        // Keep the entire request/membership/flag preamble above every cache hit.
+        let prototype = if let Some(prepared) = self.prepared.get(&prototype_id) {
+            self.cache_statistics.hits = self.cache_statistics.hits.saturating_add(1);
+            Arc::clone(prepared)
+        } else {
+            self.cache_statistics.misses = self.cache_statistics.misses.saturating_add(1);
+            let schemas = SchemaSet::new(&self.blueprints, &self.directory).map_err(decode)?;
+            let mut source = Source {
+                archive: &mut self.archive,
+                schemas,
+                directory: &self.directory,
+                by_id: &self.by_id,
+                limits: self.limits.localized_prototype,
+            };
+            let prototype = localized_prototype::resolve(
+                &mut source,
+                prototype_id,
+                self.limits.localized_prototype,
+            )?;
+            drop(source);
+            self.cache_statistics.preparations =
+                self.cache_statistics.preparations.saturating_add(1);
+            let prototype = Arc::new(prototype);
+            self.admit(prototype_id, &prototype);
+            prototype
         };
-        let prototype = localized_prototype::resolve(
-            &mut source,
-            prototype_id,
-            self.limits.localized_prototype,
-        )?;
         Ok(ResolvedLabel {
             label: label.to_owned(),
             joined_path,
@@ -320,6 +398,30 @@ impl<R: Read + Seek> ConfiguredLabels<R> {
             configuration: Arc::clone(&self.configuration),
             prototype,
         })
+    }
+
+    fn admit(&mut self, id: u64, prototype: &Arc<PreparedPrototype>) {
+        let accounted = self
+            .cache_statistics
+            .accounted_storage_bytes
+            .checked_add(prototype.values().statistics().storage_bytes);
+        if self.prepared.len() >= self.cache_limits.max_entries
+            || self.cache_limits.max_accounted_storage_bytes == 0
+            || !accounted
+                .is_some_and(|bytes| bytes <= self.cache_limits.max_accounted_storage_bytes)
+            || self.prepared.try_reserve(1).is_err()
+        {
+            // Retention is optional: a full cache or failed map reservation must
+            // not turn an already validated result into a resource failure.
+            self.cache_statistics.uncached_successes =
+                self.cache_statistics.uncached_successes.saturating_add(1);
+            return;
+        }
+        let old = self.prepared.insert(id, Arc::clone(prototype));
+        debug_assert!(old.is_none());
+        self.cache_statistics.admissions = self.cache_statistics.admissions.saturating_add(1);
+        self.cache_statistics.retained_entries = self.prepared.len();
+        self.cache_statistics.accounted_storage_bytes = accounted.expect("checked above");
     }
 }
 
@@ -722,6 +824,7 @@ mod tests {
     // Entirely fabricated format fixtures. The hash vector was independently
     // calculated for this fixture spelling, rather than copied from game data.
     const BUTTON: u64 = 0x5a5569eac4ef0c8c;
+    const SECOND: u64 = 0x7fc3c294c3660c6c;
 
     #[derive(Clone, Copy, PartialEq)]
     enum Fault {
@@ -731,11 +834,13 @@ mod tests {
         Parent,
         DuplicateField,
         DuplicatePrototype,
+        DuplicatePath,
         DuplicateAsset,
         OtherTypeAsset,
         MissingType,
         MissingTarget,
         WrongClass,
+        AlternateText,
     }
 
     fn string(out: &mut Vec<u8>, text: &str) {
@@ -805,6 +910,10 @@ mod tests {
         if fault == Fault::DuplicatePrototype {
             records.push((1, 1, "Other/Duplicate.defaults"));
         }
+        if fault == Fault::DuplicatePath {
+            records.push((4, 3, "Example/Labels/Button.prototype"));
+        }
+        records.push((SECOND, 3, "Example/Labels/Second.prototype"));
         let mut pdr = b"PDR\x0b".to_vec();
         pdr.extend((records.len() as u32).to_le_bytes());
         for (id, blueprint, name) in records {
@@ -892,7 +1001,23 @@ mod tests {
             ),
             (
                 "Calligraphy/Example/Labels/Button.prototype",
-                prototype(3, 3, &[(103, b'S', 500)]),
+                prototype(
+                    3,
+                    3,
+                    &[(
+                        103,
+                        b'S',
+                        if fault == Fault::AlternateText {
+                            600
+                        } else {
+                            500
+                        },
+                    )],
+                ),
+            ),
+            (
+                "Calligraphy/Example/Labels/Second.prototype",
+                prototype(3, 3, &[(103, b'S', 501)]),
             ),
             ("Calligraphy/Types/Directory.type", asset_type(&assets)),
             (
@@ -957,6 +1082,7 @@ mod tests {
             Fault::Parent,
             Fault::DuplicateField,
             Fault::DuplicatePrototype,
+            Fault::DuplicatePath,
             Fault::DuplicateAsset,
             Fault::OtherTypeAsset,
             Fault::MissingType,
@@ -1044,5 +1170,139 @@ mod tests {
                 ConfiguredLabels::from_reader(Cursor::new(fixture(Fault::None)), limited).is_err()
             );
         }
+    }
+
+    #[test]
+    fn cache_shares_only_preparation_and_keeps_request_guards() {
+        let mut limits = Limits::default();
+        limits.max_label_bytes = 8;
+        let mut labels =
+            ConfiguredLabels::from_reader(Cursor::new(fixture(Fault::None)), limits).unwrap();
+        let mut first = labels.resolve("Button").unwrap();
+        let alias = labels.resolve("bUtToN").unwrap();
+        assert!(std::ptr::eq(first.prototype(), alias.prototype()));
+        assert_eq!(alias.label, "bUtToN");
+        assert_eq!(alias.joined_path, "Example/Labels/bUtToN.prototype");
+        first.label.clear();
+        first.joined_path.clear();
+        first.hash_bytes.clear();
+        first.prototype_id = 0;
+        let again = labels.resolve("Button").unwrap();
+        assert_eq!(again.label, "Button");
+        assert_eq!(again.prototype_id, BUTTON);
+        assert_eq!(again.hash_bytes, b"example.labels.button?prototype");
+        assert!(std::ptr::eq(alias.prototype(), again.prototype()));
+        let statistics = labels.cache_statistics();
+        assert_eq!(statistics.hits, 2);
+        assert_eq!(statistics.misses, 1);
+        assert_eq!(statistics.preparations, 1);
+        assert_eq!(statistics.admissions, 1);
+        assert_eq!(statistics.retained_entries, 1);
+        for bad in ["", "Button\0", "\0Button", "Büttön", "123456789", "Absent"] {
+            assert!(labels.resolve(bad).is_err());
+            assert_eq!(labels.cache_statistics(), statistics);
+        }
+        drop(labels);
+        assert_eq!(again.prototype().references().display_text_id, 500);
+        assert_eq!(again.prototype().tooltip_origin().layer, 0);
+    }
+
+    #[test]
+    fn cache_limits_skip_retention_without_rejecting_valid_results() {
+        let make = |cache| {
+            ConfiguredLabels::from_reader_with_cache_limits(
+                Cursor::new(fixture(Fault::None)),
+                Limits::default(),
+                cache,
+            )
+            .unwrap()
+        };
+        let mut disabled = make(CacheLimits {
+            max_entries: 0,
+            ..CacheLimits::default()
+        });
+        let first = disabled.resolve("Button").unwrap();
+        let second = disabled.resolve("Button").unwrap();
+        assert!(!std::ptr::eq(first.prototype(), second.prototype()));
+        let charge = first.prototype().values().statistics().storage_bytes;
+        assert!(charge > 0);
+        assert_eq!(disabled.cache_statistics().uncached_successes, 2);
+        assert_eq!(disabled.cache_statistics().retained_entries, 0);
+        for cap in [0, charge - 1] {
+            let mut small = make(CacheLimits {
+                max_accounted_storage_bytes: cap,
+                ..CacheLimits::default()
+            });
+            assert_eq!(small.resolve("Button").unwrap().prototype_id, BUTTON);
+            assert_eq!(small.cache_statistics().uncached_successes, 1);
+            assert_eq!(small.cache_statistics().accounted_storage_bytes, 0);
+        }
+        for cache in [
+            CacheLimits {
+                max_entries: 1,
+                ..CacheLimits::default()
+            },
+            CacheLimits {
+                max_accounted_storage_bytes: charge,
+                ..CacheLimits::default()
+            },
+        ] {
+            let mut bounded = make(cache);
+            let retained = bounded.resolve("Button").unwrap();
+            let other = bounded.resolve("Second").unwrap();
+            let other_again = bounded.resolve("Second").unwrap();
+            assert_eq!(other.prototype_id, SECOND);
+            assert_eq!(other.prototype().references().display_text_id, 501);
+            assert!(!std::ptr::eq(other.prototype(), other_again.prototype()));
+            assert!(std::ptr::eq(
+                retained.prototype(),
+                bounded.resolve("Button").unwrap().prototype()
+            ));
+            let stats = bounded.cache_statistics();
+            assert_eq!(stats.hits, 1);
+            assert_eq!(stats.misses, 3);
+            assert_eq!(stats.preparations, 3);
+            assert_eq!(stats.admissions, 1);
+            assert_eq!(stats.uncached_successes, 2);
+            assert_eq!(stats.retained_entries, 1);
+            assert_eq!(stats.accounted_storage_bytes, charge);
+        }
+    }
+
+    #[test]
+    fn cache_does_not_share_sources_or_retain_failed_preparations() {
+        let mut valid =
+            ConfiguredLabels::from_reader(Cursor::new(fixture(Fault::None)), Limits::default())
+                .unwrap();
+        let mut other = ConfiguredLabels::from_reader(
+            Cursor::new(fixture(Fault::AlternateText)),
+            Limits::default(),
+        )
+        .unwrap();
+        let first = valid.resolve("Button").unwrap();
+        let second = other.resolve("Button").unwrap();
+        assert_eq!(first.prototype_id, second.prototype_id);
+        assert_eq!(first.prototype().references().display_text_id, 500);
+        assert_eq!(second.prototype().references().display_text_id, 600);
+        assert!(!std::ptr::eq(first.prototype(), second.prototype()));
+        let mut invalid = ConfiguredLabels::from_reader(
+            Cursor::new(fixture(Fault::WrongClass)),
+            Limits::default(),
+        )
+        .unwrap();
+        let held = invalid.resolve("Second").unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                invalid.resolve("Button").err().unwrap().kind(),
+                io::ErrorKind::Unsupported
+            );
+        }
+        assert_eq!(invalid.cache_statistics().preparations, 1);
+        assert_eq!(invalid.cache_statistics().misses, 3);
+        assert_eq!(invalid.cache_statistics().retained_entries, 1);
+        assert!(std::ptr::eq(
+            held.prototype(),
+            invalid.resolve("Second").unwrap().prototype()
+        ));
     }
 }
