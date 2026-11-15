@@ -394,3 +394,13 @@ Receipts: `evidence/build-0.1.0-dev.7-smoke.json`,
 and standard-library test targets compile. Dependency notices cover 114 crates
 and 217 texts, with no collection issues. Packaging and delivery status are
 recorded separately; these checks do not establish full startup or game parity.
+
+**VERIFIED (private dev.7 staging, 2026-11-15 09:19 UTC):** All 284 packaged file
+hashes and the packaged version/Original checks pass. Packaged clean source is
+`f2e35127dd82c4637365f23f1fbddb9d64209660`; its only difference from the tested
+source is the preceding findings prose. Binary identity is unchanged. Receipt:
+`evidence/build-0.1.0-dev.7-package-validation.json`. The artifact is under
+`builds/0.1.0-dev.7` in the private project root. It contains original tooling,
+documentation and dependency notices, with no retail binaries or game assets.
+Publication and owner-device validation remain unconfirmed; the actionable Rust
+diagnostic intake was queued for the coordinator, superseding dev.6 only.
