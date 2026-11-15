@@ -406,6 +406,14 @@ successful frozen harness makes one all-34 execution pass. Its complete 233-file
 tracked source manifest, harness/dependency inputs and owner asset hashes remain
 unchanged. Neither the unrun 32-record preparation nor any partial VM is replayed.
 
+The final independent comparison also passes: 8,103 direct scalar/collection
+comparisons plus 4,255 checks of the pre-execution adopted structure, for 12,358
+total. It matches all 674 values, 34 retained Environments, 68 distinct new
+objects and 102 soundMap metadata flags against the frozen oracle and captured
+single run. It performs no additional body execution. Owner own-property flags
+and retained pool contents were not directly read back; this preserves the
+inspection limits above and establishes no dynamic or complete event delivery.
+
 | Private artifact under `evidence/construct-saved-phases/` | SHA-256 |
 | --- | --- |
 | `composite.json` | `cd8e39ad08224a47e15e6a619b3576f515da2f2b4027b5a881c660871abd5005` |
@@ -413,6 +421,9 @@ unchanged. Neither the unrun 32-record preparation nor any partial VM is replaye
 | `oracle-all34/receipt.json` | `c1693db99652492db270dbae5bb525c976367f187d00483905549b6c52ac1242` |
 | `oracle-all34/MANIFEST.json` | `7499145e8f7f6b0fbf53890d27968cedbc91ca64b4e336525e99af03637f5b5e` |
 | `all34/execution.json` | `429752f76235bc1dabf1a2a21d73a20c886300acd07592122beaa1bd6252890e` |
+| `all34/receipt.json` | `4b414c46fa02f4321da209f2be163e8cd9a2e97a9239081426a7566728612e94` |
+| `all34/independent/comparison-receipt.json` | `98fcf4a430225aff5a9d5453d4a027479d146fd6b1b6086cabb99ecb1e76ab89` |
+| `all34/MANIFEST.json` | `069828f9b61b4ba7dbd7f8f63c9cfc1c7ff1fb9b90d264d30494778de94b2f09` |
 
 The successful private binary has SHA-256
 `1d2063d7fcdfa9bbc9d982f3aee7d59562cba30b00fc7deb4e8443e11dba33e6`.
