@@ -123,6 +123,9 @@ pub fn run(args: &[OsString]) -> Result<()> {
             println!(
                 "Probe bindings: Object/Array/Function/property-flags and typed unbound MovieClip intrinsics, Selection listeners and root-context class registry; other host operations rejected."
             );
+            println!(
+                "Model: minimal explicit globals and a parentless plain root; native global baseline and attached-root shadowing remain unverified."
+            );
             let outcome = session.initialize(&plan, &mut host)?;
             println!(
                 "OBSERVED Selection: {} retained listeners; {:?}.",

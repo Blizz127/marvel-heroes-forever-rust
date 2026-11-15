@@ -240,6 +240,11 @@ applies its bounded successful plain-text profile.
 native parent-copy, explicit-zero assignment and postprocess evidence used for
 its original bounded scalar resolver. Broader schema/default cases, fallbacks
 and live callback startup remain separate contracts.
+[Label lookup](LOCALIZED_LABEL_LOOKUP.md) records the configured data/asset
+directory chain and native ASCII path/hash identity, including codepage and
+failure boundaries. [Localization result objects](LOCALIZED_RESULT_OBJECT.md)
+records fresh native Object construction, hidden metadata, ordinary setters and
+the saved unpatched return-field order.
 [Persistent pointer controller](FRONTEND_POINTER.md) composes the existing
 original VM and display bridge, with the same Adobe/private-script provenance.
 [Native scene host](NATIVE_WINDOW.md) registers the pinned winit/wgpu contracts
@@ -275,3 +280,12 @@ capture remain separate unverified steps.
 [Native enumeration](REA_ENUMERATION.md) records the owned-binary string hash,
 collision, growth, hidden-literal metadata and visitor evidence. Derived orders
 remain distinguished from retail process observations.
+[Qualified variable reads](REA_QUALIFIED_VARIABLES.md) records native scope and
+member lookup for the observed class registrations; the diagnostic Plain root
+does not establish attached-root lookup behavior.
+[Attached MovieClip identity](ATTACHED_MOVIECLIP.md) distinguishes the display
+receiver from lazy script storage and records property precedence, state and
+onLoad gates without substituting generic-object behavior.
+[Native HTML wrapping](HTML_WRAPPING.md) records rounding and word-break evidence
+while retaining unresolved translator/font-state gates; the existing diagnostic
+layout is not promoted to native parity by a conditional mathematical model.
