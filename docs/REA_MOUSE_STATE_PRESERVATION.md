@@ -607,3 +607,122 @@ Sources are the same proprietary owner-provided PE and retained project REA
 Evidence already recorded above, used only for interoperability study. No
 client bytes, extracted data, or implementation code enter this documentation
 commit.
+
+## Follow-up: fresh event producers and first shared exposure
+
+This follow-up separates **constructor-proved** event state from the earlier
+cleanup profile's **current-state** assumptions. It does not carry fresh
+values past shared publication without an ownership/concurrency condition.
+The event remains `Q = F +40`; its inner recursive mutex is `J = Q +28`,
+its OS record is `R = [J +20]`, and its waiter manager is `W = [Q +50]`.
+
+**VERIFIED (static):** `0x14004c760` passes false/false to event constructor
+`0x14002f6f0` at `0x14004c7b8`. The latter calls the handler-container base
+with false, constructs the inner mutex with recursive true and handlers false,
+and constructs a separate waiter manager. On ordinary successful construction,
+the fields below are written by their actual producers:
+
+| Field | Constructor result | Producer |
+|---|---|---|
+| `Q +10` | null handler container | false branch of `0x14002f310` |
+| `Q +20 / +21` | zero / zero signal bytes | `0x14002f735 / 0x14002f73d` |
+| `J +10` | null handler container | same false base-constructor branch |
+| `J +20` | distinct allocated 32-byte OS record `R` | `0x1400301b0` |
+| `R +8 / +0c / +18` | recursive true / count zero / backpointer `J` | `0x14003020e..0x140030216` |
+| `R +0` | result of `CreateMutexA(NULL, FALSE, NULL)` | `0x140030223..0x140030229` |
+| `Q +50` | distinct allocated 64-byte waiter manager `W` | `0x140030550` |
+| `W +28 / +30 / +38` | three null list pointers | `0x140030589..0x140030591` |
+
+Allocation failure instead stores null OS-record or manager pointers. The
+native constructors do not validate successful OS-handle creation before
+returning, so a valid nonnull graph and successful Win32 initialization are
+explicit premises of the later successful signal/cleanup profile.
+
+The manager initializes its leading critical section through `0x1400682d0`.
+That helper uses `LoadLibraryA("kernel32.dll")` and `GetProcAddress` for
+`InitializeCriticalSectionAndSpinCount`, caching the result, or calls the
+imported `InitializeCriticalSection` fallback. The cached binding and normal
+OS return remain explicit conditions. Its critical-section bytes belong to the OS contract; the native
+code does not initialize them by blanket zeroing. The list fields above are
+written explicitly **after** that initializer returns. The event constructor
+then returns; the rest of `F` construction only installs its retained cache
+owner, initial entry state and original key pair under the existing concrete
+reference/interface profile. The fresh checkpoint is return from
+`0x14004c82e`, not an observed runtime snapshot.
+
+The earliest concrete shared entry-pointer store is in cache insertion
+`0x14004bff0`: successful branches converge at `0x14004c15e`, storing `F` in
+`H`'s cache. The insertion tail has no later call before returning.
+`0x14004d1a0` then publishes the same pointer to its caller at `0x14004d2c2`
+and releases `H +18` at `0x14004d2cc`. Under the native cache's locking
+protocol, this unlock is the first identified opportunity for another lookup
+to acquire the published entry. The existing-pending branch at `0x14004d2f9`
+retains that same `F` at `0x14004d307` and returns status 2.
+
+The status-2 caller reaches `0x14004c2e0`. The selected 53-byte entry fragment
+branches at `0x14004c30b` to `0x14004c315`, outside that capture. It is not a
+complete consumer or waiter proof. This task stops at the already-established
+shared-cache boundary; it does not infer effects for the uncaptured branch.
+
+The fresh thread's first later indirect call is its allocator at
+`0x14004e518`, followed by definition construction and optional task/provider
+work before `0x14004e645`. These calls do not receive `F` directly, but the
+shared cache already exposes it. The lack of a direct `F` argument therefore
+does not establish that reentry or another thread cannot register a handler
+or wait on its event. The selected constructor checkpoint is stronger than
+a guessed default, but it is not a current event snapshot.
+
+**VERIFIED (static):** the selected synchronous signal has an exact empty
+queue/null handler path. Given the graph produced by the constructors is still live and
+unchanged at signal entry, plus successful ordinary OS locking:
+
+1. `0x14002fe16 → 0x14002ff40` waits on `R`'s handle. Exact wait result zero
+   increments `R +0c` from zero to one.
+2. The signal writes `Q +20 = 1` and `Q +21 = 0`; these flags change and
+   must not be described as preserved constructor values.
+3. `0x14002fe27 → 0x1400300a0 → 0x14002ffb0` enters `W`'s critical section.
+   With `W +30 = 0`, it jumps directly to the unlock path. It neither writes
+   the list fields nor reaches `SetEvent` at `0x14002fff3`.
+4. Null `Q +10` leaves the saved outer handler container null.
+   `0x140030c20 → 0x140030ba0` decrements the inner recursion count to zero,
+   observes null `J +10`, and calls `ReleaseMutex` for the recursive mutex.
+   Neither inner nor outer handler visitor is reached.
+5. The signal returns with both handler containers null, the same manager
+   and OS-record identities, and its empty list fields unchanged. Publication
+   then releases `H +18`, creating another shared-state interval before
+   local-key and entry cleanup.
+
+This derivation removes `SetEvent` from the admitted **empty-queue** path;
+it does not remove that import from the real nonempty path. Nonempty queues
+can wake threads, and nonnull handler containers invoke the previously
+identified application callbacks. Wait failure, invalid OS lifetime, external
+registration, waiter activity, allocator reentry and concurrency remain
+explicit boundaries. Consequently the fresh producers can justify the cleanup
+inputs only together with preservation across the shared intervals; this
+study has not observed that preservation in a running client.
+
+Joined private receipt:
+`evidence/rea-mouse-state-preservation/event-preservation/receipt.json`, SHA-256
+`77433b720662e24baa536dd25c76f5c4b918ba59cefb68636900d3fe64d82804`.
+It binds the separate constructor, exposure, signal and prior cleanup receipts.
+Constructor verification covers 268 instruction spans / 943 bytes and 51
+literal bytes, including the explicitly partial 53-byte consumer fragment;
+exposure verification covers 855 spans / 3,081 bytes and 64 table bytes;
+signal verification covers 190 spans / 674 bytes. These sets overlap and are
+not added as unique coverage. Three new REA records were completed, exported
+and reset; other records were reused with independent pinned-PE byte checks.
+The pinned executable and all final input hashes match their expected values.
+
+New canonical Evidence:
+
+- `ev_930036d62ea5f3205eb26699227e95f35467ed329ec6cee3bc078822b72c31c4`
+  — complete critical-section initializer.
+- `ev_28dd8bb790b766c876cf94432812c5cf7988b07ef5940f69b2f2765f63457a40`
+  — its exact Win32 module/function literals.
+- `ev_286ccb39eb4df035e053ffeb845809e0eef7b5e7123133cd3b217c237cc3f718`
+  — bounded status-consumer entry fragment, with the continuation excluded.
+
+Sources remain the same owner-provided proprietary executable, original project
+REA Evidence and REA workflow documented above. This update changes only the
+investigation document; private evidence remains outside git. No native client,
+script replay or host behavior was executed or changed.
