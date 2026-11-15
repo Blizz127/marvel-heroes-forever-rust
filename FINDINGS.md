@@ -58,6 +58,13 @@ No Rust launcher publication route has been confirmed. Gate 1 retail
 behavior/visual parity is not yet verified; Gate 2 exposes no finished upgrades
 yet. Private staging/readback is recorded separately below when complete.
 
+**VERIFIED private staging:** `builds/0.1.0-dev.13` contains 354 selected
+original/dependency-notice files from clean packaged commit
+`d0093e5` (tested code `caa2250`). Complete file-set, size/hash and executable
+version checks pass. Receipt: `evidence/build-0.1.0-dev.13-package-validation.json`.
+This supersedes dev12's Rust diagnostic intake only; no retail launcher tile is
+changed and no publication is claimed.
+
 ## 2026-11-15 dev12 diagnostic increment
 
 **VERIFIED Rust execution:** tested source
