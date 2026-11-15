@@ -77,6 +77,9 @@ enum Operation {
     Float2 {
         destination: usize,
     },
+    SwapOuterColorBytes {
+        destination: usize,
+    },
 }
 
 fn plan(
@@ -107,6 +110,7 @@ fn plan(
             ),
             0x133 => (Operation::Short3 { destination }, 6),
             0x162 => (Operation::Float2 { destination }, 8),
+            0x214 => (Operation::SwapOuterColorBytes { destination }, 4),
             0x251 => (
                 Operation::Copy {
                     source: 4,
@@ -219,6 +223,16 @@ pub fn transfer_primary_vertices(
                         scratch[output + destination + 4..output + destination + 8]
                             .copy_from_slice(&y.to_le_bytes());
                     }
+                    Operation::SwapOuterColorBytes { destination } => {
+                        // Exact 032af0 byte transfer, without assigning channel
+                        // names or a GPU interpretation to the native word.
+                        scratch[output + destination..output + destination + 4].copy_from_slice(&[
+                            source[input + 6],
+                            source[input + 5],
+                            source[input + 4],
+                            source[input + 7],
+                        ]);
+                    }
                 }
             }
         }
@@ -305,5 +319,40 @@ mod tests {
             .unwrap();
         assert_eq!(output, [0xcc; 16]);
         assert!(scratch.iter().all(|&byte| byte == 0x5a));
+    }
+
+    #[test]
+    fn exact_color214_swaps_bytes_zero_and_two_without_admitting_flag_aliases() {
+        let source = [
+            0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0xff, 0, 0xa5, 0, 0, 0, 0,
+        ];
+        let mut scratch = [0x5a; SCRATCH_BYTES];
+        let mut output = [0xcc; 12];
+        transfer_primary_vertices(
+            &source,
+            &mut output,
+            &mut scratch,
+            request(&[(1, 0x214), (0, 0)], 6, 2),
+        )
+        .unwrap();
+        assert_eq!(
+            output,
+            [0x5a, 3, 2, 1, 4, 0x5a, 0x5a, 0, 0xff, 0x80, 0xa5, 0x5a]
+        );
+        let prior_scratch = scratch;
+        let prior_output = output;
+        for code in [0x10214, 0x10251] {
+            assert_eq!(
+                transfer_primary_vertices(
+                    &source,
+                    &mut output,
+                    &mut scratch,
+                    request(&[(0, code), (0, 0)], 6, 2)
+                ),
+                Err(UploadError::UnsupportedElement { index: 0, code })
+            );
+            assert_eq!(output, prior_output);
+            assert_eq!(scratch, prior_scratch);
+        }
     }
 }
