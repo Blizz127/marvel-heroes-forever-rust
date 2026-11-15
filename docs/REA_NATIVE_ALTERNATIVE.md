@@ -3,7 +3,7 @@
 Investigation: 2026-11-15 UTC, task `a3d58c579542`.
 
 **VERIFIED:** The installed REA `execute_rizin_command` route supplies static
-native instruction evidence without Ghidra. Four successful calls completed with
+native instruction evidence without Ghidra. The initial package/font study's four successful calls completed with
 exit code zero, untruncated output, and an unchanged target digest. This resolves
 the immediate lack of a working static instruction-analysis route; it does not
 repair Ghidra, recover a complete call graph, or establish runtime parity.
@@ -159,6 +159,68 @@ relabeled as REA-produced evidence.
   modified by this investigation.
 - Ghidra's existing Java-readiness limitation remains as recorded in
   `REA_NATIVE.md`. No live client or server validation was performed.
+
+## AVM1 empty `Pop` follow-up
+
+**VERIFIED (static native control flow):** On a valid initialized stack at zero
+logical depth, opcode `0x17` preserves depth zero, clears the restored sentinel's
+tag byte to zero, and returns to the action loop. Its empty-page branch does not
+raise a stack-underflow error or call an assertion routine. This supports a
+scoped empty-`Pop` no-op in the original Rust VM; it does not establish permissive
+underflow behavior for other stack-consuming actions.
+
+The AVM1 lane supplied the motivating private movie observation: the first
+manager `DoInitAction` at movie offset 7,239 reaches `Pop` at offset 8,511 with an
+empty operand stack on both known namespace branches, while the original Rust
+VM initially stopped with `StackUnderflow`. This report investigates the native
+handling, not a new run of the retail application.
+
+The proof consists of these independent static anchors:
+
+1. At `0x14020912e`, the native action loop reads the current opcode byte. It
+   routes high-bit opcodes separately, and at `0x140209145` bounds the low-opcode
+   dispatch by `0x69`. The table load at `0x14020914e` uses RVA `0x20d34c` with
+   the raw opcode as its four-byte index.
+2. REA reads the four bytes at the opcode-`0x17` table entry
+   `0x14020d3a8`. They encode RVA `0x209749`, binding `Pop` to
+   `0x140209749` in image base `0x140000000`.
+3. That handler checks the current slot's tag for cleanup, subtracts 32 from the
+   top pointer at environment offset `0x08`, compares it with the current page
+   base at offset `0x10`, and calls `0x140185840` only when it crossed below that
+   base. It then returns to the shared action loop.
+4. The boundary helper receives the address of the top-pointer field. At
+   `0x140185846` it checks the page count at helper-relative offset `0x28`
+   against one. For a count at most one, it jumps to `0x1401858e3`, adds 32 back
+   to the top pointer, writes tag byte zero at that restored slot when non-null,
+   and returns normally at `0x1401858f4`.
+5. The same action loop's depth computation at `0x140209ce6..0x140209d03`
+   is `(page_count << 5) + ((top - page_base) >> 5) - 32`. Thus one page with
+   `top == page_base` represents depth zero. The `Pop`/boundary-helper path
+   restores exactly that pointer and count relationship.
+
+**Scope:** This is a logical-depth no-op on the normal empty representation,
+with a sentinel tag reset. The internal tag-zero semantic name and stack
+constructor are not independently recovered here. Corrupt/null stack structures
+and other opcodes are outside the conclusion. No original client was run and no
+general stack-underflow policy was inferred from this one action.
+
+The boundary helper spans multiple adjacent `.pdata` records; the first record
+alone is only 41 bytes and omits the decisive empty branch. The followed code
+ends at `0x1401858f5`; the subsequent `int3` bytes are padding outside its returns.
+The bounded dispatcher prefix likewise ends inside a later unrelated instruction;
+those trailing undecoded bytes are not part of the proof.
+
+| Result | Evidence ID | Private bundle |
+| --- | --- | --- |
+| Raw dispatch, exact Pop table entry, handler and first helper fragment | `ev_9ad09fdbeaf5ea2d7e1863c3061aebe83f0432cd76e1d6119d12299f6dbb4853` | `evidence/rea-native-alternative/avm1-pop.bundle.json` |
+| Full page-boundary helper and independent depth arithmetic | `ev_22b3e9316258dea0ee949de2291bbf916ba35f5605696c3d60877a53959d8dcd` | `evidence/rea-native-alternative/avm1-pop-boundary.bundle.json` |
+
+Both calls completed with untruncated output, exit code zero, no command-error
+diagnostic, and the original target hash unchanged. The complete follow-up
+checkpoint is `evidence/rea-native-alternative/avm1-pop-final.bundle.json`.
+An earlier probe of another large dispatch table is retained for audit but was
+not established as AVM1 and is not used for this conclusion. Private candidate
+JSON files remain explicitly ordinary-file discovery evidence.
 
 ## Study provenance
 
