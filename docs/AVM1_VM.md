@@ -60,7 +60,7 @@ executions, 16,384 stack values, 10,000 host calls and 4,096 arguments. Persiste
 caps are 100,000 heap objects, one million cumulative properties, eight million
 allocated string units, 20,000 registered programs and 64 MiB of source spans.
 Arrays are capped at one million elements, prototype traversal at 256 links, and
-property-visitor work at one million members per invocation. Flag updates reserve
+property visitation and native hash-reconstruction work at one million units per invocation. Flag updates reserve
 work for both preflight and mutation before touching any member.
 Configured function depth greater than 128 is rejected. Pool references,
 registers, branches, object IDs and stack accesses are checked. Loops consume the
@@ -514,7 +514,8 @@ flags 3. The allocation marker is false. All six original function objects are
 copied onto MovieClip.prototype, and the original comma-selector call sets flags 1
 on `tween__start`, `tween__to`, and `tween__run`; the other three retain flags 0.
 
-The ordered original manager probe now completes **118 initializers**, retaining
+At the typed-allocation checkpoint, the ordered original manager probe completes
+**118 initializers**, retaining
 one real Selection listener. It next stops at Enumerate2 750939 in CodeId 113,
 called by initializer 118 at 757488, because native enumeration order with multiple
 visible names remains unsupported. The new state is original Rust script execution,
@@ -560,6 +561,72 @@ and explicit invocation failures. The ordered original startup still completes
 retain 29 passing focused checks and the private startup observation. Generic
 literal construction metadata and native hash layout remain separate evidence
 requirements; this inventory does not establish every ordinary-object factory.
+
+## InitObject metadata and native ASCII enumeration order
+
+**VERIFIED static construction:** InitObject invokes the current native Object
+through its zero-argument New path before consuming literal pairs. For the supported
+unchanged binding, the allocator first stores `__proto__`, shared construction
+stores `__constructor__`, and the Object callback stores public `constructor`.
+All three own entries have flags 3; both constructor values refer to global Object.
+Literal value/name pairs are then popped in reverse push-pair order. New ordinary
+fields have flags 0; replacing an existing data value retains its flags.
+
+`object_literal()` implements that path separately. It checks the installed global
+Object, original prototype/constructor links and null parent before allocation.
+Numeric counts and ASCII String names are the supported input profile; unsupported
+name coercion stops explicitly. Automatic ScriptFunction prototypes and direct
+Object calls retain their separate existing profiles. They do not inherit this
+literal-specific metadata contract.
+
+**VERIFIED static hash algorithm:** Native names hash from the last byte to the
+first, fold ASCII uppercase, start at 5381, and repeatedly compute `(h * 33) XOR b`
+with wrapping arithmetic, retaining the low 24 bits. A fresh table has eight slots.
+Before insertion it grows when `5 * existing_count > 4 * capacity`. Collision
+placement relocates the occupied home entry to the first wrapped linear free slot,
+repairs a displaced chain when necessary, and puts the new entry at its home.
+Growth doubles capacity and reinserts old occupied slots in ascending index order.
+Updates of existing keys leave their slots unchanged.
+
+The VM records complete insertion history for proved InitObject and native Object
+prototype profiles. Fresh ASCII hash layout is reconstructed under a work budget;
+slots are visited in ascending order and hidden entries are filtered afterward.
+The operand stack receives names above a null sentinel, so the original loop pops
+them in reverse visitation order. Deletion histories, unproved initial layouts,
+non-ASCII hashes, and the still-gated duplicate/shadow profiles stop explicitly.
+The bounded table model does not use Rust's lexical BTreeMap order for native
+multi-name enumeration.
+
+**DERIVED static reference, OBSERVED Rust agreement:** The original seven fields
+occupy a 16-slot table together with three hidden metadata keys. Their loop-pop
+order is `preferredHeight`, `maxHeight`, `visible`, `minWidth`, `maxWidth`,
+`preferredWidth`, `minHeight`. The focused test checks the complete ten-entry
+slot order, including the hidden collision chain, against the independent native
+receipt. Updates preserve that order; deletion invalidates the supported history.
+
+**OBSERVED:** The ordered original manager now completes **447 of 452 root-frame
+initializers**. UIObject.mergeClipParameters at 750939 executes through the native
+order profile. Startup next stops at GetVariable 2055355 in initializer 447
+(CodeId 447), because the existing `gfx.controls.ListItemRenderer` qualified lookup
+still requires its own native resolution proof. The other dotted final lookup is
+`gfx.controls.ScrollingList`; these are class namespace references, with no
+`__Packages`, slash, colon, root or level path. No namespace is fabricated.
+
+The construction receipt is
+`rea-enumeration-callback/initobject-finding-summary.json`. Native hashing,
+collision placement, resizing, visitation, callback and the final derived slot
+layout are joined in `rea-enumeration-order/combined-proof-receipt.json`; the
+research lane documents them in `docs/REA_ENUMERATION.md`. The original source
+join is `avm1-runtime/enumerate2-mergeclip-private.json` and final registration
+inventory is `avm1-runtime/final-registrations-private.json`. No retail executable
+was run; the reference order is a static derivation, not a native runtime capture.
+
+`vm-tests-native-hash.txt`, `run-init-order-native-hash.rs`,
+`init-order-native-hash.tsv` and `native-hash-startup-evidence.json` retain
+31 passing focused checks and the private original-script observation. The earlier
+instrumented receiver trace had only one hidden metadata key and incorrect inherited
+method flags; this new native construction/inventory evidence supersedes that
+historical Rust shape. Its original pair-pop insertion sequence remains valid.
 
 ## Exact own-name property flags
 

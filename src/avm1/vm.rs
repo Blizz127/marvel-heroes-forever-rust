@@ -324,6 +324,8 @@ struct Object {
     properties: BTreeMap<Text, Property>,
     flags: BTreeMap<Text, u8>,
     prototype: Option<ObjectId>,
+    insertion_keys: Vec<Text>,
+    native_hash_profile: bool,
 }
 struct Frame {
     stack: Vec<Value>,
@@ -360,6 +362,7 @@ pub struct Vm {
     global: ObjectId,
     root: ObjectId,
     object_constructor: Option<ObjectId>,
+    object_prototype: Option<ObjectId>,
     function_prototype: Option<ObjectId>,
     function_conversion: Option<ObjectId>,
     movie_clip_constructor: Option<ObjectId>,
@@ -392,6 +395,7 @@ impl Vm {
             global: ObjectId(0),
             root: ObjectId(0),
             object_constructor: None,
+            object_prototype: None,
             function_prototype: None,
             function_conversion: None,
             movie_clip_constructor: None,
@@ -486,6 +490,8 @@ impl Vm {
             properties: BTreeMap::new(),
             flags: BTreeMap::new(),
             prototype,
+            insertion_keys: Vec::new(),
+            native_hash_profile: false,
         });
         if let Some(parent) = prototype {
             self.raw_member(
@@ -600,6 +606,8 @@ impl Vm {
         self.set(constructor, "registerClass", Value::Object(register_class))?;
         self.set(self.global, "Object", Value::Object(constructor))?;
         self.object_constructor = Some(constructor);
+        self.object_prototype = Some(prototype);
+        self.objects[prototype.0].native_hash_profile = true;
         Ok(constructor)
     }
     /// Install the native-backed single-argument Function conversion, separately
@@ -883,6 +891,37 @@ impl Vm {
         }
         self.fail(ErrorKind::Budget("MovieClip prototype visitor depth"))
     }
+    fn object_literal(&mut self) -> Result<ObjectId> {
+        let (Some(constructor), Some(prototype)) = (self.object_constructor, self.object_prototype)
+        else {
+            return self.fail(ErrorKind::Unsupported(
+                "InitObject requires installed native Object",
+            ));
+        };
+        if self.get(self.global, "Object")? != Value::Object(constructor)
+            || self.get(constructor, "prototype")? != Value::Object(prototype)
+            || self.get(prototype, "constructor")? != Value::Object(constructor)
+            || self.objects[prototype.0].prototype.is_some()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "InitObject modified Object binding/prototype",
+            ));
+        }
+        // Exact unchanged-native-Object zero-argument New route: allocator links
+        // __proto__, shared New writes hidden ctor, callback writes public ctor.
+        // This is not the metadata contract for every ordinary_object caller.
+        let object = self.alloc(Kind::Plain, Some(prototype))?;
+        for name in ["__constructor__", "constructor"] {
+            self.raw_member(
+                object,
+                text(name),
+                Property::Data(Value::Object(constructor)),
+                3,
+            )?;
+        }
+        self.objects[object.0].native_hash_profile = true;
+        Ok(object)
+    }
     fn ordinary_object(&mut self) -> Result<ObjectId> {
         let prototype = if let Some(constructor) = self.object_constructor {
             match self.get(constructor, "prototype")? {
@@ -1057,7 +1096,31 @@ impl Vm {
                 ));
             }
             self.visit_members(self.objects[id.0].properties.len())?;
-            for key in self.objects[id.0].properties.keys() {
+            let visible_count = self.objects[id.0]
+                .properties
+                .keys()
+                .filter(|key| self.own_flags(id, key) & 1 == 0)
+                .count();
+            let keys: Vec<Text> = if visible_count > 1 {
+                if !self.objects[id.0].native_hash_profile {
+                    return self.fail(ErrorKind::Unsupported(
+                        "native hash order after unproved creation/deletion history",
+                    ));
+                }
+                let (indices, work) = native_hash_order(
+                    &self.objects[id.0].insertion_keys,
+                    self.limits.member_visits.saturating_sub(self.member_visits),
+                )
+                .map_err(|kind| self.error(kind))?;
+                self.member_visits += work;
+                indices
+                    .into_iter()
+                    .map(|index| self.objects[id.0].insertion_keys[index].clone())
+                    .collect()
+            } else {
+                self.objects[id.0].properties.keys().cloned().collect()
+            };
+            for key in &keys {
                 let visible = self.own_flags(id, key) & 1 == 0;
                 if let Some(prior) = seen.get(key) {
                     if *prior || visible {
@@ -1069,11 +1132,6 @@ impl Vm {
                 seen.insert(key.clone(), visible);
                 if visible {
                     names.push(key.clone());
-                }
-                if names.len() > 1 {
-                    return self.fail(ErrorKind::Unsupported(
-                        "native enumeration hash order with multiple names",
-                    ));
                 }
             }
             if let Some(parent) = self.objects[id.0].prototype {
@@ -1099,6 +1157,7 @@ impl Vm {
         }
         self.objects[id.0].properties.remove(key);
         self.objects[id.0].flags.remove(key);
+        self.objects[id.0].native_hash_profile = false;
         Ok(true)
     }
     pub fn register(&mut self, program: Arc<Program>) -> Result<CodeId> {
@@ -1355,6 +1414,7 @@ impl Vm {
             }
             self.properties += 1;
             self.string_units += key.len();
+            self.objects[id.0].insertion_keys.push(key.clone());
         }
         Ok(())
     }
@@ -2464,18 +2524,26 @@ impl Vm {
                         self.push(frame, Value::Object(array))?;
                     }
                     0x43 => {
-                        let count = self.number(&self.pop(frame)?)?;
+                        let Value::Number(count) = self.pop(frame)? else {
+                            return self.fail(ErrorKind::Unsupported("InitObject count profile"));
+                        };
                         if !count.is_finite() || count < 0.0 || count.fract() != 0.0 {
                             return self.fail(ErrorKind::InvalidArgumentCount);
                         }
                         if count > self.limits.arguments as f64 {
                             return self.fail(ErrorKind::Budget("object literal properties"));
                         }
-                        let object = self.ordinary_object()?;
+                        let object = self.object_literal()?;
                         for _ in 0..count as usize {
                             let value = self.pop(frame)?;
-                            let key = self.pop(frame)?;
-                            let key = self.to_text(&key)?;
+                            let Value::String(key) = self.pop(frame)? else {
+                                return self
+                                    .fail(ErrorKind::Unsupported("InitObject name type profile"));
+                            };
+                            if key.iter().any(|unit| *unit == 0 || *unit > 127) {
+                                return self
+                                    .fail(ErrorKind::Unsupported("InitObject ASCII name profile"));
+                            }
                             self.set_key(object, key, value)?;
                         }
                         self.push(frame, Value::Object(object))?;
@@ -2897,6 +2965,119 @@ fn array_index(key: &Text) -> Option<u32> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct HashSlot {
+    key: usize,
+    next: Option<usize>,
+}
+fn hash_work(work: &mut usize, limit: usize, count: usize) -> std::result::Result<(), ErrorKind> {
+    if count > limit.saturating_sub(*work) {
+        return Err(ErrorKind::Budget("property hash reconstruction work"));
+    }
+    *work += count;
+    Ok(())
+}
+fn ascii_property_hash(key: &Text) -> std::result::Result<usize, ErrorKind> {
+    let mut hash = 5381u64;
+    for unit in key.iter().rev() {
+        let byte = u8::try_from(*unit)
+            .ok()
+            .filter(|b| b.is_ascii())
+            .ok_or(ErrorKind::Unsupported("native non-ASCII property hash"))?;
+        hash = hash.wrapping_mul(33) ^ u64::from(byte.to_ascii_lowercase());
+    }
+    Ok((hash & 0x00ff_ffff) as usize)
+}
+fn place_hash_key(
+    table: &mut [Option<HashSlot>],
+    hashes: &[usize],
+    key: usize,
+    work: &mut usize,
+    limit: usize,
+) -> std::result::Result<(), ErrorKind> {
+    let mask = table.len() - 1;
+    let home = hashes[key] & mask;
+    hash_work(work, limit, 1)?;
+    let Some(old) = table[home] else {
+        table[home] = Some(HashSlot { key, next: None });
+        return Ok(());
+    };
+    let mut free = (home + 1) & mask;
+    while table[free].is_some() {
+        hash_work(work, limit, 1)?;
+        free = (free + 1) & mask;
+        if free == home {
+            return Err(ErrorKind::Unsupported("full reconstructed property hash"));
+        }
+    }
+    table[free] = Some(old);
+    let old_home = hashes[old.key] & mask;
+    let next = if old_home == home {
+        Some(free)
+    } else {
+        let mut prior = old_home;
+        loop {
+            hash_work(work, limit, 1)?;
+            let Some(entry) = table[prior] else {
+                return Err(ErrorKind::Unsupported(
+                    "invalid reconstructed property hash chain",
+                ));
+            };
+            if entry.next == Some(home) {
+                table[prior].as_mut().unwrap().next = Some(free);
+                break;
+            }
+            prior = entry.next.ok_or(ErrorKind::Unsupported(
+                "missing reconstructed property hash link",
+            ))?;
+        }
+        None
+    };
+    table[home] = Some(HashSlot { key, next });
+    Ok(())
+}
+/// A fresh native ASCII table reconstructed from complete insertion history.
+/// Values/flags may change without moving slots. Deletion histories stay gated.
+fn native_hash_order(
+    keys: &[Text],
+    budget: usize,
+) -> std::result::Result<(Vec<usize>, usize), ErrorKind> {
+    let mut work = 0;
+    let mut hashes = Vec::with_capacity(keys.len());
+    for key in keys {
+        hash_work(&mut work, budget, key.len().saturating_add(1))?;
+        hashes.push(ascii_property_hash(key)?);
+    }
+    let mut table: Vec<Option<HashSlot>> = Vec::new();
+    for key in 0..keys.len() {
+        if table.is_empty() || (key as u128) * 5 > (table.len() as u128) * 4 {
+            let capacity = if table.is_empty() {
+                8
+            } else {
+                table
+                    .len()
+                    .checked_mul(2)
+                    .ok_or(ErrorKind::Budget("property hash capacity"))?
+            };
+            hash_work(&mut work, budget, capacity)?;
+            let mut grown = vec![None; capacity];
+            for entry in &table {
+                hash_work(&mut work, budget, 1)?;
+                if let Some(entry) = entry {
+                    place_hash_key(&mut grown, &hashes, entry.key, &mut work, budget)?;
+                }
+            }
+            table = grown;
+        }
+        place_hash_key(&mut table, &hashes, key, &mut work, budget)?;
+    }
+    hash_work(&mut work, budget, table.len())?;
+    Ok((
+        table.into_iter().flatten().map(|entry| entry.key).collect(),
+        work,
+    ))
+}
+
 fn ordinary_movie_clip_name(key: &Text) -> bool {
     !key.is_empty()
         && key[0] != u16::from(b'_')
@@ -2996,6 +3177,119 @@ mod tests {
             ));
             assert_eq!(vm.host_calls, 0);
         }
+    }
+    #[test]
+    fn init_object_has_three_hidden_metadata_entries_and_guards_native_binding() {
+        let mut vm = setup();
+        let constructor = vm.install_object_constructor().unwrap();
+        let mut bytes = push(&[
+            Value::string("a"),
+            Value::Number(1.0),
+            Value::string("b"),
+            Value::Number(2.0),
+            Value::Number(2.0),
+        ]);
+        bytes.push(0x43);
+        let literal = execute(&mut vm, &bytes).unwrap();
+        let Value::Object(literal) = literal.stack[0] else {
+            panic!()
+        };
+        assert_eq!(vm.objects[literal.0].properties.len(), 5);
+        for key in ["__proto__", "__constructor__", "constructor"] {
+            assert_eq!(vm.own_property_flags(literal, key).unwrap(), Some(3));
+        }
+        for key in ["__constructor__", "constructor"] {
+            assert_eq!(vm.get(literal, key).unwrap(), Value::Object(constructor));
+        }
+        assert_eq!(vm.get(literal, "a").unwrap(), Value::Number(1.0));
+        assert_eq!(vm.own_property_flags(literal, "b").unwrap(), Some(0));
+        let mut overridden = push(&[
+            Value::string("constructor"),
+            Value::Number(7.0),
+            Value::Number(1.0),
+        ]);
+        overridden.push(0x43);
+        let value = execute(&mut vm, &overridden).unwrap();
+        let Value::Object(overridden) = value.stack[0] else {
+            panic!()
+        };
+        assert_eq!(
+            vm.get(overridden, "constructor").unwrap(),
+            Value::Number(7.0)
+        );
+        assert_eq!(
+            vm.own_property_flags(overridden, "constructor").unwrap(),
+            Some(3)
+        );
+        let replacement = vm.native(42).unwrap();
+        vm.set(vm.global(), "Object", Value::Object(replacement))
+            .unwrap();
+        let count = vm.object_count();
+        assert!(matches!(
+            execute(&mut vm, &bytes).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
+        assert_eq!(vm.object_count(), count);
+    }
+    #[test]
+    fn native_ascii_hash_and_literal_enumeration_match_static_retail_derivation() {
+        let names = [
+            "__proto__",
+            "__constructor__",
+            "constructor",
+            "preferredWidth",
+            "preferredHeight",
+            "maxWidth",
+            "maxHeight",
+            "minWidth",
+            "minHeight",
+            "visible",
+        ];
+        let keys: Vec<_> = names.iter().map(|name| text(name)).collect();
+        assert_eq!(ascii_property_hash(&text("__proto__")).unwrap(), 0x8db693);
+        assert_eq!(ascii_property_hash(&text("VISIBLE")).unwrap(), 0x149c0b);
+        let (order, _) = native_hash_order(&keys, 10_000).unwrap();
+        assert_eq!(order, vec![8, 1, 0, 3, 5, 7, 9, 2, 6, 4]);
+        assert!(matches!(
+            native_hash_order(&keys, 4).unwrap_err(),
+            ErrorKind::Budget(_)
+        ));
+        assert!(native_hash_order(&[text("é")], 100).is_err());
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let mut values = Vec::new();
+        for name in names[3..].iter().rev() {
+            values.extend([Value::string(name), Value::Number(1.0)]);
+        }
+        values.push(Value::Number(7.0));
+        let mut code = push(&values);
+        code.push(0x43);
+        let made = execute(&mut vm, &code).unwrap();
+        let Value::Object(object) = made.stack[0] else {
+            panic!()
+        };
+        assert_eq!(vm.objects[object.0].insertion_keys, keys);
+        let expected: Vec<_> = [
+            "minHeight",
+            "preferredWidth",
+            "maxWidth",
+            "minWidth",
+            "visible",
+            "maxHeight",
+            "preferredHeight",
+        ]
+        .iter()
+        .map(|name| text(name))
+        .collect();
+        assert_eq!(vm.enumerate_names(object).unwrap(), expected);
+        vm.set(object, "visible", Value::Number(2.0)).unwrap();
+        assert_eq!(vm.enumerate_names(object).unwrap(), expected);
+        assert_eq!(vm.objects[object.0].insertion_keys.len(), 10);
+        assert!(vm.delete_member(object, &text("visible")).unwrap());
+        assert!(matches!(
+            vm.enumerate_names(object).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
     }
     #[test]
     fn primitive_values_and_conservative_coercions() {
