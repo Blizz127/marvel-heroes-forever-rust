@@ -652,18 +652,20 @@ impl Vm {
         Ok(())
     }
     pub(super) fn attached_member_name(&self, key: &Text) -> Result<()> {
-        if key.as_ref() == text("autoSize").as_ref() {
-            // Authenticated standard ID48 is NOT implemented by this case-3
-            // native dispatcher. Exact false-return branches continue into
-            // ordinary handling; this does not admit other standard members or
-            // the distinct case-4 TextField's autosize behavior.
+        let ordinary_standard = [
+            ("autoSize", 48), ("wordWrap", 49), ("maxChars", 65), ("password", 68),
+        ].into_iter().find(|(name, _)| key.as_ref() == text(name).as_ref());
+        if let Some((_, native_id)) = ordinary_standard {
+            // These exact authenticated IDs return false through the case-3
+            // native dispatchers before ordinary handling. This admits no
+            // behavior of the distinct case-4 TextField native members.
             return if self.attached_name_profile.as_ref().is_some_and(|profile| {
-                profile.classify_attached_name(key) == AttachedNameClass::Standard(48)
+                profile.classify_attached_name(key) == AttachedNameClass::Standard(native_id)
             }) {
                 Ok(())
             } else {
                 self.fail(ErrorKind::Unsupported(
-                    "attached autoSize native ID profile",
+                    "attached ordinary standard-member ID profile",
                 ))
             };
         }
@@ -1080,10 +1082,12 @@ mod tests {
         );
         for id in 0..117 {
             let alias = id <= 21 || (110..=115).contains(&id);
-            let name = if id == 48 {
-                "autoSize".to_owned()
-            } else {
-                format!("{}native{id:03}", if alias { "_" } else { "" })
+            let name = match id {
+                48 => "autoSize".to_owned(),
+                49 => "wordWrap".to_owned(),
+                65 => "maxChars".to_owned(),
+                68 => "password".to_owned(),
+                _ => format!("{}native{id:03}", if alias { "_" } else { "" }),
             };
             data.push_str(&format!("standard\t{id}\t{}\t{name}\n", u8::from(alias),));
         }
@@ -1416,6 +1420,34 @@ mod tests {
         vm.install_attached_name_profile(synthetic_profile())
             .unwrap();
         assert!(vm.read_attached_member(child, "_visible").is_err());
+    }
+
+    #[test]
+    fn exact_extra_text_standard_names_follow_case3_data_rules() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        vm.set_attached_children(root, vec![]).unwrap();
+        for name in ["wordWrap", "maxChars", "password"] {
+            assert!(vm.write_attached_member(root, name, Value::Bool(false)).is_err());
+        }
+        vm.install_attached_name_profile(synthetic_profile()).unwrap();
+        for (name, value) in [
+            ("wordWrap", Value::Bool(false)),
+            ("maxChars", Value::Number(0.0)),
+            ("password", Value::Bool(true)),
+        ] {
+            assert_eq!(vm.read_attached_member(root, name).unwrap(), AttachedMember::Missing);
+            assert_eq!(vm.write_attached_member(root, name, value.clone()).unwrap(), AttachedWrite::Created);
+            assert_eq!(vm.read_attached_member(root, name).unwrap(), AttachedMember::Present(value));
+        }
+        let storage = ObjectId(vm.attached_info(root).unwrap().storage.unwrap().0);
+        vm.raw_member(storage, text("maxChars"), Property::Data(Value::Undefined), 4).unwrap();
+        assert_eq!(vm.write_attached_member(root, "maxChars", Value::Number(1.0)).unwrap(), AttachedWrite::ReadOnly);
+        assert_eq!(vm.read_attached_member(root, "maxChars").unwrap(), AttachedMember::Present(Value::Undefined));
+        vm.raw_member(storage, text("password"), Property::Accessor {getter: Value::Undefined, setter: None}, 0).unwrap();
+        assert!(vm.read_attached_member(root, "password").is_err());
+        assert!(vm.write_attached_member(root, "password", Value::Bool(false)).is_err());
+        assert!(vm.read_attached_member(root, "native050").is_err());
     }
 
     #[test]

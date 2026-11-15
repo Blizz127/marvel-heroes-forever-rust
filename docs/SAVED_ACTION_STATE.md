@@ -217,3 +217,24 @@ checks pass for existing assignment behavior, rejected names/native properties,
 Number/Null/Undefined values and fresh literal Object identity/metadata. The
 private receipt is `avm1-runtime/saved-value-checks.json`. These checks do not
 establish full original Construct completion or dynamic event delivery.
+
+**OBSERVED original source, frozen `eed5e65`:** the same selected record now
+returns through `execute_saved_phase` after all 47 instructions. Its outcome is
+`DynamicLookupPending`, with one completed body and zero host calls. The original
+stack sentinel and four registers remain unchanged, the Environment is usable,
+and the wrapper pool/table are retained. All 16 target assignments and three
+String fields in its fresh `soundMap` Object match the unchanged source-write
+inventory. No dynamic lookup, callback, native event timing or full Construct
+completion is claimed. The sealed increment3 receipt SHA256 is
+`8a210b0ff3e442cc352a177ac631996e6bef82149858e5dd85866ed810a89c32`.
+
+The exact case-3 ordinary fallback set additionally admits authenticated
+`wordWrap`49, `maxChars`65 and `password`68. Independent finite native table/branch
+checks are appended to `ATTACHED_AUTOSIZE_FALLTHROUGH.md`; all three return false
+through the selected native dispatchers and continue into the existing normal
+storage route. No TextField implementation or general standard-name fallback is
+implied. Two focused checks pass for those actual Bool/Number profiles, own
+Undefined/read-only/accessor guards, neighboring unsupported IDs and the existing
+autoSize route. Private `avm1-runtime/extra-standard-checks.json` retains final
+source/binary hashes and two earlier test-only compilation errors; no tests ran
+in those failed compilations.
