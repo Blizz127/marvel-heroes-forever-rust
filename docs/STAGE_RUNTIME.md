@@ -317,3 +317,125 @@ REA was used only in target-free read-only mode; no shared configuration or
 active engine was changed. The evidence session was exported and reset. This
 docs-only study adds no Stage stub and claims no build, live frontend, network
 or retail behavior validation.
+
+## Bounded Rust geometry and retained movie state
+
+`src/frontend/stage_state.rs` implements an original, standalone calculation
+and state boundary. Its module hook and VM integration belong to the integrator.
+It supplies no native-object factory, global binding, listener storage, host
+callback, renderer transform or event scheduler.
+
+**VERIFIED against the instruction-derived oracle within the bounds below:**
+the four scale modes and nine alignments produce matching effective endpoint
+bits and integer width/height. Scalar operations retain the recovered f32 order,
+including converting both signed viewport endpoints before multiplying by 20
+and subtracting. Replacing that sequence with `width * 20` is observably wrong:
+the synthetic `left=16777217, width=333` case produces a Stage width of 334 with
+unit factors and `noScale`. This is a numerical fixture, not an observed host
+viewport or display resolution.
+
+The API requires explicit caller-owned `MovieIdentity`, definition endpoints,
+descriptor origin/extent, factors `+0xcc/+0xd0`, scale mode and alignment. No
+`Default` supplies any of them. The factor names retain native offsets because
+their association with physical surfaces or DPI has not been established.
+`from_inputs` computes the effective rectangle; `from_snapshot` instead retains
+the caller's explicit effective rectangle after validating admitted inputs and
+getter arithmetic. The snapshot need not equal a fresh calculation. Width and
+height read this retained state and use separate f32 subtraction/multiplication
+before `cvttss2si`. The identity is immutable and never replaced by a getter's
+caller context. Extended `visibleRect`/`originalRect` object getters remain out
+of scope because their movie/context associations and allocations are separate.
+
+`recompute` accepts new explicit descriptor/definition state. ASCII setters
+recompute even when their parsed enum is unchanged. Changes are committed only
+after all admitted arithmetic succeeds; an error leaves the previous state
+intact. This transactional rejection is the Rust boundary for unsupported
+inputs, not a claim that the native client reports these errors. The returned
+`StageChange.geometry_changed` compares endpoints numerically, so signed zeros
+compare equal. It does not summarize the native viewport setter's additional
+mode/descriptor event conditions.
+
+Changing scale mode to `noScale` from a different supported mode returns
+`NoScaleResizeRequest` with the retained movie identity even if endpoints did
+not change. Repeating `noScale`, changing alignment, and explicit recomputation
+return no such direct request. Nothing executes or queues listeners. Integrators
+must preserve the distinct caller Env used by extension resize arguments and
+must not treat this request as a ready-made Rectangle or completed event.
+
+Actual strings are admitted as ASCII without embedded NUL. Scale mode uses
+case-insensitive exact matching for `noScale`, `exactFit`, and `noBorder`;
+unknown strings, including empty strings and names with trailing spaces,
+select `showAll`. Alignment folds ASCII to uppercase, examines only the first
+two bytes, and keeps the unknown-to-center mapping and native getter spelling
+documented above. Unicode normalization, embedded NUL and VM Value-to-string
+conversion are explicit unsupported boundaries rather than substitutes.
+
+The admitted geometry requires a present definition, finite normal-or-zero
+endpoints, positive f32 definition extents, positive descriptor integer extents,
+positive finite normal factors and checked i32 origin-plus-extent arithmetic.
+Every evaluated geometry intermediate must be finite and normal or zero;
+ratios, computed extents and final effective extents must remain positive.
+The center path must fit its pixel conversion and subsequent signed integer
+multiplication by 20. Unused center paths are not evaluated. Missing definition,
+invalid native enums, subnormal/nonfinite geometry, collapsed extents and
+integer overflow return typed errors. These bounds intentionally omit native
+missing-definition preservation, invalid-alignment reuse and wrapping overflow.
+
+The standalone `cvttss2si` helper covers every f32 numeric input: it truncates
+representable values toward zero and returns signed `MIN` for NaN, infinities
+and out-of-range values. A valid conversion of negative 2^31 has the same
+numeric result. This differs from Rust's ordinary saturating cast. Effective
+snapshot dimensions may exceed integer range and therefore return `MIN` from
+the getter. Floating-point exception flags/traps and altered rounding modes
+are not modeled; calculations assume the ordinary nearest/ties-even profile.
+No physical surface size, native frontend state or loaded script default is
+inferred from these bounds.
+
+### Additional evidence and focused validation
+
+The ASCII lowercase cache path is separately **VERIFIED statically**:
+`0x140097b50` calls string transformation `0x140036750`, which calls mapping
+helper `0x140072070`, then stores the interned result at original string `+0x10`.
+The independent checker validates the ASCII bitmap and pair-table lookup for
+all 128 code points: A–Z become a–z; the other ASCII code points map unchanged.
+This extends the earlier normalized-cache evidence without making a Unicode
+or embedded-NUL claim.
+
+- Private `scale-normalization.bundle.json`, SHA-256
+  `c6331f5a23f6d4ed63532837285bdb826ac3a1f72516cfe0e5a4e79b78a0f431`,
+  contains REA record
+  `ev_f9904ff0f9bb4804fab03a1056440999ce5d5f708b1eb9e6231815625facc0b0`.
+  Original `verify-scale-normalization.py` checks 139 contiguous decoded
+  instructions and 2,800 data bytes against independently mapped PE offsets.
+  The result has exit 0, no truncation, no stderr and no artifact mutation.
+  `scale-normalization-verification.json` retains its detailed checks. The
+  target-free REA session was exported and reset with no retained target.
+- Private `math-oracle/oracle.py` is an original register-machine interpreter
+  driven directly by the canonical calculator instruction record, with exact
+  rational ties-even f32 rounding. It independently verifies 1,829 original
+  bytes across 344 instructions and stops after effective endpoint writes;
+  it neither translates the Rust formulas nor launches target code.
+  Oracle receipt SHA-256:
+  `a21b5475ff91c32c5ea2dc7c620a1832e02e8fa7a89a1b67edc8e0447020efc8`.
+- Private `math-oracle/vectors.json`, SHA-256
+  `1d9a0f25082be3aa79bb82b5df4b18bfb6c5ea2759d66a6717176e548cb6f64a`,
+  contains 360 geometry cases: eight synthetic inputs and two combinations of
+  the owner's saved manager definition rectangle with explicitly synthetic
+  viewports, each across four modes and nine alignments. Extracted definition
+  inputs and instruction data remain private. It also contains 25 standalone
+  CVTT boundary cases, including signed zero, subnormals, finite limits,
+  infinities and NaNs.
+- Private `math-oracle/check-rust.py` generates a private standalone runner
+  importing this module. With Rust 1.98.1, both ordinary and `-O` builds passed
+  all 360 exact endpoint-bit/dimension comparisons and all 25 conversion cases.
+  `math-oracle/rust-verification.json` records module, runner, oracle, fixture
+  and executable hashes and commands' exit results. Nine focused module tests
+  pass, covering state retention, same-mode recomputation, conditional resize
+  requests, alignment/string mappings, rejected geometry and atomic failures.
+
+This addition uses only the original project analysis, the owner's private
+artifacts, REA and GNU objdump already listed in the provenance table above.
+The private oracle/checkers and Rust implementation are original code. The
+focused standalone checks establish this bounded arithmetic/state behavior;
+no full client suite, native execution, live viewport, VM, rendered frontend,
+network or listener execution was tested.
