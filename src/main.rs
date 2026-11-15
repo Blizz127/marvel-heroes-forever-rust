@@ -44,7 +44,7 @@ fn usage() {
     println!("  mhf prototype verify <archive.sip>");
     println!("  mhf upk summary|inspect|exports <package.upk>");
     println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
-    println!("  mhf upk world <package.upk> <export-name|1-based-index>");
+    println!("  mhf upk world|model|polys <package.upk> <export-name|1-based-index>");
     println!("  mhf upk verify-objects <package.upk>");
     println!(
         "  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]"
@@ -159,7 +159,13 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             }
         }
-        "upk" if args.len() == 4 && (args[1] == "properties" || args[1] == "world") => {
+        "upk"
+            if args.len() == 4
+                && (args[1] == "properties"
+                    || args[1] == "world"
+                    || args[1] == "model"
+                    || args[1] == "polys") =>
+        {
             let archive = PackageArchive::open(Path::new(&args[2]))?;
             let package = archive.package();
             let selector = text(&args[3])?;
@@ -190,6 +196,51 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             };
             let bytes = archive.read_export(index)?;
+            if args[1] == "model" {
+                let model = marvel_heroes_forever::upk::model::ModelObject::parse_export(
+                    package, index, &bytes,
+                )?;
+                println!(
+                    "VERIFIED Model prefix: 3 raw bulk arrays, counts {:?}, {} opaque trailing bytes",
+                    model.arrays.map(|array| array.count),
+                    model.unparsed_native_tail.length,
+                );
+                println!("Seven preserved words: {:08x?}", model.record_c5c.words);
+                for array in &model.arrays {
+                    println!(
+                        "{:?}: stride {}, {} records at export byte {}, {} stored bytes",
+                        array.slot,
+                        array.stride,
+                        array.count,
+                        array.records_span.offset,
+                        array.records_span.length,
+                    );
+                }
+                println!(
+                    "Native +0xd8 reference: {} at export byte {}",
+                    model.link_d8.reference, model.link_d8.span.offset,
+                );
+                println!(
+                    "Records and later containers remain uninterpreted. No geometry preparation or object execution performed."
+                );
+                return Ok(());
+            }
+            if args[1] == "polys" {
+                let polys = marvel_heroes_forever::upk::polys::PolysObject::parse_export(
+                    package, index, &bytes,
+                )?;
+                println!(
+                    "VERIFIED Polys header: count {}, second word 0x{:08x}, owner reference {}, {} opaque trailing bytes",
+                    polys.count,
+                    polys.secondary_word,
+                    polys.owner_reference,
+                    polys.unparsed_native_tail.length,
+                );
+                println!(
+                    "Polygon records remain undecoded; header count is not validated against them. No geometry preparation or object execution performed."
+                );
+                return Ok(());
+            }
             if args[1] == "world" {
                 let world = WorldObject::parse_export(package, index, &bytes)?;
                 println!(
