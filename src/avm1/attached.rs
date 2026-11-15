@@ -1,8 +1,9 @@
 //! Explicit live source MovieClip owners. No Scene IDs or implicit attachment.
 //! Native evidence and profile limits are recorded in ATTACHED_MOVIECLIP.md.
 use super::{
-    AttachedEventState, AttachedNameClass, AttachedTextFieldId, BaselineMembership, BaselineOwners,
-    ErrorKind, Kind, NativeNameProfile, ObjectId, Property, Result, Text, Value, Vm, text,
+    AttachedEventState, AttachedFocusRectState, AttachedNameClass, AttachedTextFieldId,
+    BaselineMembership, BaselineOwners, CodeOrigin, ErrorKind, Kind, NativeNameProfile, ObjectId,
+    Property, Result, Text, Value, Vm, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -68,6 +69,15 @@ pub enum AttachedWrite {
     Created,
     Updated,
     ReadOnly,
+    /// An admitted native target field changed; no ordinary member was written.
+    NativeUpdated,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachedFocusRectInfo {
+    pub state: AttachedFocusRectState,
+    /// Last executed setter's provenance; None for a snapshot or host write
+    /// through the public member API. This is bounded diagnostic metadata.
+    pub last_write: Option<CodeOrigin>,
 }
 #[derive(Debug, Clone)]
 pub struct AttachedInfo {
@@ -109,6 +119,7 @@ pub(super) struct AttachedClip {
     environment_movie: LoadedMovieSourceId,
     environment_header_version: u8,
     binding: Option<AttachedMovieBinding>,
+    focus_rect: Option<AttachedFocusRectInfo>,
     owner: ObjectId,
     storage: Option<ObjectId>,
     prototype: Option<ObjectId>,
@@ -230,6 +241,7 @@ impl Vm {
             environment_movie: spec.source.movie,
             environment_header_version: spec.source.header_version,
             binding,
+            focus_rect: None,
             owner,
             storage: None,
             prototype: Some(prototype),
@@ -295,6 +307,42 @@ impl Vm {
     pub fn attached_event_state(&self, id: AttachedClipId) -> Result<AttachedEventState> {
         self.check_attached(id)?;
         Ok(self.attached[id.0].spec.event_state)
+    }
+    /// Bind an independently supplied raw target+b8 snapshot once. No native
+    /// default is inferred from event flags, source bytes or root identity.
+    pub fn bind_attached_focus_rect(
+        &mut self,
+        id: AttachedClipId,
+        state: AttachedFocusRectState,
+    ) -> Result<()> {
+        self.check_attached(id)?;
+        if self.attached[id.0].focus_rect.is_some() {
+            return self.fail(ErrorKind::Unsupported(
+                "attached focus rectangle already bound",
+            ));
+        }
+        self.attached[id.0].focus_rect = Some(AttachedFocusRectInfo {
+            state,
+            last_write: None,
+        });
+        Ok(())
+    }
+    pub fn attached_focus_rect(&self, id: AttachedClipId) -> Result<Option<AttachedFocusRectInfo>> {
+        self.check_attached(id)?;
+        Ok(self.attached[id.0].focus_rect)
+    }
+    fn attached_focus_rect_name(&self, key: &Text) -> Result<bool> {
+        if key.as_ref() != text("_focusrect").as_ref() {
+            return Ok(false);
+        }
+        if self.attached_name_profile.as_ref().is_some_and(|profile| {
+            profile.classify_attached_name(key) != AttachedNameClass::Standard(17)
+        }) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached focus rectangle native ID profile",
+            ));
+        }
+        Ok(true)
     }
     pub fn update_attached_event_state(
         &mut self,
@@ -626,6 +674,16 @@ impl Vm {
     }
     pub(super) fn attached_lookup(&self, id: AttachedClipId, key: &Text) -> Result<AttachedMember> {
         self.check_attached(id)?;
+        if self.attached_focus_rect_name(key)? {
+            let Some(info) = self.attached[id.0].focus_rect else {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached focus rectangle state is unbound",
+                ));
+            };
+            return Ok(AttachedMember::Present(
+                info.state.read().map_or(Value::Null, Value::Bool),
+            ));
+        }
         self.attached_member_name(key)?;
         let clip = &self.attached[id.0];
         if let Some(storage) = clip.storage {
@@ -680,7 +738,7 @@ impl Vm {
         key: &str,
         value: Value,
     ) -> Result<AttachedWrite> {
-        self.attached_write(id, text(key), value)
+        self.attached_write_at(id, text(key), value, None)
     }
     pub(super) fn attached_write(
         &mut self,
@@ -688,7 +746,32 @@ impl Vm {
         key: Text,
         value: Value,
     ) -> Result<AttachedWrite> {
+        self.attached_write_at(id, key, value, self.origin())
+    }
+    fn attached_write_at(
+        &mut self,
+        id: AttachedClipId,
+        key: Text,
+        value: Value,
+        origin: Option<CodeOrigin>,
+    ) -> Result<AttachedWrite> {
         self.check_attached(id)?;
+        if self.attached_focus_rect_name(&key)? {
+            if value != Value::Bool(false) {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached focus rectangle exact false profile",
+                ));
+            }
+            let Some(mut info) = self.attached[id.0].focus_rect else {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached focus rectangle state is unbound",
+                ));
+            };
+            info.state.clear();
+            info.last_write = origin;
+            self.attached[id.0].focus_rect = Some(info);
+            return Ok(AttachedWrite::NativeUpdated);
+        }
         self.attached_member_name(&key)?;
         // General ordinary names are not proof that the native pre-write hook
         // is inert. These routes were absent from the earlier exact-name slice.
@@ -943,6 +1026,96 @@ mod tests {
         let ordinary = vm.object().unwrap();
         assert!(vm.bind_loaded_movie_target(ordinary, 11).is_err());
         vm.bind_loaded_movie_target(ordinary, 15).unwrap();
+    }
+
+    #[test]
+    fn focus_rect_native_state_is_explicit_local_and_bypasses_ordinary_members() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let child = vm.create_attached_movie_clip(spec(2, Some(root))).unwrap();
+        assert_eq!(vm.attached_focus_rect(root).unwrap(), None);
+        assert!(vm.read_attached_member(root, "_focusrect").is_err());
+        assert!(
+            vm.write_attached_member(root, "_focusrect", Value::Bool(false))
+                .is_err()
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        let root_state = AttachedFocusRectState {
+            target_flags_b8: 0x9abc_0180,
+        };
+        let child_state = AttachedFocusRectState {
+            target_flags_b8: 0x7654_0000,
+        };
+        vm.bind_attached_focus_rect(root, root_state).unwrap();
+        vm.bind_attached_focus_rect(child, child_state).unwrap();
+        assert!(vm.bind_attached_focus_rect(root, child_state).is_err());
+        assert_eq!(
+            vm.read_attached_member(root, "_focusrect").unwrap(),
+            AttachedMember::Present(Value::Bool(true))
+        );
+        assert_eq!(
+            vm.read_attached_member(child, "_focusrect").unwrap(),
+            AttachedMember::Present(Value::Null)
+        );
+        for value in [
+            Value::Bool(true),
+            Value::Number(0.0),
+            Value::Undefined,
+            Value::Null,
+        ] {
+            assert!(vm.write_attached_member(root, "_focusrect", value).is_err());
+            assert_eq!(
+                vm.attached_focus_rect(root).unwrap().unwrap().state,
+                root_state
+            );
+        }
+        let events = vm.attached_event_state(root).unwrap();
+        assert_eq!(
+            vm.write_attached_member(root, "_focusrect", Value::Bool(false))
+                .unwrap(),
+            AttachedWrite::NativeUpdated
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        assert_eq!(
+            vm.attached_focus_rect(root)
+                .unwrap()
+                .unwrap()
+                .state
+                .target_flags_b8,
+            0x9abc_0100
+        );
+        assert_eq!(
+            vm.attached_focus_rect(child).unwrap().unwrap().state,
+            child_state
+        );
+        assert_eq!(vm.attached_event_state(root).unwrap(), events);
+        vm.write_attached_member(root, "disabled", Value::Bool(true))
+            .unwrap();
+        let storage = ObjectId(vm.attached_info(root).unwrap().storage.unwrap().0);
+        vm.raw_member(
+            storage,
+            text("_focusrect"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: Some(Value::Undefined),
+            },
+            4,
+        )
+        .unwrap();
+        assert_eq!(
+            vm.write_attached_member(root, "_focusrect", Value::Bool(false))
+                .unwrap(),
+            AttachedWrite::NativeUpdated
+        );
+        assert_eq!(
+            vm.read_attached_member(root, "_focusrect").unwrap(),
+            AttachedMember::Present(Value::Bool(false))
+        );
+        assert!(matches!(
+            vm.objects[storage.0].properties.get(&text("_focusrect")),
+            Some(Property::Accessor { .. })
+        ));
+        assert_eq!(vm.own_flags(storage, &text("_focusrect")), 4);
     }
 
     fn vm() -> Vm {

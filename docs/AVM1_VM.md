@@ -1256,6 +1256,19 @@ tested module hashes are in `avm1-runtime/string-bridge-evidence.json`. The owne
 94251 call-snippet diagnostic is separate; these tests do not claim the full
 label update, native loading or retail UI parity.
 
+**OBSERVED owned-call snippet:** frozen commit `7389005` executes the unchanged
+manager action span 94235+17, including CallMethod 94251, twice. A synthetic
+21-byte prefix sets root register 2; the unchanged original 103-entry constant
+pool at source 90399+1577 is relocated in the controlled program, while the call
+retains its source coordinate. Each seven-instruction execution returns
+`MARVEL HEROES 123 !?` from the supplied `mArVeL hErOeS 123 !?`, with zero VM/host
+callbacks. The graph is cached, the global descriptor retains flags 1, and wrapper
+IDs 20 and 21 are distinct. Input and owned movie hashes remain unchanged.
+`avm1-owned-string-call/execution.json`, SHA256
+`bf012a034b15c2a5c9be475d02c6d659757f56a1f1d4393e816bd0349338bca3`,
+retains nine frozen source hashes and explicit setup/coordinate mapping. This
+executes the original call snippet, not the complete method or native client.
+
 ## Optional verified attached-name inventory
 
 `install_attached_name_profile(Arc<NativeNameProfile>)` installs one immutable,
@@ -1316,6 +1329,40 @@ native member. `avm1-attached-manager-init-increment4/receipt.json`, SHA256
 `67926731aa7377f276e51001365dffa6fb6b1691ce098913847cb78c6c57fd61`,
 retains original source coordinates, operand proof and partial state. This is
 separate from the historical parentless Plain-root initializer count.
+
+## Supplied native focus rectangle state
+
+`bind_attached_focus_rect(AttachedClipId, AttachedFocusRectState)` binds a supplied
+raw `target_flags_b8` word once. There is no Default. This is native target DWORD
++0xb8, separate from +0x6a event flags and from ordinary MovieClip storage. An
+unbound snapshot remains unsupported; it never becomes an invented Null/false.
+`attached_focus_rect` returns the optional supplied/current state and bounded
+last-write CodeOrigin metadata. Public host writes record no stale interpreter
+origin. Existing ClipSpec literals and other adoption APIs are unchanged.
+
+For exact `_focusrect`, the typed case-3 member route now uses proved standard
+member 17 before ordinary storage/children/prototype lookup. If an authenticated
+name profile is installed it must agree on that exact ID. Read returns native
+Null for mask 0, or Boolean(mask == 0x180) for the other masks. Only exact Boolean
+false assignment is admitted: `(word & !0x80) | 0x100`, preserving every other bit.
+The result is `AttachedWrite::NativeUpdated`, with no ordinary member insertion,
+lazy storage allocation, accessor/watch execution or fabricated host callback.
+This does not broaden Boolean true/coercion, other display kinds, alias spellings,
+or indexed GetProperty/SetProperty host routing.
+
+**VERIFIED static:** `ATTACHED_FOCUSRECT.md` and private
+`rea-attached-focusrect/finding-summary.json` (SHA256
+`38e23de370824c68b6ae4abf5d4a82660086bf47c033c1504de6a9ed0dafe49c`)
+prove receiver-local setter/getter behavior and the complete return-only helper.
+No rendering/focus-navigation consumer or native initial word is inferred.
+
+**OBSERVED controlled Rust checks:** two pure state tests cover all focus masks
+and preservation/idempotence; integration tests cover unknown snapshots, duplicate
+binding, root/child isolation, rejection of other input types, no lazy storage,
+ordinary accessor/readonly shadow bypass, unchanged event flags, original code
+provenance and zero host dispatch. Supplied test words are explicit synthetic
+state, not observed native defaults. The original manager frontier is exercised
+separately; no startup result is inferred from these tests.
 
 ## Explicit attached TextField snapshot and native member seam
 

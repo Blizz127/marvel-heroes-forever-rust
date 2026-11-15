@@ -17,13 +17,15 @@ mod attached_textfield;
 mod deferred;
 #[path = "external_interface.rs"]
 mod external_interface;
+#[path = "focus_rect.rs"]
+mod focus_rect;
 #[path = "string.rs"]
 mod string;
 use attached::AttachedTarget;
 pub use attached::{
-    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
-    AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedWrite, DisplayTargetId,
-    LoadedMovieSourceId,
+    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
+    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedStorageId, AttachedWrite,
+    DisplayTargetId, LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
 pub use attached_name_profile::{
@@ -37,6 +39,7 @@ pub use attached_textfield::{
 };
 pub use deferred::{BuiltinFactory, DeferredBuiltinName};
 pub use external_interface::ExternalInterfaceObjects;
+pub use focus_rect::AttachedFocusRectState;
 pub use string::StringObjects;
 
 pub type Text = Arc<[u16]>;
@@ -4610,6 +4613,54 @@ mod tests {
         assert!(vm.call(callable, receiver, &[], &mut host).is_err());
         assert_eq!(host.calls.len(), 1);
         assert!(vm.current_target.is_none());
+    }
+
+    #[test]
+    fn focus_rect_opcode_records_origin_without_storage_or_host_dispatch() {
+        let (mut vm, root, caller, _) = typed_field_fixture();
+        vm.bind_attached_focus_rect(
+            root,
+            AttachedFocusRectState {
+                target_flags_b8: 0x1234_0180,
+            },
+        )
+        .unwrap();
+        let mut bytes = variable_bytes("_root");
+        bytes.extend(push(&[Value::string("_focusrect"), Value::Bool(false)]));
+        let setter_offset = bytes.len();
+        bytes.push(0x4f);
+        bytes.extend(variable_bytes("_root"));
+        bytes.extend(push(&[Value::string("_focusrect")]));
+        bytes.push(0x4e);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let result = vm
+            .execute(code, vm.attached_owner(caller).unwrap(), &mut RejectHost)
+            .unwrap();
+        assert_eq!(result.stack, vec![Value::Bool(false)]);
+        assert_eq!(result.host_calls, 0);
+        let snapshot = vm.attached_focus_rect(root).unwrap().unwrap();
+        assert_eq!(snapshot.state.target_flags_b8, 0x1234_0100);
+        assert_eq!(
+            snapshot.last_write,
+            Some(CodeOrigin {
+                code,
+                source_offset: setter_offset
+            })
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        assert!(vm.attached_focus_rect(caller).unwrap().is_none());
+        // Public host writes carry no stale completed-interpreter provenance.
+        vm.write_attached_member(root, "_focusrect", Value::Bool(false))
+            .unwrap();
+        assert!(
+            vm.attached_focus_rect(root)
+                .unwrap()
+                .unwrap()
+                .last_write
+                .is_none()
+        );
     }
     #[test]
     fn deferred_scalars_and_token_equality_do_not_materialize() {
