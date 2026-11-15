@@ -22,6 +22,16 @@ dispatch integration remains outstanding; generic execution is still diagnostic.
 style derivation for the qualified fresh HTML path while retaining explicit
 font-selection and effective runtime-state requirements.
 
+**VERIFIED prepared geometry/alpha; INFERRED explanation of retained pixels:**
+the saved login's later shape instances 106, 112 and 116 each cover the complete
+node-89 field with opaque bitmap samples. Their source triangles, saved/runtime
+draw order and 6,760 required alpha bytes per sampled support explain why the
+updated glyph geometry produced unchanged final pixels in the retained probe.
+[Visibility evidence](docs/RUNTIME_TEXT_VISIBILITY.md) also locates the original
+constructor writes that hide those panels; those writes have not yet executed
+through the full startup path. No visibility workaround or new GPU pass is
+claimed.
+
 **OBSERVED retail reference:** the full same-snapshot continuation remained on
 the original loading splash at its 45-second deadline. Both visible windows
 reported the isolated owned retail PID. All 16,490 input hashes passed the

@@ -443,3 +443,9 @@ independent source/Environment identities.
 same-snapshot offline run and complete post-run hashes. Its original passive
 window observer studied `/usr/include/X11/Xlib.h` API signatures under the
 header's Open Group permissive licence; no Xlib implementation was copied.
+
+[Runtime text visibility](RUNTIME_TEXT_VISIBILITY.md) records exact saved draw
+order, triangle coverage, decoded bitmap alpha and the original visibility
+action route. Its CPU explanation preserves the failed whole-scene GPU check.
+Cached `wgpu-types` 27.0.1 blend constants (MIT OR Apache-2.0) were studied to
+interpret the existing diagnostic blend state, not copied into game logic.
