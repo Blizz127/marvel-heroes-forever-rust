@@ -20,7 +20,12 @@ properties. It accepts the supported asset class names case-insensitively:
 Texture2D, SwfMovie, Package, ObjectReferencer/GazCookedObjectReferencer, Material,
 MaterialInstanceConstant and MaterialInstanceTimeVarying. Material preambles are
 reference-based; material exports were absent from the five selected samples.
-UClass, actors and custom gameplay class preambles remain unsupported.
+The checked imported Engine classes Level, Model, Polys and World also admit
+this prefix when the optional state-frame flag is absent. Their native tails
+remain opaque. [Entry-package evidence](ENTRY_PACKAGE_OBJECTS.md) records the
+native serializer chain and all five original `MarvelEntry` export checks.
+WorldInfo uses the separate existing actor reader; UClass, actors and custom
+gameplay class preambles remain unsupported by this generic entry point.
 
 `parse_tagged_properties(package, bytes, start_offset)` is the lower-level entry
 point when the caller has independently established a property's starting offset.

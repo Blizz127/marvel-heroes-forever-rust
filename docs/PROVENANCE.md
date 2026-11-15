@@ -498,3 +498,8 @@ readers and VM interfaces with explicitly supplied runtime state. Its retained
 147-node proof does not claim native fresh-state defaults or startup execution.
 [Attached tab state](REA_ATTACHED_TAB_ENABLED.md) grounds `tabEnabled` access in
 the owned executable and preserves its shared target-status word with focus state.
+
+[Entry-package object evidence](ENTRY_PACKAGE_OBJECTS.md) registers the owned
+UObject/class serializers used for narrow Level, Model, Polys and World property
+admission. WorldInfo remains with the existing actor reader; retained native
+tails and successful property parsing do not establish startup behavior.
