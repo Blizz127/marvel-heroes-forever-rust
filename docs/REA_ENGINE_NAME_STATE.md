@@ -727,3 +727,292 @@ scanner and independent retained-source review add no target execution or
 current-state capture. Source/licence provenance remains the owner's private
 PE and prior original project evidence with the tooling recorded above; no
 config contents, native bytes, VM implementation or host behavior entered git.
+
+## Continuation: selected external object and native path-size callback
+
+**VERIFIED static binding:** the selected bootstrap passes static object
+**F=0x1429e1660** as argument six at **0x141333115**. The callee loads that
+slot into RBX at **0x14078c9cd** and publishes RBX to **0x142ae68e8 at
+0x14078ca32**. The owned image initializes F's primary pointer to
+**0x142231048**. Immediate initialization dispatch at **0x14078ca3f** selects
+slot zero, **0x14058fea0**, a three-byte `RET 0` with no write or callee.
+
+The .data source has a different file mapping from .text/.rdata: F's pointer
+is at file offset **0x29dfe60**, captured at raw REA address **0x1429e0a60**.
+The checker explicitly joins those bytes to F's preferred image address; it
+does not mistake the raw mapping for the native object address. Relevant
+primary slots are independently byte-bound:
+
+| Slot | Selected native function |
+| --- | --- |
+| `+0` | `0x14058fea0`, immediate-return initializer |
+| `+0xa8` | `0x1406ec770`, first path-string transform |
+| `+0xb0` | `0x1406ec390`, second path-string transform |
+| `+0xc0` | `0x1406f11c0`, callback selected by the cache miss |
+| `+0xe0` | `0x1406f6ea0`, host path-size query |
+
+This is a producer/image-table join, not a current-process table observation.
+The caller also publishes F+0x30 through another global, so F is not assumed
+isolated. Its current fields, aliases, table stability and lifetime remain
+conditions. The two calls between the argument load and publication,
+`0x1407215a0` and `0x14119e300`, preserve RBX under the normal nonvolatile-
+register ABI; their other effects remain separate prerequisites. The selected
+slot-zero initializer above adds no direct effect.
+
+### Callback order and exact return decisions
+
+Complete **0x1406f11c0..0x1406f1343** calls F+0xa8 with the original filename
+and a local output string, then F+0xb0 with that output and a second local
+string. It calls F+0xe0 with the second string's data and saves the low DWORD
+result. It releases both temporary buffers through the existing allocator
+wrapper.
+
+Only an exact result **0xffffffff** triggers the fallback. That branch calls
+F+0xa8 again with the original filename, passes that first-form path directly
+to F+0xe0, releases the new temporary and returns the second DWORD. It does
+not repeat F+0xb0. Every other first result is returned unchanged. The outer
+`0x1406f1400` then tests the sign bit of EAX at **0x1406f1504**. Therefore an
+initial result in `0x80000000..0xfffffffe` skips the callback fallback but
+still takes the outer negative-return path. No existence Boolean or full
+64-bit file length is substituted for this exact behavior.
+
+### Host imports: an open/query/close sequence
+
+Complete **0x1406f6ea0..0x1406f6f0d** binds its imports to KERNEL32
+`CreateFileW`, `GetFileSize` and `CloseHandle`. The first call receives the
+supplied path, access **0x80000000**, share **1**, null security attributes,
+disposition **3**, attributes **0x80**, and null template handle. These are
+read access, read sharing and opening an existing path with normal attributes.
+This native operation can create an OS handle; it is not a pure metadata
+function. [CreateFileW documentation](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+
+An invalid returned handle yields DWORD `0xffffffff` immediately. Otherwise
+the code calls `GetFileSize(handle, NULL)`, saves its low DWORD, attempts
+`CloseHandle(handle)`, ignores the close result and returns the saved value.
+It neither asks for the high size word nor queries last-error information.
+Thus `0xffffffff` remains ambiguous at the OS contract boundary, and the
+native caller still applies the fallback above.
+[GetFileSize documentation](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesize),
+[CloseHandle documentation](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle).
+
+The investigation performed none of these operations. The selected path,
+handle, OS result and close outcome remain unknown. An ordinary import profile
+may preserve protected engine memory while still changing OS handle and thread
+error state; those are separate effects.
+
+### Path helpers and bounded memory footprint
+
+The complete path methods and their selected string dependencies are retained.
+F+0xa8 first constructs a distinct UTF-16 copy through `0x1406d3b90`. It tests
+its first two characters against the owned literal consisting of two dots,
+using `0x1407087a0` and the concrete `_wcsnicmp` import. The matching branch
+uses `0x1407d0df0` and counted-string concatenation; the other branch returns
+the independent copy. It is not assigned a guessed filesystem-normalization
+API or a guessed current path.
+
+`0x1407d0df0` returns the shared module-directory buffer at **0x142c23f20**.
+If its first WORD is zero, it calls `GetModuleFileNameW` using the module
+handle loaded from **0x142c48b28**, a **512-WORD** destination and then scans
+for NUL. It shortens the buffer at the selected last separator and returns its
+address. The native code ignores the API return value. Its unbounded NUL scan
+occurs before the final index-range check, so the admitted branch requires an
+already valid bounded cache or a bounded terminated result from the import.
+Failure/truncation without that prerequisite is not silently accepted. The
+range-failure branch reaches `0x141c6f1b8`, which stays outside the normal
+profile. [GetModuleFileNameW documentation](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew).
+
+F+0xb0 reads F's counted-string fields and selected globals. Its visible and
+transitive normal writes are to caller outputs and local copied strings,
+subject to aliasing conditions. `0x140789a90` is an eight-byte leaf returning
+the address of the command-line buffer **0x142b19180**; it does not execute
+that text. Retained case-insensitive search/replace, append and concatenate
+helpers use bounded ordinary CRT/allocation contracts. Their jump/selector
+tables are checked data with destinations inside the selected code, not
+instruction-shaped writes inferred from table bytes.
+
+One important write is real: `0x1407828b0` temporarily writes a NUL into the
+matched source and later writes the pattern's first WORD back. Because its
+search can ignore case, that is not guaranteed to restore the original code
+unit. Both F+0xb0 call sites pass a local copied string, so the write remains
+within temporary storage only under the proved call-site and disjoint-buffer
+profile. The helpers are not described as universally read-only.
+
+The allowed write footprint therefore includes stack/output objects, distinct
+owned temporary buffers, allocator metadata and the shared module-directory
+cache. F fields and protected E/L/O/C_L are not direct write targets on these
+normal selected methods. That statement depends on stable valid F descriptors,
+valid module/command-line buffers, bounded arithmetic and disjoint allocations;
+it is not a statement that arbitrary aliased pointers, overridden tables or
+reentrant imports preserve the engine.
+
+### Resulting preservation frontier
+
+With the selected F/table identity, valid bounded path state, ordinary Win32/
+CRT/allocator contracts, successful required allocations, valid stack/cookie
+state and no reentry or concurrent mutation, this callback preserves actual
+E/L/O/C_L and the supplied bag state while allowing the effects just listed.
+No current host operation is run or declared successful by this static proof.
+
+A signed-negative final DWORD makes `0x1406f1400` return null and the outer
+lookup return zero; the next engine helper remains **0x141272aff →
+0x141260940(E+0x148, E+0x100)**. A nonnegative DWORD enters a distinct path:
+a bounded filename copy and local empty-container setup, then the next
+unclosed cache insertion **0x1406f15b8 → 0x1406e6ee0**. Later loading
+`0x1406fc150` and logging `0x14077f590` are not covered. Current OS outcomes
+cannot select either branch, and neither branch proves whole-engine or
+current Mouse-handler absence.
+
+### External-object evidence and provenance
+
+Private evidence is under `evidence/rea-engine-name-state/external-lookup/`.
+The original verification matches **1,289 instruction spans / 4,720 bytes**,
+source/table mappings, import bindings and dispatch data. Its
+`verification.json` SHA-256 is
+`347a88457ae3f29f2cdc66a805e3098fc2ee6b013884424bc81c7856e27d7f8b`.
+The independent producer review's SHA-256 is
+`f64331c81e940701e04a76bfb4e13cfc3cacbd77f9bf568f656e27539892917a`.
+The independent retained-path review covers 15 executable scopes, both
+internal dispatch tables and all selected call inventories. Its
+`path-review.json` SHA-256 is
+`395924b19878530dd3c27bac73bfdbe065d273e10bf5b8fef202afa16493585e`.
+The final verifier wording distinguishes an ordinary `CreateFileW` failure
+sentinel, whose branch is covered, from invalid descriptors or allocation
+failure, which remain excluded. The earlier draft hash is superseded.
+Five new REA calls were exported/reset in `entry`, `methods`, `path-entry`,
+`path-helpers` and `string-leaves`; completed output is untruncated,
+exit-zero and unchanged-target, and each reset export matches its bundle.
+
+The primary Microsoft API pages linked in this section were used only to
+interpret the observed import arguments and returns. Documentation licence:
+[MicrosoftDocs/sdk-api CC BY 4.0](https://github.com/MicrosoftDocs/sdk-api/blob/docs/LICENSE).
+Exact URLs, names and uses are also recorded in private `provenance.json` for
+the integrator's `docs/PROVENANCE.md` update. No SDK implementation or sample
+code was copied. Owned-artifact and original tooling provenance remains as
+recorded above. No native process, script replay, file/config operation, VM
+code or host acceptance was performed by this study.
+
+## Continuation: nonempty configuration output
+
+**VERIFIED selected static bodies; conditional output construction:** the
+separate cached-section branch of `0x1406f4870` can now be followed through
+normal output iteration. This does not close the distinct cache-miss insertion
+and load helpers above, establish current configuration contents, or choose a
+native branch.
+
+### Append and row construction order
+
+At **0x1406f49b8**, `0x140828b20` receives the output descriptor in RDX. It
+increments and stores its signed count before any row construction. If needed,
+it computes capacity through the existing `0x1406d74e0` rule, reallocates
+**16 × capacity** bytes with alignment eight, and stores the new pointer. It
+returns `base + 16 × old_count`; it initializes no row bytes. Valid monotone
+counts, nonoverflowing sizes, successful allocation and disjoint live storage
+are required. A null returned row skips construction without undoing the
+count, so no transactional or graceful-failure behavior is claimed.
+
+The caller then converts the selected entry's key through
+`0x1407b85c0 → 0x1407b8600 → 0x140795e10`. The first helper zeroes a local
+16-byte string descriptor. The later helpers use the current name table at
+**0x142c23b40**, its count at **0x142c23b48**, the selected entry's encoding
+flag and text, and its separate biased numeric suffix. They may copy UTF-16,
+convert byte text through the observed `MultiByteToWideChar` import with
+code-page argument zero, and append an underscore plus a signed decimal
+suffix. The current entry, encoding, suffix and conversion result are not
+captured. A numeric index check alone does not prove a valid table or string.
+
+The byte conversion ignores its import return, so the supported ordinary
+profile explicitly requires a valid terminated result. The decimal suffix
+helper is complete and uses integer division and the checked digit units;
+its signed 32-bit input fits its local buffer. The complete counted UTF-16
+append helper stores the new count before growth/copy, replaces the old
+terminator when appending, and copies the new terminator. Safe arithmetic,
+valid terminators, disjoint copy extents and stable lifetimes remain required.
+
+At **0x1406f4a70**, the actual fixed format at **0x141de44a0** is `%s=%s`.
+Arguments are the converted key and the row's UTF-16 value, with a checked
+empty literal used when the relevant count is zero. Negative descriptor
+counts take a diagnostic route outside this profile; positive counts alone
+do not certify the pointers or terminators.
+
+`0x140775830 → 0x140781d50` first formats into a 128-WORD stack buffer.
+It reuses the independently sealed `0x1407d2a80` adapter to the concrete
+`MSVCR120!_vsnwprintf_s` import; no diagnostic formatter body was probed.
+A result at least the capacity or exactly -1 enters a heap-buffer retry with
+growing capacity. The accepted path requires finite successful formatting,
+safe growth and **0 ≤ returned count < capacity**. Other negative results
+would pass the native comparisons and index before the buffer; those error
+paths are not accepted. No universal termination or arbitrary-format purity
+is claimed.
+
+On the admitted return, the code writes a terminator and constructs the fresh
+row with `0x1406d3b90`. That constructor does not inspect or release old row
+contents. Under the ordinary successful fixed-format contract, the copied
+string is key, equals sign and value; if their lengths are k and v, its
+count and capacity are **k + v + 2** UTF-16 units including NUL. This is an
+**INFERRED conditional import-contract result**, not executed output or a
+current configuration observation. Both the array count and row metadata
+become visible before all allocations/copies finish, so nonreentry and valid
+exclusive access are substantive conditions.
+
+### Iterator, cleanup and protected state
+
+Complete `0x140a7aa00` is call-free. It modifies only the iterator's word/bit/
+index fields at offsets **+8, +0xc, +0x18, +0x1c and +0x20**, plus its own
+stack temporary. After iterator initialization, the caller explicitly sets
+the separate flags at **+0x34 and +0x38** to zero at **0x1406f4992/4997**.
+The zero invariant starts at those stores. The admitted advance does not
+change them, so the later `0x14098f570` cleanup call is unreachable on this
+profile. Its body was not analyzed and no general cleanup effect is assumed.
+
+The iterator reads a current bit word before testing exhaustion. Its valid
+word extent, coherent logical count and stable bit/row storage must therefore
+be supplied. A padding bit beyond the logical count is rejected by the
+caller's signed index/count test before row access. This proof does not
+silently import the earlier 135-entry limit into configuration output.
+
+Temporary key buffers are released after each normal construction. Each
+output row owns its copied string under the stated profile. The allowed
+writes are the caller's output descriptor, allocated array/strings, local
+iterator/temporaries and ordinary allocator/CRT state. With valid disjoint
+E/L/O/C_L extents, stable source data, successful nonreentrant imports and
+allocations, these writes preserve the protected engine/bag state. Invalid
+parameters, diagnostic callbacks, allocation failures, concurrency and
+unexpected CRT results remain excluded.
+
+### Joined branch frontiers and receipts
+
+Normal output iteration returns EAX=1 at **0x1406f4acb** and resumes the
+engine caller at **0x141272769**. The next unresolved work remains split:
+
+| Selected condition | Next unclosed native helper |
+| --- | --- |
+| Lookup returns zero, including a signed-negative final host size result | `0x141272aff → 0x141260940(E+0x148, E+0x100)` |
+| Lookup succeeds with nonpositive output count | `0x141272b09 → 0x141269560(E+0x100, 0)` |
+| Lookup succeeds with positive output count | `0x1412727dc → 0x1406dacc0`, the first output consumer |
+| Cache miss has a nonnegative host size result | `0x1406f15b8 → 0x1406e6ee0`, before the separate load/log path |
+
+No current cache state, external result, row count or branch is selected by
+these static proofs. They do not establish whole-engine initialization,
+current state-4 absence or permission to accept Mouse requests.
+
+Private `evidence/rea-engine-name-state/config-output/verification.json`
+checks **865 instruction spans / 3,071 bytes** across 15 complete selected
+functions, fixed literal/digit data and concrete import bindings. SHA-256:
+`800246d0acec52dbfda1e77a40141f90db24bdabfdaf5eea686e8170e3c584b1`.
+Its five new REA records are complete, untruncated and unchanged-target;
+`complete.bundle.json` and `reset.bundle.json` have the same SHA-256,
+`0d200fa1c3aeb5fe52a742cab462c0dff0883bf6aada66245647574e3cd52190`.
+The reset clears five records and retains no target. Both original verification
+scripts were rerun successfully before this documentation handoff. Their
+instruction counts overlap on shared helpers and are not added as a unique
+coverage total. No runtime tests were run for this docs-only change.
+
+The independent output audit reproduced the 865 spans and all 47 listed
+calls, and checked the two outgoing tail routes separately. Its
+`config-output/independent-review.json` SHA-256 is
+`fb81998b099f54428c7e7acf70226e2da267950393ee83e928fa1e95a9bf5b3e`.
+The joined `external-lookup/preservation-receipt.json` binds the original
+verifiers, independent reviews, prior caller/preservation receipts, import
+provenance and export/reset pairs to the four separate frontiers above.
+SHA-256:
+`0af4620134dcf7544931c505e1f46718c7a35604c6dafde0fd7803ee163ae193`.
