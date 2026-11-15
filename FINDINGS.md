@@ -23,6 +23,30 @@ metadata compilation pass. The original manager replay remains separate.
 Receipt: `evidence/avm1-runtime/rectangle-checks.json`, SHA-256
 `ffb67f42d9a52019a84bc62ad4056d9bc76f37b8ab308fdb897cea1f436b388c`.
 
+**OBSERVED original manager continuation:** the single unchanged-fixture replay
+completes the same 452 initializers and reaches 290 frame instructions. Its
+Rectangle and all three Points construct successfully, with verified zero-field
+reads, distinct instances and shared canonical Point identity. The next stop is
+the original `Mouse.hide()` call at offset 6391. No Mouse callback ran and this
+does not establish native Mouse absence. Supplied raw/name state remains
+diagnostic. Receipt:
+`evidence/avm1-attached-manager-frame-action-increment10/receipt.json`, SHA-256
+`7a2347e0d81fb9e9d6e45297e13723e4c47ef7acc742d82a9b1fe6bc7e96f73d`.
+
+**VERIFIED bounded UClass reader:** five focused checks and four original class
+comparisons pass across 767 fields, 32 arrays and 4,367 bytes. The reader retains
+saved flags, configuration names and exact terminal default references, with no
+effective runtime-default inference. Its CLI is integrated for the next binary
+check. Receipt: `evidence/upk-class-reader/receipt.json`, SHA-256
+`5be1752701e5b71dd5c2aa99c961ecfe12a116b17a6e7fe41c3cf47498eda8a1`.
+
+**VERIFIED static fresh name path:** the selected successful fresh MovieDef/AS2
+route produces and assigns `_level0` before level publication. Cached subtype,
+current manager invocation/name and later-name preservation remain unknown;
+the diagnostic manager name has not been replaced. See
+`docs/FRESH_ROOT_NAME.md` and `evidence/fresh-root-name/receipt.json`, SHA-256
+`1c32a184b4d31d0fcc1c55b533cd6a33a3366e16a09286d8692bb40e75ac2f2e`.
+
 Dev17 remains the latest staged package. No dev18 binary or startup check has
 run yet; the inherited service/access holds remain in place.
 

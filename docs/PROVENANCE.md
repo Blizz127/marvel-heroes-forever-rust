@@ -645,3 +645,15 @@ The dev18 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev18-linux/manifest.json`, SHA-256
 `6826bccc5a3305e8abff3d3712006772f80130a8b1c7248f997431c35cefaff0`.
+
+[UClass metadata](UPK_CLASS.md) implements the bounded original parser profile
+corroborated against the retained MIT Unreal-Library sources and selected owned
+package/native evidence. Its source ledger distinguishes source/synthetic-only
+nonempty collection coverage from the four original class comparisons; no
+third-party implementation was copied.
+
+[Fresh root naming](FRESH_ROOT_NAME.md) records the owned executable's formatting,
+interning, name-field assignment and conditional fresh MovieDef/AS2 association.
+The ledger identifies retained evidence, newly verified native bytes and assumed
+ordinary imported CRT contracts. No CRT DLL or native client ran for this study;
+current adopted-instance names remain separate inputs.

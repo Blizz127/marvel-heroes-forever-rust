@@ -44,7 +44,7 @@ fn usage() {
     println!("  mhf prototype verify <archive.sip>");
     println!("  mhf upk summary|inspect|exports <package.upk>");
     println!("  mhf upk properties <package.upk> <export-name|1-based-index>");
-    println!("  mhf upk world|model|polys <package.upk> <export-name|1-based-index>");
+    println!("  mhf upk world|model|polys|class <package.upk> <export-name|1-based-index>");
     println!("  mhf upk verify-objects <package.upk>");
     println!(
         "  mhf frontend inspect <package.upk> <movie-name|1-based-index> [dependency.upk ...]"
@@ -164,6 +164,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 && (args[1] == "properties"
                     || args[1] == "world"
                     || args[1] == "model"
+                    || args[1] == "class"
                     || args[1] == "polys") =>
         {
             let archive = PackageArchive::open(Path::new(&args[2]))?;
@@ -196,6 +197,43 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 }
             };
             let bytes = archive.read_export(index)?;
+            if args[1] == "class" {
+                let class = marvel_heroes_forever::upk::class::ClassObject::parse_export(
+                    package, index, &bytes,
+                )?;
+                let config = package
+                    .resolve_name(class.config_name.value)
+                    .ok_or_else(|| invalid("class configuration name is unresolved"))?;
+                println!(
+                    "VERIFIED UClass metadata: {} bytes; loaded script size {}, {} opaque serialized script bytes",
+                    class.span.length,
+                    class.structure.loaded_script_size.value,
+                    class.structure.script.length,
+                );
+                println!(
+                    "Saved flags: 0x{:08x}; configuration: {}; superclass reference {}",
+                    class.flags.value, config, class.structure.super_class.value,
+                );
+                println!(
+                    "Default object reference: {} at export byte {}",
+                    class.default_object.value, class.default_object.span.offset,
+                );
+                println!(
+                    "Saved arrays: {} functions, {} component defaults, {} raw interface pairs, category counts {:?}, {} class groups",
+                    class.state.functions.entries.len(),
+                    class.component_defaults.entries.len(),
+                    class.interfaces.entries.len(),
+                    [
+                        class.dont_sort_categories.entries.len(),
+                        class.hide_categories.entries.len(),
+                        class.auto_expand_categories.entries.len(),
+                        class.auto_collapse_categories.entries.len()
+                    ],
+                    class.class_groups.entries.len(),
+                );
+                println!("No class loading, default application or script execution performed.");
+                return Ok(());
+            }
             if args[1] == "model" {
                 let model = marvel_heroes_forever::upk::model::ModelObject::parse_export(
                     package, index, &bytes,

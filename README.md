@@ -52,6 +52,7 @@ mhf upk exports /private/path/MarvelFrontEnd_SF.upk
 mhf upk world /private/path/MarvelEntry.upk theworld
 mhf upk model /private/path/MarvelFrontEndMap.upk 13
 mhf upk polys /private/path/MarvelFrontEndMap.upk 26
+mhf upk class /private/path/GFxUI.upk GFxAction_OpenMovie
 mhf frontend startup-map /private/path/MarvelFrontEndMap.upk
 ```
 
@@ -67,6 +68,11 @@ or execute the linked Level. See [World payloads](docs/UPK_WORLD.md).
 reference; `upk polys` reads the supported header. Both preserve opaque tails
 and validate class identity. They do not reconstruct world geometry. See
 [Model and Polys payloads](docs/UPK_MODEL_POLYS.md).
+
+`upk class` inspects bounded UClass metadata, saved flags, configuration name and
+the terminal default-object reference. It preserves the distinction between
+loaded and serialized script sizes and does not apply defaults or execute code.
+See [class metadata](docs/UPK_CLASS.md).
 
 `frontend startup-map` reports saved LevelLoaded links in their original order,
 OpenMovie resources, variable links and explicit flag origins. Missing serialized
