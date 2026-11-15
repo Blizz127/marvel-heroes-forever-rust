@@ -542,3 +542,13 @@ requires an explicit current-name snapshot; no root name is inferred from a file
 evidence for actor, Model, ModelComponent, URL and sequence-link framing. Ordered
 links and opaque suffixes remain distinct; successful parsing does not execute
 the selected sequence or establish full Level dependency coverage.
+
+The [startup selection](FRONTEND_STARTUP_MAP.md) composes those same owned
+native World/Level contracts with the original inventory reader. Its CLI adds
+no external source or runtime default. The visibility integration check uses
+artificial script/profile data and original project code; the separate native
+claim remains the pinned executable evidence. The latest
+[Scale9 binding investigation](SCALE9_RENDERING.md) traces the owned tag1009
+descriptor, filename resolver, engine creator and post-creation inverse matrix;
+unobserved runtime inputs remain explicit and no third-party implementation was
+copied.

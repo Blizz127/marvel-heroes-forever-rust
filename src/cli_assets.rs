@@ -26,7 +26,12 @@ fn text(value: &OsString) -> Result<&str> {
 pub fn run(args: &[OsString]) -> Result<()> {
     match args {
         [command, operation, package] if command == "frontend" && operation == "startup-map" => {
-            inspect_startup_map(package)?;
+            inspect_startup_map(package, None)?;
+        }
+        [command, operation, package, option, selector]
+            if command == "frontend" && operation == "startup-map" && option == "--world" =>
+        {
+            inspect_startup_map(package, Some(text(selector)?))?;
         }
         [command, operation, package, selector, output, extra @ ..]
             if command == "frontend" && operation == "render-static" =>
@@ -366,8 +371,10 @@ pub fn run(args: &[OsString]) -> Result<()> {
     Ok(())
 }
 
-fn inspect_startup_map(package: &OsString) -> Result<()> {
-    use marvel_heroes_forever::frontend::startup_map::{self, ObjectReference, Saved};
+fn inspect_startup_map(package: &OsString, world: Option<&str>) -> Result<()> {
+    use marvel_heroes_forever::frontend::startup_map::{
+        self, MainSequence, ObjectReference, Saved,
+    };
     fn reference(value: &ObjectReference) -> String {
         match value {
             ObjectReference::Null => "null".into(),
@@ -390,7 +397,40 @@ fn inspect_startup_map(package: &OsString) -> Result<()> {
         )
     }
     let archive = PackageArchive::open(package)?;
-    let prepared = startup_map::prepare(&archive, startup_map::Limits::default())?;
+    let prepared = if let Some(selector) = world {
+        let selected = startup_map::prepare_world(
+            &archive,
+            select(archive.package(), selector)?,
+            startup_map::Limits::default(),
+        )?;
+        println!(
+            "OBSERVED saved World {:+} {:?} -> PersistentLevel {:+} {:?}.",
+            selected.world_identity.value,
+            selected.world_identity.object_path,
+            selected.level_identity.value,
+            selected.level_identity.object_path,
+        );
+        match &selected.main_sequence {
+            MainSequence::EmptyArray => println!("Main sequence: empty saved sequence array."),
+            MainSequence::FirstNull { link } => println!(
+                "Main sequence: first saved reference is null @ {:?}.",
+                link.origin.logical_value_offset(),
+            ),
+            MainSequence::Local { link, .. } => println!(
+                "Main sequence: {} @ {:?}.",
+                reference(&link.value),
+                link.origin.logical_value_offset(),
+            ),
+        }
+        println!(
+            "Selected Level retains {} opaque tail bytes. Selection usage: {:?}.",
+            selected.level.unparsed_native_tail.length, selected.usage,
+        );
+        println!("Saved links do not establish the current runtime Level or a map transition.");
+        selected.inventory
+    } else {
+        startup_map::prepare(&archive, startup_map::Limits::default())?
+    };
     println!(
         "OBSERVED saved startup map: {} exports, {} sequences, {} LevelLoaded events, {} OpenMovie actions, {} player variables.",
         prepared.export_count,

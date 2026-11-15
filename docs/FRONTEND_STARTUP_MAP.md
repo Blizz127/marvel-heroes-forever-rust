@@ -338,3 +338,13 @@ The three reused REA records are
 (83-byte getter). Each retained instruction range was matched to the pinned PE;
 the Level field-identity chain is recorded in
 `entry-level-native/field-identities/verification.json`.
+
+## Explicit World selection in the diagnostic CLI
+
+`mhf frontend startup-map <package.upk> --world <export-name|1-based-index>`
+reports the selected World, PersistentLevel and first saved sequence reference,
+followed by the unchanged whole-package inventory. The World selector is
+explicit; an empty sequence array or first null entry is reported without
+searching for a replacement. The command also reports the Level's opaque tail
+length. Omitting `--world` keeps the existing inventory-only behavior. Neither
+mode establishes the runtime current Level or executes a map transition.

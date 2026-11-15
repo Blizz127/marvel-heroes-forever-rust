@@ -57,7 +57,7 @@ fn usage() {
         "  mhf frontend scene <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path]"
     );
     println!("  mhf frontend init-probe <package.upk> <movie>");
-    println!("  mhf frontend startup-map <package.upk>");
+    println!("  mhf frontend startup-map <package.upk> [--world <export-name|1-based-index>]");
     println!(
         "  mhf frontend pointer-probe <package.upk> <movie> <stage-x-pixels> <stage-y-pixels> <private-output.pam> [dependency.upk ...]"
     );
@@ -194,13 +194,20 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 let world = WorldObject::parse_export(package, index, &bytes)?;
                 println!(
                     "VERIFIED World payload: {} links, {} preserved seven-word records, {} array entries, {} opaque trailing bytes",
-                    world.links.len(), world.records.len(), world.reference_array_count,
+                    world.links.len(),
+                    world.records.len(),
+                    world.reference_array_count,
                     world.unknown_tail.length
                 );
                 for link in world.links.iter().take(100) {
-                    println!("{:?}: reference {} at export byte {}", link.slot, link.reference, link.span.offset);
+                    println!(
+                        "{:?}: reference {} at export byte {}",
+                        link.slot, link.reference, link.span.offset
+                    );
                 }
-                println!("References remain package-local; records retain exact bits without inferred scalar types. No level loading or execution performed.");
+                println!(
+                    "References remain package-local; records retain exact bits without inferred scalar types. No level loading or execution performed."
+                );
                 return Ok(());
             }
             let object = ObjectProperties::parse_export(package, index, &bytes)?;

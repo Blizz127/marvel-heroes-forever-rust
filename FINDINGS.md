@@ -7,6 +7,27 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev15 integration in progress
 
+**VERIFIED later bounded execution:** all 34 original login Construct saved
+phases completed 1,686 instructions and 674 writes with zero host calls. Each
+returned `DynamicLookupPending`; no dynamic handler or registered constructor
+was invoked. Independent validation made 12,358 comparisons, retaining all
+34 supplied Environment stacks/registers. The earlier single-handler stop
+below is historical. Final receipt:
+`evidence/construct-saved-phases/all34/receipt.json`, SHA-256
+`4b414c46fa02f4321da209f2be163e8cd9a2e97a9239081426a7566728612e94`.
+
+**VERIFIED host integration:** a synthetic named visibility assignment passes
+through the actual VM and FrontendHost, committing raw and display visibility
+together. Explicit conditional state remains necessary; no original panel hide
+or new GPU success is claimed. See
+[transaction validation](docs/ATTACHED_VISIBILITY_BINDING.md).
+
+**VERIFIED saved startup selection:** the native World/Level readers select
+FrontEnd export 36 → Level 11 → Sequence 34. Entry export 4 → Level 1 has a null
+first sequence reference. Seven focused tests and the independent original-file
+comparison pass. The CLI now exposes this explicit selection with `--world`;
+runtime current-Level identity, transitions and sequence execution remain open.
+
 **VERIFIED Rust integration:** selected saved Scene records now bind to distinct
 VM installations with exact original source and mask identity. The actual login
 probe installs all 34 Construct records, preserving 89 unselected bindings and
