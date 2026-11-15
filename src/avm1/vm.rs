@@ -137,6 +137,40 @@ pub struct HostCall<'a> {
     pub args: &'a [Value],
     pub source_offset: Option<usize>,
 }
+/// Adobe's indexed movie properties; the host owns coordinate/state semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum MovieProperty {
+    X = 0,
+    Y = 1,
+    XScale = 2,
+    YScale = 3,
+    CurrentFrame = 4,
+    TotalFrames = 5,
+    Alpha = 6,
+    Visible = 7,
+    Width = 8,
+    Height = 9,
+    Rotation = 10,
+    Target = 11,
+    FramesLoaded = 12,
+    Name = 13,
+    DropTarget = 14,
+    Url = 15,
+    HighQuality = 16,
+    FocusRect = 17,
+    SoundBufferTime = 18,
+    Quality = 19,
+    MouseX = 20,
+    MouseY = 21,
+}
+#[derive(Debug, Clone)]
+pub struct PropertyRequest {
+    pub context: ObjectId,
+    pub target: Value,
+    pub property: MovieProperty,
+    pub source_offset: Option<usize>,
+}
 pub trait Host {
     fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String>;
     fn command(
@@ -144,6 +178,22 @@ pub trait Host {
         target: ObjectId,
         command: HostCommand,
     ) -> std::result::Result<(), String>;
+    fn get_property(&mut self, request: PropertyRequest) -> std::result::Result<Value, String> {
+        Err(format!(
+            "unhandled movie-property read {:?}",
+            request.property
+        ))
+    }
+    fn set_property(
+        &mut self,
+        request: PropertyRequest,
+        _value: Value,
+    ) -> std::result::Result<(), String> {
+        Err(format!(
+            "unhandled movie-property write {:?}",
+            request.property
+        ))
+    }
 }
 #[derive(Debug, Default)]
 pub struct RejectHost;
@@ -626,6 +676,36 @@ impl Vm {
                 "primitive property receiver or missing object binding",
             ))
         }
+    }
+    fn movie_property(&self, value: Value) -> Result<MovieProperty> {
+        let number = self.number(&value)?;
+        if !number.is_finite() || number.fract() != 0.0 || !(0.0..=21.0).contains(&number) {
+            return self.fail(ErrorKind::Unsupported("invalid indexed movie property"));
+        }
+        Ok(match number as u8 {
+            0 => MovieProperty::X,
+            1 => MovieProperty::Y,
+            2 => MovieProperty::XScale,
+            3 => MovieProperty::YScale,
+            4 => MovieProperty::CurrentFrame,
+            5 => MovieProperty::TotalFrames,
+            6 => MovieProperty::Alpha,
+            7 => MovieProperty::Visible,
+            8 => MovieProperty::Width,
+            9 => MovieProperty::Height,
+            10 => MovieProperty::Rotation,
+            11 => MovieProperty::Target,
+            12 => MovieProperty::FramesLoaded,
+            13 => MovieProperty::Name,
+            14 => MovieProperty::DropTarget,
+            15 => MovieProperty::Url,
+            16 => MovieProperty::HighQuality,
+            17 => MovieProperty::FocusRect,
+            18 => MovieProperty::SoundBufferTime,
+            19 => MovieProperty::Quality,
+            20 => MovieProperty::MouseX,
+            _ => MovieProperty::MouseY,
+        })
     }
     fn number(&self, value: &Value) -> Result<f64> {
         match value {
@@ -1460,6 +1540,37 @@ impl Vm {
                         self.set(subclass, "prototype", Value::Object(prototype))?;
                     }
                     0x3e => return Ok(Flow::Return(self.pop(frame)?)),
+                    0x22 => {
+                        let property = self.movie_property(self.pop(frame)?)?;
+                        let target = self.pop(frame)?;
+                        self.host_budget()?;
+                        let value = host
+                            .get_property(PropertyRequest {
+                                context: frame.target,
+                                target,
+                                property,
+                                source_offset: Some(instruction.span.offset),
+                            })
+                            .map_err(|message| self.error(ErrorKind::Host(message)))?;
+                        self.check_value(&value)?;
+                        self.push(frame, value)?;
+                    }
+                    0x23 => {
+                        let value = self.pop(frame)?;
+                        let property = self.movie_property(self.pop(frame)?)?;
+                        let target = self.pop(frame)?;
+                        self.host_budget()?;
+                        host.set_property(
+                            PropertyRequest {
+                                context: frame.target,
+                                target,
+                                property,
+                                source_offset: Some(instruction.span.offset),
+                            },
+                            value,
+                        )
+                        .map_err(|message| self.error(ErrorKind::Host(message)))?;
+                    }
                     0x26 => {
                         let value = self.pop(frame)?;
                         self.command(frame.target, HostCommand::Trace(value), host)?;
@@ -2137,5 +2248,58 @@ mod tests {
         assert_eq!(result.instructions, 3);
         let error = execute(&mut setup(), &[0x1c]).unwrap_err();
         assert_eq!(error.kind, ErrorKind::StackUnderflow);
+    }
+    struct InvalidPropertyHost;
+    impl Host for InvalidPropertyHost {
+        fn call(&mut self, _: HostCall<'_>) -> std::result::Result<Value, String> {
+            Err("unbound".into())
+        }
+        fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+            Err("unbound".into())
+        }
+        fn get_property(&mut self, request: PropertyRequest) -> std::result::Result<Value, String> {
+            assert_eq!(request.property, MovieProperty::X);
+            assert!(request.source_offset.is_some());
+            Ok(Value::Object(ObjectId(usize::MAX)))
+        }
+    }
+    #[test]
+    fn movie_property_boundary_rejects_missing_bindings_bad_indices_and_ids() {
+        let mut bytes = push(&[Value::string(""), Value::Number(0.0)]);
+        bytes.push(0x22);
+        assert!(matches!(
+            execute(&mut setup(), &bytes).unwrap_err().kind,
+            ErrorKind::Host(_)
+        ));
+        let mut vm = setup();
+        let id = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        assert_eq!(
+            vm.execute(id, vm.root(), &mut InvalidPropertyHost)
+                .unwrap_err()
+                .kind,
+            ErrorKind::InvalidObject(ObjectId(usize::MAX))
+        );
+        let mut vm = Vm::new(
+            15,
+            Limits {
+                host_calls: 0,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            execute(&mut vm, &bytes).unwrap_err().kind,
+            ErrorKind::Budget("host calls")
+        );
+        let mut bad = push(&[Value::string(""), Value::Number(22.0)]);
+        bad.push(0x22);
+        let mut vm = setup();
+        assert!(matches!(
+            execute(&mut vm, &bad).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
+        assert_eq!(vm.host_calls, 0);
     }
 }

@@ -118,7 +118,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Thirteen focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Fourteen focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -231,6 +231,29 @@ been claimed.
 The ASSetPropFlags research verifies part of its bit-mask transformation but does
 not yet settle every flag's meaning, visitor coverage and default return value.
 Those gaps remain explicit. No successful property-flags callback is installed.
+
+## Indexed movie-property host seam
+
+GetProperty/SetProperty now use `Host::get_property` / `set_property`. Both have
+default rejecting implementations, so existing hosts retain explicit failures.
+Requests contain the execution-context ObjectId, original target value, a typed
+Adobe movie-property index, and the source instruction offset. The host owns
+path resolution, local/global coordinate conversion, frame state and actual
+mutation. Returned object IDs are checked; invalid indices and exhausted host
+budgets stop before the callback. Nothing accesses a native client automatically.
+
+**OBSERVED:** The original manager MouseMove ClipAction at 7096+77 executes all
+14 instructions against a controlled geometry host. Starting at (10,20) with a
+supplied pointer at (100,200), it sets the cursor to (100,200). Its six callbacks
+are reads of X/MouseX at 7127/7138, write X at 7140, reads Y/MouseY at 7158/7169,
+and write Y at 7171. No native function is invoked. This verifies original script
+execution and the host seam with supplied coordinate behavior; it does not prove
+retail pointer transforms or automatic event dispatch.
+
+`run-owned-cursor.rs`, `owned-cursor-results.tsv`, `cursor-execution-evidence.json`
+and `vm-tests-movie-properties.txt` retain the private probe and fourteen passing
+focused tests. The integrating frontend must supply actual geometry/event state;
+returning invented values from a default host would be incorrect.
 
 ## Source and licence ledger
 
