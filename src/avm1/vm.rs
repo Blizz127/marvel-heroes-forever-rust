@@ -265,12 +265,15 @@ enum Kind {
     Native(u32),
     ObjectConstructor,
     ArrayConstructor,
-    ArrayPrototype,
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
     FunctionMethod(FunctionMethod),
     FunctionPrototype,
+    ConstructorSuper {
+        constructor: ObjectId,
+        receiver: ObjectId,
+    },
 }
 impl Kind {
     fn function_value(&self) -> bool {
@@ -294,6 +297,12 @@ enum Property {
         getter: Value,
         setter: Option<Value>,
     },
+}
+#[derive(Debug, Clone, Copy)]
+struct ClassBase {
+    constructor: ObjectId,
+    prototype: ObjectId,
+    parent_prototype: ObjectId,
 }
 #[derive(Debug, Clone)]
 struct Object {
@@ -340,6 +349,7 @@ pub struct Vm {
     function_prototype: Option<ObjectId>,
     array_constructor: Option<ObjectId>,
     array_prototype: Option<ObjectId>,
+    class_bases: BTreeMap<ObjectId, ClassBase>,
 }
 impl Vm {
     /// This execution profile supports SWF 7+; legacy coercions are not guessed.
@@ -366,6 +376,7 @@ impl Vm {
             function_prototype: None,
             array_constructor: None,
             array_prototype: None,
+            class_bases: BTreeMap::new(),
         };
         if !(7..=19).contains(&version) {
             return vm.fail(ErrorKind::Unsupported(
@@ -530,8 +541,8 @@ impl Vm {
         self.object_constructor = Some(constructor);
         Ok(constructor)
     }
-    /// Installs the documented Array creation forms. Prototype-specific indexed
-    /// and length behavior remains explicit until native metadata is established.
+    /// Installs the documented Array creation forms and the REA-verified empty
+    /// Array prototype. Prototype mutation remains a separately gated profile.
     /// Install before defining script functions or creating array values.
     pub fn install_array_constructor(&mut self) -> Result<ObjectId> {
         if let Some(id) = self.array_constructor {
@@ -554,7 +565,7 @@ impl Vm {
         }
         let parent = self.object_id(self.get(object, "prototype")?)?;
         let constructor = self.alloc(Kind::ArrayConstructor, None)?;
-        let prototype = self.alloc(Kind::ArrayPrototype, Some(parent))?;
+        let prototype = self.alloc(Kind::Array(0), Some(parent))?;
         self.set(constructor, "prototype", Value::Object(prototype))?;
         self.set(prototype, "constructor", Value::Object(constructor))?;
         self.set(self.global, "Array", Value::Object(constructor))?;
@@ -562,15 +573,23 @@ impl Vm {
         self.array_prototype = Some(prototype);
         Ok(constructor)
     }
-    fn check_array_prototype_member(&self, id: ObjectId, key: &Text) -> Result<()> {
-        if matches!(self.objects[id.0].kind, Kind::ArrayPrototype)
-            && (key.as_ref() == text("length").as_ref() || array_index(key).is_some())
-        {
-            return self.fail(ErrorKind::Unsupported(
-                "Array prototype indexed/length semantics",
-            ));
+    fn reject_super_member_access(&self, id: ObjectId) -> Result<()> {
+        if matches!(self.objects[id.0].kind, Kind::ConstructorSuper { .. }) {
+            return self.fail(ErrorKind::Unsupported("super member lookup/assignment"));
         }
         Ok(())
+    }
+    fn array_parent(&self) -> Result<Option<ObjectId>> {
+        if let Some(constructor) = self.array_constructor {
+            if self.get(constructor, "prototype")?
+                != self.array_prototype.map_or(Value::Undefined, Value::Object)
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "modified native Array prototype binding",
+                ));
+            }
+        }
+        Ok(self.array_prototype)
     }
     fn ordinary_object(&mut self) -> Result<ObjectId> {
         let prototype = if let Some(constructor) = self.object_constructor {
@@ -807,7 +826,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
-            self.check_array_prototype_member(id, key)?;
+            self.reject_super_member_access(id)?;
             if key.as_ref() == text("__proto__").as_ref() {
                 return Ok(object.prototype.map_or(Value::Null, Value::Object));
             }
@@ -836,7 +855,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
-            self.check_array_prototype_member(id, key)?;
+            self.reject_super_member_access(id)?;
             if object.properties.contains_key(key)
                 || key.as_ref() == text("__proto__").as_ref()
                 || (matches!(object.kind, Kind::Array(_))
@@ -861,7 +880,7 @@ impl Vm {
                     return Ok(Some(Property::Data(Value::Number(f64::from(length)))));
                 }
             }
-            self.check_array_prototype_member(id, key)?;
+            self.reject_super_member_access(id)?;
             if let Some(property) = object.properties.get(key) {
                 return Ok(Some(property.clone()));
             }
@@ -876,6 +895,11 @@ impl Vm {
     fn property_owner(&self, mut id: ObjectId, key: &Text) -> Result<Option<ObjectId>> {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
+            if matches!(self.objects[id.0].kind, Kind::Array(_))
+                && key.as_ref() == text("length").as_ref()
+            {
+                return Ok(Some(id));
+            }
             if self.objects[id.0].properties.contains_key(key) {
                 return Ok(Some(id));
             }
@@ -983,7 +1007,14 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
-        self.check_array_prototype_member(id, &key)?;
+        self.reject_super_member_access(id)?;
+        if self.array_prototype == Some(id)
+            && (key.as_ref() == text("length").as_ref() || array_index(&key).is_some())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "Array prototype indexed/length mutation semantics",
+            ));
+        }
         self.check_value(&value)?;
         if matches!(self.descriptor(id, &key)?, Some(Property::Accessor { .. })) {
             return self.fail(ErrorKind::Unsupported(
@@ -1333,12 +1364,22 @@ impl Vm {
         args: &[Value],
         host: &mut impl Host,
     ) -> Result<Value> {
+        self.invoke_in_context(callable, this, args, host, None)
+    }
+    fn invoke_in_context(
+        &mut self,
+        callable: Value,
+        this: Value,
+        args: &[Value],
+        host: &mut impl Host,
+        constructor_context: Option<ObjectId>,
+    ) -> Result<Value> {
         if self.depth >= self.limits.call_depth {
             return self.fail(ErrorKind::Budget("function call depth"));
         }
         let caller = (self.current, self.current_code, self.current_target);
         self.depth += 1;
-        let result = self.invoke_inner(callable, this, args, host);
+        let result = self.invoke_inner(callable, this, args, host, constructor_context);
         self.depth -= 1;
         self.current = caller.0;
         self.current_code = caller.1;
@@ -1351,6 +1392,7 @@ impl Vm {
         this: Value,
         args: &[Value],
         host: &mut impl Host,
+        constructor_context: Option<ObjectId>,
     ) -> Result<Value> {
         if args.len() > self.limits.arguments {
             return self.fail(ErrorKind::Budget("arguments"));
@@ -1364,6 +1406,18 @@ impl Vm {
         };
         self.check_object(id)?;
         let function = match self.objects[id.0].kind.clone() {
+            Kind::ConstructorSuper {
+                constructor,
+                receiver,
+            } => {
+                return self.invoke_in_context(
+                    Value::Object(constructor),
+                    Value::Object(receiver),
+                    args,
+                    host,
+                    Some(constructor),
+                );
+            }
             Kind::FunctionPrototype => {
                 return self.fail(ErrorKind::Unsupported(
                     "Function prototype invocation semantics",
@@ -1480,7 +1534,7 @@ impl Vm {
             Kind::AddProperty => {
                 if args.iter().skip(1).any(|value| {
                     matches!(value, Value::Object(id)
-                    if matches!(self.objects[id.0].kind, Kind::FunctionPrototype))
+                    if matches!(self.objects[id.0].kind, Kind::FunctionPrototype | Kind::ConstructorSuper { .. }))
                 }) {
                     return self.fail(ErrorKind::Unsupported(
                         "Function prototype accessor callability",
@@ -1525,6 +1579,11 @@ impl Vm {
                 return Ok(Value::Bool(true));
             }
             Kind::ArrayConstructor => {
+                if constructor_context.is_some() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Array superclass receiver initialization",
+                    ));
+                }
                 if let [Value::Number(length)] = args {
                     if !length.is_finite() || *length < 0.0 || length.fract() != 0.0 {
                         return self.fail(ErrorKind::Unsupported(
@@ -1535,12 +1594,17 @@ impl Vm {
                         return self.fail(ErrorKind::Budget("array length"));
                     }
                     return Ok(Value::Object(
-                        self.alloc(Kind::Array(*length as u32), self.array_prototype)?,
+                        self.alloc(Kind::Array(*length as u32), self.array_parent()?)?,
                     ));
                 }
                 return Ok(Value::Object(self.array(args)?));
             }
             Kind::ObjectConstructor => {
+                if constructor_context.is_some() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Object superclass receiver initialization",
+                    ));
+                }
                 if args.len() > 1 {
                     return self.fail(ErrorKind::Unsupported("Object constructor extra arguments"));
                 }
@@ -1569,9 +1633,21 @@ impl Vm {
                 "conflicting function preload/suppress flags",
             ));
         }
-        // Super and parent need prototype/movie hierarchy behavior not yet provided.
-        if flags & (0x10 | 0x80) != 0 {
-            return self.fail(ErrorKind::Unsupported("super/parent register preload"));
+        if flags & 0x80 != 0 {
+            return self.fail(ErrorKind::Unsupported("parent register preload"));
+        }
+        let super_reference = if constructor_context == Some(id)
+            && self.class_bases.contains_key(&id)
+            && flags & 0x20 == 0
+        {
+            Some(self.constructor_super(id, self.object_id(this.clone())?)?)
+        } else {
+            None
+        };
+        if flags & 0x10 != 0 && super_reference.is_none() {
+            return self.fail(ErrorKind::Unsupported(
+                "super preload requires recorded constructor context",
+            ));
         }
         if flags & 0xfe00 != 0 {
             return self.fail(ErrorKind::Unsupported("reserved Function2 flags"));
@@ -1615,10 +1691,17 @@ impl Vm {
         if flags & 2 == 0 {
             self.set(activation, "this", this.clone())?;
         }
+        if let Some(super_reference) = super_reference {
+            self.set(activation, "super", Value::Object(super_reference))?;
+        }
         let mut register = 1u8;
         for (mask, value) in [
             (1, this),
             (4, arguments.unwrap_or(Value::Undefined)),
+            (
+                0x10,
+                super_reference.map_or(Value::Undefined, Value::Object),
+            ),
             (0x40, Value::Object(self.root)),
             (0x100, Value::Object(self.global)),
         ] {
@@ -1634,6 +1717,42 @@ impl Vm {
             Flow::Jump(p) => self.fail(ErrorKind::InvalidBranch(p as i128)),
         }
     }
+    fn constructor_super(&mut self, class: ObjectId, receiver: ObjectId) -> Result<ObjectId> {
+        let base = self.class_bases[&class];
+        if self.get(class, "prototype")? != Value::Object(base.prototype)
+            || self.get(base.prototype, "__constructor__")? != Value::Object(base.constructor)
+            || self.objects[base.prototype.0].prototype != Some(base.parent_prototype)
+            || self.get(base.constructor, "prototype")? != Value::Object(base.parent_prototype)
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "modified constructor inheritance for super",
+            ));
+        }
+        let mut cursor = self.objects[receiver.0].prototype;
+        let mut found = false;
+        for _ in 0..self.limits.prototype_depth {
+            let Some(id) = cursor else {
+                break;
+            };
+            if id == base.prototype {
+                found = true;
+                break;
+            }
+            cursor = self.objects[id.0].prototype;
+        }
+        if !found {
+            return self.fail(ErrorKind::Unsupported(
+                "super receiver outside constructor prototype chain",
+            ));
+        }
+        self.alloc(
+            Kind::ConstructorSuper {
+                constructor: base.constructor,
+                receiver,
+            },
+            None,
+        )
+    }
     fn write_register(&self, frame: &mut Frame, index: u8, value: Value) -> Result<()> {
         let slot = frame
             .registers
@@ -1648,7 +1767,7 @@ impl Vm {
         if len > self.limits.array_length {
             return self.fail(ErrorKind::Budget("array length"));
         }
-        let id = self.alloc(Kind::Array(len), self.array_prototype)?;
+        let id = self.alloc(Kind::Array(len), self.array_parent()?)?;
         for (i, value) in values.iter().enumerate() {
             self.check_value(value)?;
             self.raw_member(id, text(&i.to_string()), Property::Data(value.clone()), 0)?;
@@ -2010,16 +2129,28 @@ impl Vm {
                                 ));
                             }
                         };
-                        let object = self.alloc(Kind::Plain, prototype)?;
-                        let returned = self.invoke(callable, Value::Object(object), &args, host)?;
-                        self.push(
-                            frame,
-                            if matches!(returned, Value::Object(_)) {
-                                returned
-                            } else {
-                                Value::Object(object)
-                            },
-                        )?;
+                        if matches!(
+                            self.objects[constructor.0].kind,
+                            Kind::ObjectConstructor | Kind::ArrayConstructor
+                        ) {
+                            // Native standard constructors select their constructed object;
+                            // this is distinct from a script constructor's return value.
+                            let object =
+                                self.invoke(callable, Value::Object(frame.target), &args, host)?;
+                            self.object_id(object.clone())?;
+                            self.push(frame, object)?;
+                        } else {
+                            let object = self.alloc(Kind::Plain, prototype)?;
+                            self.invoke_in_context(
+                                callable,
+                                Value::Object(object),
+                                &args,
+                                host,
+                                Some(constructor),
+                            )?;
+                            // Adobe NewObject/NewMethod discard script constructor returns.
+                            self.push(frame, Value::Object(object))?;
+                        }
                     }
                     0x69 => {
                         let superclass = self.object_id(self.pop(frame)?)?;
@@ -2048,6 +2179,14 @@ impl Vm {
                             3,
                         )?;
                         self.set(subclass, "prototype", Value::Object(prototype))?;
+                        self.class_bases.insert(
+                            subclass,
+                            ClassBase {
+                                constructor: superclass,
+                                prototype,
+                                parent_prototype: parent,
+                            },
+                        );
                     }
                     0x46 | 0x55 => {
                         let target = self.pop(frame)?;
@@ -2234,9 +2373,12 @@ impl Vm {
                             Value::String(_) => "string",
                             Value::Object(id) => {
                                 self.check_object(id)?;
-                                if matches!(self.objects[id.0].kind, Kind::FunctionPrototype) {
+                                if matches!(
+                                    self.objects[id.0].kind,
+                                    Kind::FunctionPrototype | Kind::ConstructorSuper { .. }
+                                ) {
                                     return self.fail(ErrorKind::Unsupported(
-                                        "Function prototype typeof semantics",
+                                        "special prototype/super typeof semantics",
                                     ));
                                 }
                                 if matches!(
@@ -2640,7 +2782,9 @@ mod tests {
             vm.get(values, "__proto__").unwrap(),
             Value::Object(prototype)
         );
-        assert!(vm.get(prototype, "length").is_err());
+        assert_eq!(vm.get(prototype, "length").unwrap(), Value::Number(0.0));
+        assert_eq!(vm.get(sized, "0").unwrap(), Value::Undefined);
+        assert_eq!(vm.get(prototype, "0").unwrap(), Value::Undefined);
         assert!(vm.set(prototype, "0", Value::Null).is_err());
         assert!(vm
             .call(
@@ -2674,6 +2818,125 @@ mod tests {
             panic!()
         };
         assert_eq!(vm.get(new, "length").unwrap(), Value::Number(0.0));
+    }
+    #[test]
+    fn nested_constructor_super_keeps_receiver_and_new_discards_script_return() {
+        struct ConstructorHost(Vec<ObjectId>);
+        impl Host for ConstructorHost {
+            fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String> {
+                assert_eq!(call.binding, 77);
+                assert!(call.args.is_empty());
+                let Value::Object(receiver) = call.this else {
+                    panic!()
+                };
+                self.0.push(receiver);
+                Ok(Value::Number(7.0))
+            }
+            fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+                Err("unused".into())
+            }
+        }
+        fn definition(name: &str, body: &[u8]) -> Vec<u8> {
+            let mut payload = name.as_bytes().to_vec();
+            payload.extend([0, 0, 0, 2, 0x19, 0]);
+            payload.extend((body.len() as u16).to_le_bytes());
+            let mut bytes = action(0x8e, &payload);
+            bytes.extend(body);
+            bytes
+        }
+        fn super_call() -> Vec<u8> {
+            let mut bytes = push(&[Value::Number(0.0)]);
+            bytes.extend(action(0x96, &[4, 2, 3]));
+            bytes.push(0x52);
+            bytes
+        }
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let root = vm.root();
+        let base = vm.native(77).unwrap();
+        let base_proto = vm.object().unwrap();
+        vm.set(base, "prototype", Value::Object(base_proto))
+            .unwrap();
+        vm.set(root, "Base", Value::Object(base)).unwrap();
+        let replacement = vm.object().unwrap();
+        vm.set(root, "replacement", Value::Object(replacement))
+            .unwrap();
+        let mut b = push(&[Value::string("this")]);
+        b.push(0x1c);
+        b.extend(push(&[Value::string("baseResult")]));
+        b.extend(super_call());
+        b.push(0x4f);
+        b.extend(push(&[Value::string("this")]));
+        b.push(0x1c);
+        b.extend(push(&[Value::string("b"), Value::Bool(true)]));
+        b.push(0x4f);
+        let mut c = super_call();
+        c.push(0x17);
+        c.extend(push(&[Value::string("this")]));
+        c.push(0x1c);
+        c.extend(push(&[Value::string("c"), Value::Bool(true)]));
+        c.push(0x4f);
+        c.extend(push(&[Value::string("replacement")]));
+        c.extend([0x1c, 0x3e]);
+        let mut setup_code = definition("B", &b);
+        setup_code.extend(definition("C", &c));
+        for (child, parent) in [("B", "Base"), ("C", "B")] {
+            setup_code.extend(push(&[Value::string(child)]));
+            setup_code.push(0x1c);
+            setup_code.extend(push(&[Value::string(parent)]));
+            setup_code.extend([0x1c, 0x69]);
+        }
+        execute(&mut vm, &setup_code).unwrap();
+        let constructor = vm.get(root, "C").unwrap();
+        let namespace = vm.object().unwrap();
+        vm.set(namespace, "C", constructor.clone()).unwrap();
+        vm.set(root, "space", Value::Object(namespace)).unwrap();
+        let mut host = ConstructorHost(Vec::new());
+        for opcode in [0x40, 0x53] {
+            let mut bytes = push(&[Value::Number(0.0)]);
+            if opcode == 0x53 {
+                bytes.extend(push(&[Value::string("space")]));
+                bytes.push(0x1c);
+            }
+            bytes.extend(push(&[Value::string("C")]));
+            bytes.push(opcode);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            let result = vm.execute(code, root, &mut host).unwrap();
+            let Value::Object(instance) = result.stack[0] else {
+                panic!()
+            };
+            assert_ne!(instance, replacement);
+            assert_eq!(host.0.last(), Some(&instance));
+            assert_eq!(vm.get(instance, "baseResult").unwrap(), Value::Number(7.0));
+            assert_eq!(vm.get(instance, "b").unwrap(), Value::Bool(true));
+            assert_eq!(vm.get(instance, "c").unwrap(), Value::Bool(true));
+        }
+        assert_ne!(host.0[0], host.0[1]);
+        assert!(matches!(
+            vm.call(constructor, Value::Object(replacement), &[], &mut host)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Unsupported(_)
+        ));
+        let Value::Object(b) = vm.get(root, "B").unwrap() else {
+            panic!()
+        };
+        let Value::Object(proto) = vm.get(b, "prototype").unwrap() else {
+            panic!()
+        };
+        vm.set(proto, "__constructor__", Value::Null).unwrap();
+        let mut bytes = push(&[Value::Number(0.0), Value::string("C")]);
+        bytes.push(0x40);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        assert!(matches!(
+            vm.execute(code, root, &mut host).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
+        assert_eq!(host.0.len(), 2);
     }
     #[test]
     fn inherited_undefined_shadows_outer_scope() {

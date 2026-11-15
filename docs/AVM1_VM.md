@@ -73,7 +73,7 @@ allocation counters cover its own allocations and installed property names.
 
 Unsupported operations return errors, including Try/Throw, unrestricted
 enumeration/property flags (the bounded supported profile is below), movieclip
-paths, super and parent preloads, automatic
+paths, general super-member dispatch and parent preloads, automatic
 primitive boxing, and uninstalled standard-library/native functions. Missing
 ordinary properties correctly yield undefined; attempting to call that value
 stops with `UnboundCall`. The optional `install_object_constructor()` installs the documented Object
@@ -133,7 +133,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Twenty-three focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twenty-four focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -394,20 +394,22 @@ length limit produces a resource-budget error. Adobe documents integer conversio
 for fractional input, so no ECMAScript/AS3 RangeError behavior is substituted.
 
 Constructed arrays and InitArray results share an Array-prototype identity linked
-to Object.prototype. The Array prototype's own native category, initial length and
-index/resize behavior are still gated pending the dedicated native study. Numeric
-or length accesses that reach this prototype therefore stop; this includes sparse
-index reads that cannot be satisfied by an own stored element. Real array instances
-expose their own length and stored elements. Array methods are not fabricated.
-The native Extends operation can use this prototype identity without invoking the
-Array constructor or depending on unproved prototype length behavior.
+to Object.prototype. **VERIFIED, static REA:** The fresh native prototype is an
+actual Array-category object with initial length zero, an Object-prototype parent,
+and an exact constructor.prototype link. The VM therefore represents it as an empty
+Array, allowing its length and missing initial index reads. Prototype-specific
+indexed/length mutation and changes to the native constructor's prototype binding
+remain explicit unsupported cases. Real array instances expose their own length
+and stored elements. Array methods are not fabricated. Native evidence is in
+`rea-array/finding-receipt.json` and `final.bundle.json`; the earlier opaque
+prototype was an evidence gate, not a claimed native category.
 
 **OBSERVED:** The original manager now completes 52 serialized root-frame
 initializers in the same VM, with the original FocusHandler accessor returning the
 one retained Selection listener. The next stop is NewMethod at323687 (CodeId52,
 initializer321958), entering a constructor that requests unsupported super/parent
 register preloading. No initializer after that stop or ordinary root action runs.
-Array-prototype index/length guards are not reached in this probe.
+No Array-prototype mutation is attempted in this probe.
 
 `run-init-order-array.rs`, `init-order-array.tsv`, `vm-tests-array.txt` and
 `array-startup-evidence.json` retain the owned result and 23 passing focused VM
@@ -415,6 +417,48 @@ checks. The Array check exercises creation forms, nested reference identity,
 constructor opcodes, bounds, version-independent unsupported coercions, and the
 prototype-specific guards. This is an execution increment, not completed Array
 or frontend parity.
+
+## Constructor-only super dispatch
+
+Function2 super preloading now works for a constructor entered by NewObject or
+NewMethod through an unchanged recorded ActionExtends relationship. A bounded
+internal reference retains the receiver and immediate superclass constructor.
+Nested super calls advance relative to the constructor currently executing,
+without allocating a replacement receiver or rediscovering the most-derived
+class. Both register and nonsuppressed named-super bindings use that reference.
+The prototype, parent link and owned `__constructor__` metadata are validated;
+modified chains, ordinary super.method lookup, parent preloading and ungrounded
+constructor call/apply contexts remain explicit unsupported cases. Object/Array
+superclass initialization also stays gated separately from their ordinary native
+factory behavior.
+
+Adobe SWF19, printed pages98–99, specifies that NewObject/NewMethod retain the
+constructed instance and discard script-constructor return values. The VM now
+follows that rule, while the explicitly supported Object/Array factories select
+the actual native-constructor result separately. A controlled three-level fixture
+verifies same-receiver nested super calls, preserved super-call results, rejection
+of modified metadata and discarded script-constructor object returns.
+
+**OBSERVED:** Original Tween initialization still completes 52 preceding
+initializers, then executes90 instructions before reaching MovieClip native binding1
+at322430 (CodeId52). The request has zero arguments and the exact same instance
+whose prototype is Tween.prototype; it is not the MovieClip function object. The
+host rejects this unresolved native boundary. Selection still retains one listener,
+and the original instance accessor returns that listener without adding another.
+
+This does not establish the native allocation category of a subclass of MovieClip.
+REA has identified selection of an allocation function through the prototype's
+public `constructor`, separately from the hidden `__constructor__` used in the
+recorded inheritance relation. The current generic allocation in this controlled
+probe does not implement that native selection or prove the retail receiver's
+category. Typed native-base allocation and MovieClip constructor behavior must be
+established before continuing past this boundary. No no-op MovieClip implementation is installed.
+
+`run-init-order-super.rs`, `init-order-super.tsv`, `vm-tests-super.txt` and
+`constructor-super-evidence.json` preserve the controlled host request and24 passing
+focused VM checks. `tween-super-dispatch-private.json` records the unchanged source
+instructions and the following comma-list flag dependency. Primary source sections
+and licences are retained in `avm1-reference/super-sources.json`.
 
 ## Indexed movie-property host seam
 
@@ -524,6 +568,7 @@ manager/login root-frame distributions and registration dependencies.
 | [Adobe compiler migration warnings, AIR SDK mirror](https://airsdk.dev/reference/actionscript/3.0/compilerWarnings.html) | Adobe API documentation, copyrighted; maintained mirror | Warning 1039 documents AS2/AS3 empty/whitespace numeric conversion differences; these cases remain unsupported here. |
 | [Adobe SWF v9 specification, authored PDF mirror](https://www.mobilefish.com/download/flash/swf_file_format_spec_v9.pdf) | © 2006–2008 Adobe, all rights reserved | Cross-check Extends `__proto__` / `__constructor__` fields obscured in extracted v19 text. |
 | [Adobe AS2 Object reference](https://open-flash.github.io/mirrors/as2-language-reference/Object.html) and [Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html) | Adobe copyrighted documentation, all rights reserved | Object construction and prototype behavior; registerClass and function call/apply contracts for remaining bootstrap work. |
+| [Adobe AS2 super statement](https://open-flash.github.io/mirrors/as2-language-reference/statements.html#super) | © 2004–2010 Adobe, all rights reserved | Constructor-super invocation/receiver semantics, combined with SWF19 preload flags and NewObject/NewMethod behavior; no general method-super implementation inferred. |
 | [Adobe AS2 Array reference](https://open-flash.github.io/mirrors/as2-language-reference/Array.html) | © 2004–2010 Adobe, all rights reserved | Array/Object inheritance and bounded documented constructor forms. Prototype-specific ECMAScript behavior is not assumed to be AS2 behavior. |
 | [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; Array conversion takes precedence over an identity cast. `Function(value)` adoption remains unimplemented in this increment. |
 | [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage context; native implementation decisions use the cited owned REA evidence. |
