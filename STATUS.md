@@ -1,6 +1,6 @@
 # Work status
 
-Task `a3d58c579542` remains **working**, updated 2026-11-15 13:14 UTC.
+Task `a3d58c579542` remains **working**, updated 2026-11-15 13:30 UTC.
 The full 1:1 client objective is not achieved. Asset and frontend milestones
 remain in progress; Rust login, world entry and combat are not implemented to
 retail parity. The current source version is `0.1.0-dev.21`.
@@ -53,9 +53,10 @@ notices; no retail executable, game assets, captures or extracted data.
 - **OBSERVED dev21 typed-global boundary:** with the new opt-in native-global
   profile and unknown initial extension byte, one initializer completes; the
   next stops at original numeric1 assignment to gfxExtensions (offset13566).
-  The current subset accepts exact Booleans. No frame/Mouse call runs in that
-  replay. Native conversion proof is next; the prior Plain-global run remains
-  a separate controlled profile. Dev21 has not been built or staged.
+  No frame/Mouse call ran in that replay. The numeric conversion extension now
+  passes nineteen focused checks; a corrected original replay is pending.
+  The prior Plain-global run remains a separate controlled profile. Dev21 has
+  not been built or staged.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions
@@ -68,7 +69,9 @@ notices; no retail executable, game assets, captures or extracted data.
   admission profiles. No complete frontend lifecycle is claimed.
 - **VERIFIED bounded native geometry/paint:** explicit-input rectangle
   tessellation and whole-fill matrix arithmetic pass independent native-derived
-  comparisons. Runtime provider/options/resource selection and output-coordinate
+  comparisons. Positive tolerance now admits only unchanged native scan rows;
+  selected Model geometry also joins all twelve frontend Nodes to their 48
+  saved corners. Runtime provider/options/resource selection and output-coordinate
   reconstruction remain unbound, so these do not enable a renderer path.
 - **OBSERVED original-client reference:** isolated offline retail runs reached
   splash frames, not a login screen. Their immutable receipts distinguish

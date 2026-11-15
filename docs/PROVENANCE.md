@@ -785,3 +785,15 @@ the exact constructor, receiver, upload and resource/query records listed in
 their ledgers. These original static studies keep current inputs and callback
 effects explicit. No external SDK implementation or live renderer state was
 substituted for the remaining evidence.
+
+[Positive rectangle tolerance](SCALE9_TOLERANCE.md) reuses exact owned scan and
+endpoint evidence, with original frozen instruction-derived witnesses. It adds
+no external implementation or assumed current options. [Fresh root publication](FRESH_ROOT_PUBLICATION.md)
+records conditional field/name changes, queued work and cleanup through normal
+return, without applying those fields to an adopted populated Scene.
+
+The numeric [global-extension study](REA_GLOBAL_EXTENSIONS.md) additionally
+consulted Intel's [SetDenormAreZeros documentation](https://www.intel.com/content/www/us/en/docs/ipp/developer-guide-reference/2021-12/setdenormarezeros.html)
+(copyright Intel; documentation only) to distinguish DAZ-controlled subnormal
+behavior from the unobserved native floating-point mode. No Intel implementation
+was copied. Original integer/double conversion retains that unsupported boundary.

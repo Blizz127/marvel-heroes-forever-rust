@@ -7,6 +7,34 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev21 work in progress
 
+**VERIFIED numeric extension conversion:** original Rust now admits the proved
+integer/double conversion used by the original `gfxExtensions = 1` assignment.
+Nineteen focused checks, including raw Integer Push through the interpreter,
+and production metadata compilation pass. Nonzero double subnormals and other
+unproved conversion categories remain unsupported. Receipt:
+`evidence/avm1-runtime/global-extensions-numeric-checks/receipt.json`, SHA-256
+`7fc7597b97cdcdee0173fea61eba09b75f515eb6034443de53e6d68c5b2322fd`.
+The corrected original replay is separate and pending; manager12 below remains
+the unchanged earlier failed run.
+
+**VERIFIED selected geometry:** the checked Model reader joins twelve saved
+frontend Nodes to 48 ordered corners and all sixteen referenced position
+records. Four focused tests and all 106 independent comparison rows pass.
+Receipt: `evidence/model-node-geometry/final-receipt.json`, SHA-256
+`fd90d8435c975e77879a463c5faea43f330a0c2d7f43b81431b9ad1829ae0647`.
+The new explicit-selection CLI is integrated; its combined build/smoke is pending.
+These saved-record joins do not generate triangles or evaluate materials.
+
+**VERIFIED positive-tolerance rectangle subset:** finite nonnegative supplied
+tolerance is admitted when the exact native Y scan retains both source rows.
+Nine focused checks and ten independently frozen witnesses pass (91 output
+groups). AA and runtime option binding remain unsupported. Receipt:
+`evidence/scale9-tolerance/receipt.json`, SHA-256
+`3dac59b3d5693aeb1ec9648560006a6fcd0e5eb159683384b1af8d0583097df1`.
+Native constructor evidence establishes nonzero tolerance and width only at
+its stated checkpoint; it does not select current options. See
+[native options](docs/SCALE9_OPTIONS.md).
+
 **VERIFIED bounded native-global property effects:** the opt-in same-context
 profile preserves unknown current extension state and orders exact-Boolean
 writes as native context byte, version-property effect, then marker write.
@@ -25,8 +53,8 @@ Mouse.hide call runs. The earlier 452-initializer/290-frame results used a Plain
 global and remain distinct controlled evidence. Receipt:
 `evidence/avm1-attached-manager-frame-action-increment12/receipt.json`, SHA-256
 `85d8e4fead6ab94cecec88af7883b2c325bf53ac64b997dc1cd405427a5a05f4`.
-Numeric conversion is the next native proof/implementation dependency; neither
-original bytes nor the unknown state were replaced to advance the run.
+Numeric conversion was the next dependency at that earlier checkpoint; neither
+original bytes nor the unknown state were replaced to advance that run.
 
 **VERIFIED static hardware-cursor route:** selected controller/viewport routines
 establish ordered movie-player/HUD updates, conditional centering, unconditional

@@ -1,5 +1,9 @@
 # Conditional primary rectangle tessellation
 
+The later [positive-tolerance extension](SCALE9_TOLERANCE.md) admits explicit
+finite nonnegative tolerance when native Y coalescing preserves both rows.
+The zero-tolerance proof below remains the original subset; AA is still excluded.
+
 `src/gfx/native_scale9_tessellation.rs` now closes one source-to-generated
 geometry route: a fresh mode-1 primary tessellator, one closed axis-aligned
 rectangle in the recovered source order, native styles `[0,1]`, resource style
