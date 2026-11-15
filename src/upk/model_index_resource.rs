@@ -56,14 +56,14 @@ pub enum SnapshotPhase {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Request<'a> {
+pub struct Request<'a, 'r> {
     pub model: ExportInput<'a>,
     /// Ordered writer invocations; repeated component selections append again.
-    pub components: &'a [ExportInput<'a>],
+    pub components: &'r [ExportInput<'a>],
     pub phase: SnapshotPhase,
-    pub references: &'a [ReferenceKey],
-    pub initial_buffers: &'a [InitialBuffer<'a>],
-    pub initial_map: &'a [MapEntry],
+    pub references: &'r [ReferenceKey],
+    pub initial_buffers: &'r [InitialBuffer<'r>],
+    pub initial_map: &'r [MapEntry],
 }
 
 /// Loader policy, not native-format or native-allocation acceptance rules.
@@ -180,7 +180,11 @@ pub struct ModelIndexResource<'a> {
 }
 
 impl<'a> ModelIndexResource<'a> {
-    pub fn construct(package: &Package, request: Request<'a>, limits: Limits) -> io::Result<Self> {
+    pub fn construct(
+        package: &Package,
+        request: Request<'a, '_>,
+        limits: Limits,
+    ) -> io::Result<Self> {
         if request.phase != SnapshotPhase::AfterElementCallbacks {
             return Err(unsupported("index snapshot must follow element callbacks"));
         }
@@ -821,13 +825,13 @@ mod tests {
                 })
                 .collect()
         }
-        fn request<'a>(
+        fn request<'a, 'r>(
             &'a self,
-            components: &'a [ExportInput<'a>],
-            references: &'a [ReferenceKey],
-            initial_buffers: &'a [InitialBuffer<'a>],
-            initial_map: &'a [MapEntry],
-        ) -> Request<'a> {
+            components: &'r [ExportInput<'a>],
+            references: &'r [ReferenceKey],
+            initial_buffers: &'r [InitialBuffer<'r>],
+            initial_map: &'r [MapEntry],
+        ) -> Request<'a, 'r> {
             Request {
                 model: ExportInput {
                     index: 0,

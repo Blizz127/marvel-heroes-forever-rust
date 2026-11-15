@@ -23,6 +23,9 @@ selected Model by its positive one-based export reference. The builder does not
 discover components or impose the observed FrontEnd node partition. Callers can
 use the separately checked [Level/component binding](MODEL_COMPONENT_BINDING.md)
 to choose an authoritative Level list before constructing a request.
+The [asset-bound bridge](MODEL_INDEX_BINDING.md) performs that composition while
+retaining namespace identity and separating original-byte and temporary-request
+lifetimes. Its later focused receipt identifies the updated core source.
 
 The following inputs have no inferred defaults:
 

@@ -53,6 +53,8 @@ pub mod localized_prototype;
 pub mod movie_binding;
 #[path = "frontend/model_component_binding.rs"]
 pub mod model_component_binding;
+#[path = "frontend/model_index_binding.rs"]
+pub mod model_index_binding;
 #[path = "frontend/pointer.rs"]
 pub mod pointer;
 #[cfg(feature = "renderer")]

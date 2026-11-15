@@ -888,3 +888,9 @@ buffer/map snapshots and ordered saved component inputs. Their ledgers record
 the owned executable/packages, retained REA evidence and original independent
 comparisons; no external renderer implementation, live material identity or
 current lifecycle state was substituted.
+
+[Asset-bound index preparation](MODEL_INDEX_BINDING.md) composes those original
+readers with the retained AssetSet namespace and original package bytes. Its
+focused production harness reuses the sealed independent fixture expectations;
+no new outside implementation or native execution is involved. The private
+source-replacement audit records the core API's lifetime-only change.

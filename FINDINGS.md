@@ -7,6 +7,17 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev23 work in progress
 
+**VERIFIED asset-bound Model indices:** the checked Level/Model/component binding
+now supplies the explicit integer builder without losing its AssetSet identity
+or original export backing. Three actual-package fixture cases match all 147
+independent expected indices and 20 element results. Temporary request lifetimes,
+repeated selections, namespace mismatch and invalid inputs are checked; four
+focused core tests pass. These are hypothetical explicit post-callback states,
+not native material identities or runtime buffers. Receipt:
+`evidence/model-index-binding/receipt.json`, SHA-256
+`28b3255e60ebebd8e06c1998e3481d7b70c7693936568e7b1b55d95c75be5bff`.
+See [asset-bound construction](docs/MODEL_INDEX_BINDING.md).
+
 **VERIFIED context diagnostic byte preparation:** the fixed native formatter's
 selected branch is now original Rust. Three focused tests and fifteen
 independently frozen instruction-span witnesses pass, including exact capacity
