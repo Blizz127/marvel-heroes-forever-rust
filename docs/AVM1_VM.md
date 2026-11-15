@@ -1439,6 +1439,56 @@ SHA256 `3a05b7c62800f829f124c1c1ee8a4468d7100224b89bf7198a54cd4b797b4955`,
 retains source/binary hashes and exact filtered results; these checks do not
 establish original frame completion or native runtime parity.
 
+**OBSERVED original-script follow-up:** the frozen `e537cad` replay completes the
+same 452 initializers and reaches the same original Apply call at 855918 after
+33 frame instructions. The attached-receiver gate is passed; invocation now stops
+at `super preload requires recorded constructor context`. No MenuManager body
+instruction has run yet. Public root storage/prototype, focus/event words,
+Selection and class registry match the previous partial result, with no new
+host call. Private `avm1-attached-manager-frame-action-increment2/receipt.json`,
+SHA256 `dba8037690bc67af74debbe28cdef158cbc742cc4038e9139e5680a8da3e0f70`,
+retains source/input hashes, unchanged setup/action selection and build/run exit 0
+with that explicit VM error.
+
+## Ordinary applied superclass invocation
+
+Apply now carries a separate internal attached invocation context. Its initial
+prototype cursor comes from the actual receiver owner. When the Function2 flags
+require Super, `applied_super.rs` validates that selected cursor against the
+recorded Extends prototype and reads its exact own hidden constructor. Each fresh
+opaque Super reference retains that callable, the unchanged display receiver and
+the next parent-prototype cursor. A nested unnamed zero-argument call advances
+only the cursor; it does not alter the receiver's prototype or allocate a new
+display instance. The existing NewObject/NewMethod construction context remains
+separate.
+
+`REA_APPLIED_SUPER.md` provides the **VERIFIED static** ordinary invocation,
+null-method-hint, receiver/prototype separation and nested forwarding contract.
+It also proves the terminal original native MovieClip callback returns Undefined
+for the attached owner's category 2, without substituting category-11 storage or
+writing receiver properties. No host success stub is involved.
+
+Initial admission is deliberately narrower than native lookup: supported
+target/global-only Function2 classes, exact original data links and flags-3
+hidden/prototype metadata, a nonnull parent, and ordinary Function2 or canonical
+MovieClip base. Metadata mutations, missing/marker/deferred/accessor fallback,
+ambiguous recorded prototypes, non-Undefined method names, arguments and named
+super methods remain unsupported. Unrelated prototype accessors are not evaluated
+or rejected by these exact own-data checks. The actual cursor is checked before
+using the class relation; a cached class relation never replaces receiver lookup.
+
+**OBSERVED synthetic validation:** three helper checks cover cursor progression,
+fresh wrapper identities, metadata rejection before allocation, captured-scope and
+native-parent gates, and heap budgets. An opcode-level two-class Apply check
+observes the same typed receiver at both script levels, Undefined from the native
+terminal, preserved captured context and unchanged receiver prototype/storage.
+The two existing attached Apply checks and both existing constructor-super and
+typed MovieClip allocation checks also pass: eight focused checks total.
+`avm1-runtime/applied-super-checks.json`, SHA256
+`f20d1f29d9413e777a32362859daa47ae1c110b036e89ebfb605869c17de739f`,
+retains final source/binary hashes and filtered output. Original frame progression
+is measured separately; these checks do not establish native lifecycle parity.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established

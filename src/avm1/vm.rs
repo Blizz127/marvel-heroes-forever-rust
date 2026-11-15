@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
+#[path = "applied_super.rs"]
+mod applied_super;
 #[path = "attached.rs"]
 mod attached;
 #[path = "attached_events.rs"]
@@ -21,6 +23,7 @@ mod external_interface;
 mod focus_rect;
 #[path = "string.rs"]
 mod string;
+use applied_super::AttachedSuperCall;
 use attached::AttachedTarget;
 pub use attached::{
     AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
@@ -371,6 +374,10 @@ enum Kind {
         constructor: ObjectId,
         receiver: ObjectId,
     },
+    AttachedSuper {
+        constructor: ObjectId,
+        call: AttachedSuperCall,
+    },
 }
 impl Kind {
     fn function_value(&self) -> bool {
@@ -412,6 +419,12 @@ struct ClassBase {
     constructor: ObjectId,
     prototype: ObjectId,
     parent_prototype: ObjectId,
+}
+#[derive(Debug, Clone, Copy)]
+enum InvocationContext {
+    Ordinary,
+    Construction(ObjectId),
+    Attached(AttachedSuperCall),
 }
 #[derive(Debug, Clone)]
 struct Object {
@@ -870,7 +883,10 @@ impl Vm {
                 "Function prototype constructor descriptor",
             ));
         }
-        if matches!(self.objects[id.0].kind, Kind::ConstructorSuper { .. }) {
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::ConstructorSuper { .. } | Kind::AttachedSuper { .. }
+        ) {
             return self.fail(ErrorKind::Unsupported("super member lookup/assignment"));
         }
         Ok(())
@@ -2319,7 +2335,7 @@ impl Vm {
         args: &[Value],
         host: &mut impl Host,
     ) -> Result<Value> {
-        self.invoke_in_context(callable, this, args, host, None)
+        self.invoke_in_context(callable, this, args, host, InvocationContext::Ordinary)
     }
     fn invoke_in_context(
         &mut self,
@@ -2327,14 +2343,14 @@ impl Vm {
         this: Value,
         args: &[Value],
         host: &mut impl Host,
-        constructor_context: Option<ObjectId>,
+        context: InvocationContext,
     ) -> Result<Value> {
         if self.depth >= self.limits.call_depth {
             return self.fail(ErrorKind::Budget("function call depth"));
         }
         let caller = (self.current, self.current_code, self.current_target);
         self.depth += 1;
-        let result = self.invoke_inner(callable, this, args, host, constructor_context);
+        let result = self.invoke_inner(callable, this, args, host, context);
         self.depth -= 1;
         self.current = caller.0;
         self.current_code = caller.1;
@@ -2347,7 +2363,7 @@ impl Vm {
         this: Value,
         args: &[Value],
         host: &mut impl Host,
-        constructor_context: Option<ObjectId>,
+        context: InvocationContext,
     ) -> Result<Value> {
         if args.len() > self.limits.arguments {
             return self.fail(ErrorKind::Budget("arguments"));
@@ -2361,6 +2377,10 @@ impl Vm {
             return self.fail(ErrorKind::UnboundCall);
         };
         self.check_object(id)?;
+        let constructor_context = match context {
+            InvocationContext::Construction(constructor) => Some(constructor),
+            _ => None,
+        };
         let function = match self.objects[id.0].kind.clone() {
             Kind::ConstructorSuper {
                 constructor,
@@ -2371,7 +2391,34 @@ impl Vm {
                     Value::Object(receiver),
                     args,
                     host,
-                    Some(constructor),
+                    InvocationContext::Construction(constructor),
+                );
+            }
+            Kind::AttachedSuper { constructor, call } => {
+                if this != Value::Object(id) || !args.is_empty() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "attached super requires unnamed zero-argument call",
+                    ));
+                }
+                let captured = match &self.objects[constructor.0].kind {
+                    Kind::Script(function) => function.target,
+                    Kind::MovieClipConstructor => self.current_target.ok_or_else(|| {
+                        self.error(ErrorKind::Unsupported(
+                            "attached super requires active Environment",
+                        ))
+                    })?,
+                    _ => {
+                        return self
+                            .fail(ErrorKind::Unsupported("attached super callable category"));
+                    }
+                };
+                self.attached_invocation_context(call.receiver, captured)?;
+                return self.invoke_in_context(
+                    Value::Object(constructor),
+                    Value::DisplayClip(call.receiver),
+                    args,
+                    host,
+                    InvocationContext::Attached(call),
                 );
             }
             Kind::FunctionPrototype => {
@@ -2455,6 +2502,19 @@ impl Vm {
                         }
                     }
                 };
+                if let Value::DisplayClip(clip) = receiver {
+                    let call = AttachedSuperCall {
+                        receiver: clip,
+                        prototype: self.attached_info(clip)?.prototype,
+                    };
+                    return self.invoke_in_context(
+                        this,
+                        receiver,
+                        &forwarded,
+                        host,
+                        InvocationContext::Attached(call),
+                    );
+                }
                 return self.invoke(this, receiver, &forwarded, host);
             }
             Kind::SetPropertyFlags => return self.apply_property_flags(args),
@@ -2520,7 +2580,7 @@ impl Vm {
                 }
                 if args.iter().skip(1).any(|value| {
                     matches!(value, Value::Object(id)
-                    if matches!(self.objects[id.0].kind, Kind::FunctionPrototype | Kind::ConstructorSuper { .. }))
+                    if matches!(self.objects[id.0].kind, Kind::FunctionPrototype | Kind::ConstructorSuper { .. } | Kind::AttachedSuper { .. }))
                 }) {
                     return self.fail(ErrorKind::Unsupported(
                         "Function prototype accessor callability",
@@ -2585,6 +2645,10 @@ impl Vm {
                     {
                         Value::Object(receiver)
                     }
+                    // Applied-super unwrapping retains the attached owner,
+                    // whose category2 takes the native callback's Undefined
+                    // branch. It does not substitute category11 lazy storage.
+                    Value::DisplayClip(_) => Value::Undefined,
                     _ => Value::Undefined,
                 });
             }
@@ -2610,7 +2674,10 @@ impl Vm {
                     ));
                 }
                 if let Value::Object(argument) = args[0] {
-                    if matches!(self.objects[argument.0].kind, Kind::ConstructorSuper { .. }) {
+                    if matches!(
+                        self.objects[argument.0].kind,
+                        Kind::ConstructorSuper { .. } | Kind::AttachedSuper { .. }
+                    ) {
                         return self.fail(ErrorKind::Unsupported(
                             "Function conversion of super reference",
                         ));
@@ -2698,7 +2765,14 @@ impl Vm {
         if flags & 0x80 != 0 {
             return self.fail(ErrorKind::Unsupported("parent register preload"));
         }
-        let super_reference = if constructor_context == Some(id)
+        let super_reference = if let InvocationContext::Attached(call) = context
+            && flags & 0x20 == 0
+        {
+            if this != Value::DisplayClip(call.receiver) {
+                return self.fail(ErrorKind::Unsupported("attached super receiver identity"));
+            }
+            Some(self.prepare_attached_super(id, call)?)
+        } else if constructor_context == Some(id)
             && self.class_bases.contains_key(&id)
             && flags & 0x20 == 0
         {
@@ -2819,6 +2893,13 @@ impl Vm {
                 "attached Function.apply requires ScriptFunction2",
             ));
         }
+        self.attached_invocation_context(receiver, function.target)
+    }
+    fn attached_invocation_context(
+        &self,
+        receiver: AttachedClipId,
+        captured: ObjectId,
+    ) -> Result<()> {
         let Some(caller) = self.current_target else {
             return self.fail(ErrorKind::Unsupported(
                 "attached Function.apply requires active attached Environment",
@@ -2827,7 +2908,7 @@ impl Vm {
         let (Kind::AttachedOwner(root), Kind::AttachedOwner(caller), Kind::AttachedOwner(captured)) = (
             &self.objects[self.root.0].kind,
             &self.objects[caller.0].kind,
-            &self.objects[function.target.0].kind,
+            &self.objects[captured.0].kind,
         ) else {
             return self.fail(ErrorKind::Unsupported(
                 "attached Function.apply requires one adopted attached root context",
@@ -3297,6 +3378,14 @@ impl Vm {
                         let callable = if matches!(method, Value::Undefined)
                             || matches!(&method,Value::String(s) if s.is_empty())
                         {
+                            if !matches!(method, Value::Undefined)
+                                && matches!(&receiver, Value::Object(id)
+                                    if matches!(self.objects[id.0].kind, Kind::AttachedSuper { .. }))
+                            {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "attached super requires Undefined method name",
+                                ));
+                            }
                             if matches!(receiver, Value::DeferredBuiltin(_)) {
                                 return self.fail(ErrorKind::Unsupported(
                                     "unnamed CallMethod deferred this binding",
@@ -3411,7 +3500,7 @@ impl Vm {
                                 Value::Object(object),
                                 &args,
                                 host,
-                                Some(constructor),
+                                InvocationContext::Construction(constructor),
                             )?;
                             // Adobe NewObject/NewMethod discard script constructor returns.
                             self.push(frame, Value::Object(object))?;
@@ -3680,6 +3769,7 @@ impl Vm {
                                     self.objects[id.0].kind,
                                     Kind::FunctionPrototype
                                         | Kind::ConstructorSuper { .. }
+                                        | Kind::AttachedSuper { .. }
                                         | Kind::MovieClip(_)
                                         | Kind::StringObject(_)
                                 ) {
@@ -6334,6 +6424,119 @@ mod tests {
         }
     }
     #[test]
+    fn attached_applied_super_advances_prototype_without_constructing_receiver() {
+        #[derive(Default)]
+        struct SuperHost(Vec<(u32, Vec<Value>, Option<ObjectId>)>);
+        impl Host for SuperHost {
+            fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String> {
+                self.0
+                    .push((call.binding, call.args.to_vec(), call.context));
+                Ok(Value::Undefined)
+            }
+            fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+                Err("unexpected command".into())
+            }
+        }
+        let (mut vm, root, receiver, _) = typed_field_fixture();
+        let root_owner = vm.attached_owner(root).unwrap();
+        let receiver_value = vm.attached_value(receiver).unwrap();
+        for (name, audit, binding) in [("Base", "auditBase", 701), ("Derived", "auditDerived", 702)]
+        {
+            let callback = vm.native(binding).unwrap();
+            vm.set(vm.global(), audit, Value::Object(callback)).unwrap();
+            let mut body = push(&[Value::Number(0.0)]);
+            body.extend(action(0x96, &[4, 2, 3])); // r2, Undefined: unnamed super().
+            body.push(0x52);
+            // Preserve the returned superclass result as the second audit argument.
+            body.extend(action(0x96, &[4, 1]));
+            body.extend(push(&[Value::Number(2.0)]));
+            body.extend(variable_bytes("_global"));
+            body.extend(push(&[Value::string(audit)]));
+            body.extend([0x52, 0x17]);
+            body.extend(action(0x96, &[4, 1]));
+            body.push(0x3e);
+            let definition = anonymous_function2(0x19, &body);
+            let code = vm
+                .register(Arc::new(Program::parse(&definition).unwrap()))
+                .unwrap();
+            let class = vm
+                .execute(code, root_owner, &mut RejectHost)
+                .unwrap()
+                .stack
+                .pop()
+                .unwrap();
+            vm.set(vm.global(), name, class).unwrap();
+        }
+        for (child, parent) in [("Base", "MovieClip"), ("Derived", "Base")] {
+            let mut bytes = vec![];
+            for name in [child, parent] {
+                bytes.extend(variable_bytes("_global"));
+                bytes.extend(push(&[Value::string(name)]));
+                bytes.push(0x4e);
+            }
+            bytes.push(0x69);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            vm.execute(code, root_owner, &mut RejectHost).unwrap();
+        }
+        let Value::Object(derived) = vm.get(vm.global(), "Derived").unwrap() else {
+            panic!()
+        };
+        let Value::Object(prototype) = vm.get(derived, "prototype").unwrap() else {
+            panic!()
+        };
+        vm.set_attached_prototype(receiver, Some(prototype))
+            .unwrap();
+        let storage = vm.attached_info(receiver).unwrap().storage;
+        vm.set(vm.global(), "fixtureReceiver", receiver_value.clone())
+            .unwrap();
+        vm.set(vm.global(), "fixtureFunction", Value::Object(derived))
+            .unwrap();
+        let bytes = attached_apply_program("apply", Value::Null);
+        let code = vm
+            .register(Arc::new(Program::parse_at(&bytes, 600).unwrap()))
+            .unwrap();
+        let attached_count = vm.attached.len();
+        let wrappers_before = vm
+            .objects
+            .iter()
+            .filter(|o| matches!(o.kind, Kind::AttachedSuper { .. }))
+            .count();
+        let mut host = SuperHost::default();
+        let result = vm.execute(code, root_owner, &mut host).unwrap();
+        assert_eq!(result.stack, vec![receiver_value.clone()]);
+        assert_eq!(
+            host.0,
+            vec![
+                (
+                    701,
+                    vec![receiver_value.clone(), Value::Undefined],
+                    Some(root_owner)
+                ),
+                (
+                    702,
+                    vec![receiver_value.clone(), receiver_value],
+                    Some(root_owner)
+                ),
+            ]
+        );
+        assert_eq!(vm.attached.len(), attached_count);
+        assert_eq!(
+            vm.attached_info(receiver).unwrap().prototype,
+            Some(prototype)
+        );
+        assert_eq!(vm.attached_info(receiver).unwrap().storage, storage);
+        assert_eq!(
+            vm.objects
+                .iter()
+                .filter(|o| matches!(o.kind, Kind::AttachedSuper { .. }))
+                .count(),
+            wrappers_before + 2
+        );
+        assert_eq!(vm.current_target, Some(root_owner));
+    }
+    #[test]
     fn attached_apply_gates_unproved_profiles_and_keeps_super_separate() {
         let (mut vm, root, caller, field) = typed_field_fixture();
         let root_owner = vm.attached_owner(root).unwrap();
@@ -6444,10 +6647,7 @@ mod tests {
         vm.set(vm.global(), "fixtureFunction", super_function)
             .unwrap();
         let error = vm.execute(code, root_owner, &mut RejectHost).unwrap_err();
-        assert_eq!(
-            error.kind,
-            ErrorKind::Unsupported("super preload requires recorded constructor context")
-        );
+        assert!(matches!(error.kind, ErrorKind::Unsupported(_)));
         assert_eq!(error.origin.unwrap().code, code);
         assert_eq!(vm.host_calls, 0);
         assert!(vm.attached_info(caller).unwrap().storage.is_none());
