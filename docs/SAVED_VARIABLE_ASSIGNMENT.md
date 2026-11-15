@@ -10,8 +10,9 @@ where to write. This binds ActionSetVariable separately from DefineLocal.
 
 The profile here is the existing pure saved Construct raw mode 4, coherent live
 case-3 attached owner, current Environment version 11, no target changes, no
-With and no dynamic/captured activation. Primitive String names and String or
-Boolean right-hand values are the initial supported inputs. The target's full
+With and no dynamic/captured activation. Primitive String names follow the
+bounded conversion profile; the original right-hand Value is forwarded to the
+target's existing supported normal setter without a scalar-only restriction. The target's full
 normal setter remains responsible for native members, watches, accessors,
 flags and storage. Routing an assignment does not prove that any particular
 property write succeeds.
@@ -156,12 +157,45 @@ forwarded to the setter. Diagnostic output and general coercion behavior are
 not modeled or claimed equivalent here; the helper is not described as pure.
 
 **INFERRED first implementation:** admit the established pure-mode-4 state,
-validate the simple String name and bounded scalar value without losing the
+validate the simple String name and supported Value identity without losing the
 pair on an unsupported gate, then route through the typed current target's
 existing normal setter. After supported normal completion consume the two
 operands and preserve prior stack/register/pool state. Keep each property
 contract and context guard; this proof alone does not implement `autoSize`,
 native watches, arbitrary accessors or qualified assignment.
+
+### RHS forwarding clarification and current implementation
+
+The first Rust increment imposed a String/Boolean RHS gate. That was an
+implementation restriction, not a native assignment rule. Retained instructions
+bind the exact pointer chain: raw `209938→20994a`, simple helper
+`203192→203267`, scope/target helper `194f41→19507e→195087`, and attached normal
+setter `1aa164→1aa73f`. The established ordinary no-watch/no-accessor storage
+route continues through `1ad625→1ad635→1ad646` and `1a129b..1a12ee` to raw setter
+`1e3b20`. No RHS-tag filter appears in the simple assignment routing.
+
+Existing-slot copy `18d9d0` and fresh-slot copy `18d770` preserve Number bits and
+ordinary noncallable Object/Array references. Function tag8 copies its FunctionRef
+without invoking it. A native tag6 value whose object reports callable category
+0x17 can convert into tag8, so this is not a claim that every opaque native tag
+is preserved. The Rust VM's existing typed Value and normal-member guards remain
+the admission boundary; owner/storage IDs are not ordinary Object values.
+
+The optional diagnostic path at `2031ce` supplies conversion argument5=true,
+which avoids scripted `toString` on this route. A tag6 native virtual `+8` can
+still run if diagnostic mask0x4 is enabled; its concrete binding and current
+flag state remain outside this proof. This correction does not turn diagnostic
+side effects into a modeled no-op.
+
+The retained-only pointer/copy review is
+`evidence/rea-attached-root-name/saved-variable-rhs-review.json`, SHA256
+`6da6d367fe1eb84900357e5e46814d5eb4489b82db47a96a0ddf5218b5d890a7`.
+No additional native process was run. With the artificial scalar gate removed,
+the unchanged selected Construct body executes all47 instructions in the
+controlled Rust saved phase, including the fresh ordinary `soundMap` object and
+its three String entries. It returns `DynamicLookupPending`, not complete event
+delivery; `SAVED_ACTION_STATE.md` records the exact receipt and supplied-state
+limits.
 
 ## Evidence, validation and provenance
 
