@@ -875,3 +875,16 @@ owned executable and private registered native records. They close stated
 forwarding, optional-task and publication intervals while retaining current
 provider, notification and later initialization boundaries. No runtime state
 or global handler absence was inferred from a prefix.
+
+[Diagnostic Environment state](REA_DIAGNOSTIC_ENVIRONMENT.md) distinguishes the
+stack-local policy record from the saved incoming context pointer using exact
+owned interpreter/helper evidence. The ledger retains an incomplete query and
+excludes it from positive coverage; no current null pointer is assumed.
+
+[Draw mesh identity](SCALE9_DRAW_MESH_IDENTITY.md) joins the same record collection
+through native upload and draw forwarding. [Model index resources](MODEL_INDEX_RESOURCE.md)
+adds original integer-phase construction from explicit resolved identities,
+buffer/map snapshots and ordered saved component inputs. Their ledgers record
+the owned executable/packages, retained REA evidence and original independent
+comparisons; no external renderer implementation, live material identity or
+current lifecycle state was substituted.

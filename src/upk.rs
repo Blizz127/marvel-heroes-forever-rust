@@ -24,6 +24,8 @@ pub mod model_component;
 pub mod model_node_geometry;
 #[path = "upk/model_render_resource.rs"]
 pub mod model_render_resource;
+#[path = "upk/model_index_resource.rs"]
+pub mod model_index_resource;
 #[path = "upk/polys.rs"]
 pub mod polys;
 #[path = "upk/class.rs"]
