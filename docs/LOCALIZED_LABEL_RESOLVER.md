@@ -168,3 +168,34 @@ the focused validator. These private proprietary sources remain outside git.
 No outside implementation, website, ClientConfig, account data or network
 service was read. The proof's exact executable/archive identities and source
 licenses are recorded in [LOCALIZED_LABEL_LOOKUP.md](LOCALIZED_LABEL_LOOKUP.md).
+
+## Callback backend integration validation
+
+**VERIFIED controlled Rust execution:** a new private harness uses the complete
+crate at `9c30ed1` through a frozen Git worktree. All 149 tracked crate files and
+the harness stay unchanged across build and execution. Its controlled host now
+delegates directly to `LocalizationCallback::resolve_call`; handwritten host
+resource preparation is removed. The original selected manager wrapper/caller
+returns all 27 oracle texts and 54 distinct result objects, retaining the exact
+four data fields, flags and original Object metadata. Frozen resource and
+configuration oracles match 1,242 resource comparisons, 16 configuration values
+and 327 path/hash/identity comparisons across 109 prepared observations.
+
+One further original-wrapper call successfully prepares a resource before a
+controlled altered-Object binding makes VM materialization fail. `resolved`
+becomes 82 while completed script requests remain 81, and `last_resolution`
+correctly records that newly prepared resource. Thirteen admitted rejections
+cover wrong callback, arity/types, empty/NUL/non-ASCII/unpaired-surrogate labels,
+missing resources and the 1,024/1,025-unit input boundary. Two subsequent
+request-budget failures do not increment admission. All 15 rejections preserve
+the last resolution and its provenance; final counters are 95 requests and 82
+prepared resources. Independent raw-directory checks establish both selected
+resource misses across all 85,186 records. These are bounded Rust error and
+counter checks, not native failure semantics.
+
+The passing focused build/run, immutable source/input hashes, binary, oracles
+and reproduction scripts remain private under
+`evidence/localized-vm-integration/callback-backend/`. The uncommitted display
+attachment work is outside the tested commit. No native ExternalInterface,
+Movie/Environment/Unreal receiver selection, full initializer or label-display
+lifecycle is claimed; no native process, rendering, account or server was run.
