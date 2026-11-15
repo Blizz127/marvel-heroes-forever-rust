@@ -1912,3 +1912,16 @@ manager/login root-frame distributions and registration dependencies.
 
 The integrating lead owns additions to `docs/PROVENANCE.md`. This lane changes
 only this document, the VM module and its coordinated `avm1.rs` module export.
+
+### Supplied Function2 register parameters
+
+VERIFIED native setup writes a nonzero-register parameter only when its argument
+exists; a missing later parameter sharing that register does not erase an earlier
+supplied value. Named/zero-register parameters still receive Undefined when absent.
+Ordered preloads run afterward and may replace a supplied register value. This
+correction follows `SAVED_SCRIPT_CALLS.md` and the private register receipt
+`rea-saved-script-registers/register-index-contract.json`
+(`fde9c4b4b4138a98dfdae12628d124510b7a32780533e6d2a15ba8dc4a2be6c2`).
+Focused synthetic coverage checks duplicate destinations, absent arguments and
+preload precedence; it also directly classifies the resulting ScriptFunction as
+callable without invoking a factory. These are Rust checks, not native execution.

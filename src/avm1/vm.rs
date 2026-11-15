@@ -33,10 +33,11 @@ mod string;
 use applied_super::AttachedSuperCall;
 use attached::AttachedTarget;
 pub use attached::{
-    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo, AttachedHandleSnapshot,
-    AttachedInfo, AttachedMember, AttachedMovieBinding, AttachedNameSnapshot, AttachedStorageId, AttachedTabEnabledInfo,
-    AttachedVisibilityBaseProfile, AttachedVisibilityInfo, AttachedVisibilityPolicy,
-    AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
+    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedFocusRectInfo,
+    AttachedHandleSnapshot, AttachedInfo, AttachedMember, AttachedMovieBinding,
+    AttachedNameSnapshot, AttachedStorageId, AttachedTabEnabledInfo, AttachedVisibilityBaseProfile,
+    AttachedVisibilityInfo, AttachedVisibilityPolicy, AttachedWrite, DisplayTargetId,
+    LoadedMovieSourceId,
 };
 pub use attached_events::{AttachedEventKind, AttachedEventState};
 pub use attached_name_profile::{
@@ -1698,7 +1699,9 @@ impl Vm {
     }
     fn callable(&self, value: &Value) -> bool {
         if let Value::Object(id) = value {
-            self.objects.get(id.0).is_some_and(|object| object.kind.function_value())
+            self.objects
+                .get(id.0)
+                .is_some_and(|object| object.kind.function_value())
         } else {
             false
         }
@@ -2956,10 +2959,14 @@ impl Vm {
             kind: FrameKind::Ordinary,
         };
         for (index, param) in definition.parameters.iter().enumerate() {
-            let value = args.get(index).cloned().unwrap_or(Value::Undefined);
             if let Some(register) = param.register.filter(|r| *r != 0) {
-                self.write_register(&mut frame, register, value)?;
+                // Native setup writes only supplied register parameters. An
+                // absent duplicate destination must not erase an earlier arg.
+                if let Some(value) = args.get(index) {
+                    self.write_register(&mut frame, register, value.clone())?;
+                }
             } else {
+                let value = args.get(index).cloned().unwrap_or(Value::Undefined);
                 let key = self.decode_text(&param.name)?;
                 self.set_key(activation, key, value)?;
             }
@@ -3818,7 +3825,8 @@ impl Vm {
                                     matches!(object.kind, Kind::AttachedOwner(_))
                                 }),
                                 Value::String(path) if path.is_empty() => matches!(
-                                    self.objects[frame.target.0].kind, Kind::AttachedOwner(_)
+                                    self.objects[frame.target.0].kind,
+                                    Kind::AttachedOwner(_)
                                 ),
                                 _ => false,
                             }
@@ -4497,35 +4505,91 @@ mod tests {
         let mut vm = setup();
         vm.install_object_constructor().unwrap();
         vm.install_movie_clip_constructor().unwrap();
-        let clip = vm.create_attached_movie_clip(AttachedClipSpec {
-            target: DisplayTargetId(912),
-            source: AttachedClipSource {movie: LoadedMovieSourceId(2), sprite_id: 3, header_version: 15},
-            parent: None,
-            event_state: AttachedEventState {target_flags: 0x5200_0180, load_flags: 0, source_flags: 0},
-        }).unwrap();
+        let clip = vm
+            .create_attached_movie_clip(AttachedClipSpec {
+                target: DisplayTargetId(912),
+                source: AttachedClipSource {
+                    movie: LoadedMovieSourceId(2),
+                    sprite_id: 3,
+                    header_version: 15,
+                },
+                parent: None,
+                event_state: AttachedEventState {
+                    target_flags: 0x5200_0180,
+                    load_flags: 0,
+                    source_flags: 0,
+                },
+            })
+            .unwrap();
         let owner = vm.attached_owner(clip).unwrap();
         let plain = vm.object().unwrap();
         let native = vm.native(97).unwrap();
-        let unsupported = vm.alloc(Kind::UnsupportedNative("unimplemented test method"), None).unwrap();
-        let token = vm.register_deferred_builtin(vm.global(), "DeferredTest", BuiltinFactory::Unsupported, 1).unwrap();
-        let before = (vm.object_count(), vm.properties, vm.string_units, vm.host_calls, vm.builtin_targets.len());
-        for value in [Value::Object(native), Value::Object(unsupported), Value::Object(vm.object_constructor.unwrap())] {
-            assert_eq!(vm.classify_callability(&value).unwrap(), ValueCallability::Callable);
+        let unsupported = vm
+            .alloc(Kind::UnsupportedNative("unimplemented test method"), None)
+            .unwrap();
+        let token = vm
+            .register_deferred_builtin(vm.global(), "DeferredTest", BuiltinFactory::Unsupported, 1)
+            .unwrap();
+        let before = (
+            vm.object_count(),
+            vm.properties,
+            vm.string_units,
+            vm.host_calls,
+            vm.builtin_targets.len(),
+        );
+        for value in [
+            Value::Object(native),
+            Value::Object(unsupported),
+            Value::Object(vm.object_constructor.unwrap()),
+        ] {
+            assert_eq!(
+                vm.classify_callability(&value).unwrap(),
+                ValueCallability::Callable
+            );
         }
-        for value in [Value::Object(plain), Value::DisplayClip(clip), Value::Undefined, Value::Null,
-                      Value::Bool(true), Value::Number(1.0), Value::string("function")] {
-            assert_eq!(vm.classify_callability(&value).unwrap(), ValueCallability::NonCallable);
+        for value in [
+            Value::Object(plain),
+            Value::DisplayClip(clip),
+            Value::Undefined,
+            Value::Null,
+            Value::Bool(true),
+            Value::Number(1.0),
+            Value::string("function"),
+        ] {
+            assert_eq!(
+                vm.classify_callability(&value).unwrap(),
+                ValueCallability::NonCallable
+            );
         }
-        assert_eq!(vm.classify_callability(&token).unwrap(), ValueCallability::DeferredBuiltin);
+        assert_eq!(
+            vm.classify_callability(&token).unwrap(),
+            ValueCallability::DeferredBuiltin
+        );
         assert_eq!(vm.get(vm.global(), "DeferredTest").unwrap(), token);
-        for value in [Value::Object(ObjectId(usize::MAX)), Value::DisplayClip(AttachedClipId(usize::MAX)), Value::Object(owner)] {
+        for value in [
+            Value::Object(ObjectId(usize::MAX)),
+            Value::DisplayClip(AttachedClipId(usize::MAX)),
+            Value::Object(owner),
+        ] {
             assert!(vm.classify_callability(&value).is_err());
         }
         assert!(!vm.is_bound_builtin_context_target(owner).unwrap());
         assert!(!vm.is_bound_builtin_context_target(plain).unwrap());
         assert!(vm.is_bound_builtin_context_target(native).is_err());
-        assert!(vm.is_bound_builtin_context_target(ObjectId(usize::MAX)).is_err());
-        assert_eq!((vm.object_count(), vm.properties, vm.string_units, vm.host_calls, vm.builtin_targets.len()), before);
+        assert!(
+            vm.is_bound_builtin_context_target(ObjectId(usize::MAX))
+                .is_err()
+        );
+        assert_eq!(
+            (
+                vm.object_count(),
+                vm.properties,
+                vm.string_units,
+                vm.host_calls,
+                vm.builtin_targets.len()
+            ),
+            before
+        );
         vm.bind_builtin_context_target(owner).unwrap();
         vm.bind_builtin_context_target(plain).unwrap();
         assert!(vm.is_bound_builtin_context_target(owner).unwrap());
@@ -6712,6 +6776,51 @@ mod tests {
         let mut bytes = action(0x8e, &payload);
         bytes.extend(body);
         bytes
+    }
+    #[test]
+    fn function2_missing_register_argument_preserves_prior_parameter_and_preloads_win() {
+        let mut vm = setup();
+        let mut body = action(0x96, &[4, 1]);
+        body.push(0x3e);
+        for flags in [0x2au16, 0x29] {
+            let mut payload = vec![0, 2, 0, 2];
+            payload.extend(flags.to_le_bytes());
+            payload.extend(b"\x01first\0\x01second\0");
+            payload.extend((body.len() as u16).to_le_bytes());
+            let mut bytes = action(0x8e, &payload);
+            bytes.extend(&body);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            let function = vm
+                .execute(code, vm.root(), &mut RejectHost)
+                .unwrap()
+                .stack
+                .pop()
+                .unwrap();
+            assert_eq!(
+                vm.classify_callability(&function).unwrap(),
+                ValueCallability::Callable
+            );
+            let receiver = Value::Object(vm.root());
+            for args in [
+                vec![],
+                vec![Value::Number(7.0)],
+                vec![Value::Number(7.0), Value::Number(9.0)],
+            ] {
+                let expected = if flags & 1 != 0 {
+                    receiver.clone()
+                } else {
+                    args.last().cloned().unwrap_or(Value::Undefined)
+                };
+                assert_eq!(
+                    vm.call(function.clone(), receiver.clone(), &args, &mut RejectHost)
+                        .unwrap()
+                        .value,
+                    expected
+                );
+            }
+        }
     }
     #[test]
     fn function2_register_count_does_not_grant_an_extra_or_outer_slot() {
