@@ -5,6 +5,44 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev14 runtime integration in progress
+
+**VERIFIED Rust integration:** the window-feature check passes after native
+`tabEnabled`, complete scene adoption, saved-handler VM binding and recovered
+Scale9 arithmetic are compiled together. The integration receipt is
+`evidence/dev14-adopter-tab-integration.json`. This is not yet a dev14 package.
+
+The [scene adopter](docs/LOGIN_INSTANCE_INPUTS.md) binds the original saved login
+from explicitly supplied runtime inputs: 75 clips, 33 fields and 95 named child
+lookups. Its independent original-data probe passes 4,255 checks, leaving all
+147 nodes, 123 action bindings and 26 movie buffers unchanged. It executes no
+scripts. The [tab setter](docs/REA_ATTACHED_TAB_ENABLED.md) preserves the shared
+status word and grounded fresh-storage watch invariant; nine focused tab/focus
+checks pass. Native current defaults remain separate evidence requirements.
+
+[Saved-mode execution](docs/SAVED_EVENT_EXECUTION.md) now owns persistent
+operand/register state and per-installation constant pools. Eighteen focused
+checks pass. **OBSERVED original Construct boundary:** one unchanged original
+449-byte action reaches SetVariable at file offset 39513 after three instructions
+and stops at the explicit unsupported route. Supplied sentinel state and pending
+operands remain retained, no host calls occur, and that Environment is halted.
+Receipt: `evidence/avm1-original-construct-saved-increment1/receipt.json`.
+This controlled probe does not establish native event timing or full startup.
+
+**VERIFIED conditional script-to-text preparation:** the original localization
+path obtains `Log In`, executes ASCII uppercase and writes `LOG IN` through the
+live host. The new [format helper](docs/TEXTFIELD_FORMAT_MAPPING.md) derives six
+glyph placements from that resulting document; all 32 neighboring text instances
+remain unchanged. Final font and effective-state inputs remain explicit. The
+retained whole-scene GPU visibility failure is unchanged; no panel workaround or
+new visibility success is claimed. Receipt:
+`evidence/textfield-format-post-vm/receipt.json`.
+
+The new [Scale9 arithmetic](docs/SCALE9_RENDERING.md) passes 37 focused numeric
+checks under its finite IEEE arithmetic profile. Final renderer coordinate and
+resource binding remain unimplemented; it is not enabled as a visual upgrade.
+The latest staged build remains dev13, with no confirmed publication route.
+
 ## 2026-11-15 dev13 diagnostic increment
 
 **VERIFIED Rust build/startup:** source
