@@ -1410,6 +1410,35 @@ included in this containing-frame probe.
 retains the unchanged frozen sources, full initializer prefix, exact call-chain
 coordinates and build/run exit 0 with the explicit VM stop.
 
+## Bounded attached receiver for Function.apply
+
+The explicit Apply path now preserves a canonical live `DisplayClip` receiver
+for an ordinary ScriptFunction2 with exactly two arguments and an explicit null
+or undefined list. It requires an active attached caller, a supported captured
+target/global scope, and live receiver/caller/captured targets under the same
+adopted root. The shared-root condition is a conservative implementation limit;
+it is not presented as a native root-identity comparison. Existing typed identity
+admission supplies the coherent target/public-handle association; retirement and
+rebinding remain unsupported. No owner or lazy storage is exposed as an ordinary
+Object value, and changing `this` does not replace the captured Environment.
+
+`REA_ATTACHED_FUNCTION_APPLY.md` records the **VERIFIED static** tag7-to-owner and
+Function2 owner-to-tag7 bridges, including both preloaded and named `this`.
+Legacy DefineFunction, captured activations/With scopes, native/Super callables,
+TextField receivers, Function.call, array lists and direct calls without an active
+caller remain outside this attached extension. Apply remains ordinary invocation;
+it does not invent constructor context to satisfy the separate Super-preload gate.
+
+**OBSERVED focused synthetic checks:** both Function2 this routes preserve the
+display value while nested execution uses the captured target and restores the
+caller context. Unsupported profiles reject without fabricated callbacks or lazy
+receiver storage. A Function2 requiring Super still reports that existing gate.
+The two new checks and three existing call/apply, Function-conversion and captured
+Environment checks pass. Private `avm1-runtime/attached-apply-final-evidence.json`,
+SHA256 `3a05b7c62800f829f124c1c1ee8a4468d7100224b89bf7198a54cd4b797b4955`,
+retains source/binary hashes and exact filtered results; these checks do not
+establish original frame completion or native runtime parity.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established

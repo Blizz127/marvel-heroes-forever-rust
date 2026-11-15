@@ -2407,10 +2407,17 @@ impl Vm {
                 if !self.callable(&this) {
                     return self.fail(ErrorKind::UnboundCall);
                 }
-                let Some(Value::Object(receiver)) = args.first() else {
-                    return self.fail(ErrorKind::Unsupported(
-                        "Function method null/primitive thisObject",
-                    ));
+                let receiver = match args.first() {
+                    Some(Value::Object(receiver)) => Value::Object(*receiver),
+                    Some(Value::DisplayClip(receiver)) => {
+                        self.attached_apply_receiver(method, &this, *receiver, args)?;
+                        Value::DisplayClip(*receiver)
+                    }
+                    _ => {
+                        return self.fail(ErrorKind::Unsupported(
+                            "Function method unsupported thisObject category",
+                        ));
+                    }
                 };
                 let forwarded = match method {
                     FunctionMethod::Call => args[1..].to_vec(),
@@ -2448,7 +2455,7 @@ impl Vm {
                         }
                     }
                 };
-                return self.invoke(this, Value::Object(*receiver), &forwarded, host);
+                return self.invoke(this, receiver, &forwarded, host);
             }
             Kind::SetPropertyFlags => return self.apply_property_flags(args),
             Kind::RegisterClass => {
@@ -2771,6 +2778,85 @@ impl Vm {
             Flow::End => Ok(Value::Undefined),
             Flow::Jump(p) => self.fail(ErrorKind::InvalidBranch(p as i128)),
         }
+    }
+    fn attached_apply_receiver(
+        &self,
+        method: FunctionMethod,
+        callable: &Value,
+        receiver: AttachedClipId,
+        args: &[Value],
+    ) -> Result<()> {
+        // This is the native live case-3 handle/interface bridge, not generic
+        // object coercion. Normal apply remains an ordinary function invocation.
+        if !matches!(method, FunctionMethod::Apply)
+            || !matches!(
+                args,
+                [Value::DisplayClip(_), Value::Null | Value::Undefined]
+            )
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply requires explicit null/undefined argument list",
+            ));
+        }
+        let Value::Object(callable) = callable else {
+            return self.fail(ErrorKind::UnboundCall);
+        };
+        let Kind::Script(function) = &self.objects[callable.0].kind else {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply requires ScriptFunction2",
+            ));
+        };
+        if function.scopes.as_slice() != [function.target, self.global] {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply captured activation/With profile",
+            ));
+        }
+        let instruction = self.code[function.code.0].instruction_at(function.offset);
+        if !matches!(instruction.map(|i| &i.operands),
+            Some(Operands::Function(definition)) if definition.flags.is_some())
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply requires ScriptFunction2",
+            ));
+        }
+        let Some(caller) = self.current_target else {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply requires active attached Environment",
+            ));
+        };
+        let (Kind::AttachedOwner(root), Kind::AttachedOwner(caller), Kind::AttachedOwner(captured)) = (
+            &self.objects[self.root.0].kind,
+            &self.objects[caller.0].kind,
+            &self.objects[function.target.0].kind,
+        ) else {
+            return self.fail(ErrorKind::Unsupported(
+                "attached Function.apply requires one adopted attached root context",
+            ));
+        };
+        for clip in [receiver, *caller, *captured] {
+            self.check_attached(clip)?;
+            if self.attached_event_state(clip)?.target_flags & 0x80 == 0 {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached Function.apply requires live eligible targets",
+                ));
+            }
+            let mut next = Some(clip);
+            let mut found = false;
+            for _ in 0..self.limits.prototype_depth {
+                let Some(id) = next else { break };
+                if id == *root {
+                    found = true;
+                    break;
+                }
+                next = self.attached_info(id)?.parent;
+            }
+            if !found {
+                return self.fail(ErrorKind::Unsupported(
+                    "attached Function.apply crosses adopted root context",
+                ));
+            }
+        }
+        Ok(())
     }
     fn constructor_super(&mut self, class: ObjectId, receiver: ObjectId) -> Result<ObjectId> {
         let base = self.class_bases[&class];
@@ -6174,6 +6260,197 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Budget("function call depth"));
+    }
+    fn attached_apply_program(method: &str, list: Value) -> Vec<u8> {
+        let mut bytes = push(&[list]);
+        bytes.extend(variable_bytes("_global"));
+        bytes.extend(push(&[Value::string("fixtureReceiver")]));
+        bytes.push(0x4e);
+        bytes.extend(push(&[Value::Number(2.0)]));
+        bytes.extend(variable_bytes("_global"));
+        bytes.extend(push(&[Value::string("fixtureFunction")]));
+        bytes.push(0x4e);
+        bytes.extend(push(&[Value::string(method)]));
+        bytes.push(0x52);
+        bytes
+    }
+    fn anonymous_function2(flags: u16, body: &[u8]) -> Vec<u8> {
+        let mut payload = vec![0, 0, 0, 2];
+        payload.extend(flags.to_le_bytes());
+        payload.extend((body.len() as u16).to_le_bytes());
+        let mut bytes = action(0x8e, &payload);
+        bytes.extend(body);
+        bytes
+    }
+    #[test]
+    fn attached_apply_preserves_display_this_and_captured_environment() {
+        for flags in [0x28, 0x29] {
+            let (mut vm, root, caller, _) = typed_field_fixture();
+            let root_owner = vm.attached_owner(root).unwrap();
+            let caller_owner = vm.attached_owner(caller).unwrap();
+            let receiver = vm.attached_value(caller).unwrap();
+            let observe = vm.native(97).unwrap();
+            vm.set(vm.global(), "observe", Value::Object(observe))
+                .unwrap();
+            let mut body = method_call("_global", "observe");
+            body.push(0x17);
+            body.extend(if flags & 1 != 0 {
+                action(0x96, &[4, 1])
+            } else {
+                variable_bytes("this")
+            });
+            body.push(0x3e);
+            let definition = anonymous_function2(flags, &body);
+            let code = vm
+                .register(Arc::new(Program::parse(&definition).unwrap()))
+                .unwrap();
+            let callable = vm
+                .execute(code, root_owner, &mut RejectHost)
+                .unwrap()
+                .stack
+                .pop()
+                .unwrap();
+            vm.set(vm.global(), "fixtureFunction", callable).unwrap();
+            vm.set(vm.global(), "fixtureReceiver", receiver.clone())
+                .unwrap();
+            for list in [Value::Null, Value::Undefined] {
+                let mut bytes = attached_apply_program("apply", list);
+                // Observe caller context after the nested script returns.
+                bytes.extend(method_call("_global", "observe"));
+                bytes.push(0x17);
+                let code = vm
+                    .register(Arc::new(Program::parse_at(&bytes, 400).unwrap()))
+                    .unwrap();
+                let mut host = ContextHost::default();
+                let result = vm.execute(code, caller_owner, &mut host).unwrap();
+                assert_eq!(result.stack, vec![receiver.clone()]);
+                assert_eq!(host.calls.len(), 2);
+                assert_eq!(host.calls[0].1, Some(root_owner));
+                assert_eq!(host.calls[1].1, Some(caller_owner));
+                assert_eq!(vm.current_target, Some(caller_owner));
+                assert!(vm.attached_info(root).unwrap().storage.is_none());
+                assert!(vm.attached_info(caller).unwrap().storage.is_none());
+            }
+        }
+    }
+    #[test]
+    fn attached_apply_gates_unproved_profiles_and_keeps_super_separate() {
+        let (mut vm, root, caller, field) = typed_field_fixture();
+        let root_owner = vm.attached_owner(root).unwrap();
+        let receiver = vm.attached_value(caller).unwrap();
+        let definition = anonymous_function2(0x29, &[0]);
+        let code = vm
+            .register(Arc::new(Program::parse(&definition).unwrap()))
+            .unwrap();
+        let callable = vm
+            .execute(code, root_owner, &mut RejectHost)
+            .unwrap()
+            .stack
+            .pop()
+            .unwrap();
+        vm.set(vm.global(), "fixtureFunction", callable.clone())
+            .unwrap();
+        vm.set(vm.global(), "fixtureReceiver", receiver.clone())
+            .unwrap();
+        let Value::Object(function_id) = callable.clone() else {
+            panic!()
+        };
+        let apply = vm.get(function_id, "apply").unwrap();
+        let before = vm.object_count();
+        assert!(
+            vm.call(
+                apply,
+                callable,
+                &[receiver.clone(), Value::Null],
+                &mut RejectHost
+            )
+            .is_err()
+        );
+        assert_eq!(vm.object_count(), before);
+        for (method, list) in [("call", Value::Null), ("apply", Value::Number(0.0))] {
+            let bytes = attached_apply_program(method, list);
+            let code = vm
+                .register(Arc::new(Program::parse(&bytes).unwrap()))
+                .unwrap();
+            assert!(vm.execute(code, root_owner, &mut RejectHost).is_err());
+            assert_eq!(vm.object_count(), before);
+        }
+        let bytes = attached_apply_program("apply", Value::Null);
+        let code = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        vm.set(
+            vm.global(),
+            "fixtureReceiver",
+            vm.attached_text_field_value(field).unwrap(),
+        )
+        .unwrap();
+        assert!(vm.execute(code, root_owner, &mut RejectHost).is_err());
+        assert_eq!(vm.object_count(), before);
+        vm.set(vm.global(), "fixtureReceiver", receiver).unwrap();
+        let plain = vm.object().unwrap();
+        assert!(vm.execute(code, plain, &mut RejectHost).is_err());
+        let old = function("", &[0]);
+        let old_code = vm
+            .register(Arc::new(Program::parse(&old).unwrap()))
+            .unwrap();
+        let old_function = vm
+            .execute(old_code, root_owner, &mut RejectHost)
+            .unwrap()
+            .stack
+            .pop()
+            .unwrap();
+        vm.set(vm.global(), "fixtureFunction", old_function)
+            .unwrap();
+        assert!(vm.execute(code, root_owner, &mut RejectHost).is_err());
+        let mut closure_body = anonymous_function2(0x29, &[0]);
+        closure_body.push(0x3e);
+        let closure_definition = anonymous_function2(0x29, &closure_body);
+        let closure_code = vm
+            .register(Arc::new(Program::parse(&closure_definition).unwrap()))
+            .unwrap();
+        let outer = vm
+            .execute(closure_code, root_owner, &mut RejectHost)
+            .unwrap()
+            .stack
+            .pop()
+            .unwrap();
+        let closure = vm
+            .call(
+                outer,
+                vm.attached_value(root).unwrap(),
+                &[],
+                &mut RejectHost,
+            )
+            .unwrap()
+            .value;
+        vm.set(vm.global(), "fixtureFunction", closure).unwrap();
+        assert_eq!(
+            vm.execute(code, root_owner, &mut RejectHost)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Unsupported("attached Function.apply captured activation/With profile")
+        );
+        let super_definition = anonymous_function2(0x19, &[0]);
+        let super_code = vm
+            .register(Arc::new(Program::parse(&super_definition).unwrap()))
+            .unwrap();
+        let super_function = vm
+            .execute(super_code, root_owner, &mut RejectHost)
+            .unwrap()
+            .stack
+            .pop()
+            .unwrap();
+        vm.set(vm.global(), "fixtureFunction", super_function)
+            .unwrap();
+        let error = vm.execute(code, root_owner, &mut RejectHost).unwrap_err();
+        assert_eq!(
+            error.kind,
+            ErrorKind::Unsupported("super preload requires recorded constructor context")
+        );
+        assert_eq!(error.origin.unwrap().code, code);
+        assert_eq!(vm.host_calls, 0);
+        assert!(vm.attached_info(caller).unwrap().storage.is_none());
     }
     #[test]
     fn function_conversion_preserves_top_level_identity_and_gates_captured_frames() {
