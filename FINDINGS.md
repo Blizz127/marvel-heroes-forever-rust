@@ -7,6 +7,15 @@ have now run; no server login or playable Rust frontend has been demonstrated.
 
 ## 2026-11-15 dev25 work in progress
 
+**VERIFIED primary output composition:** one immutable generated-record owner
+now normalizes the complete supplied array before descriptor selection and
+binds triangle ordinal transfer to that same source. Preview and resumed chunks
+retain source identity; rejected packing retains both cursor and destination.
+Three focused invariants pass. Exact format, resolved colors and invocation-wide
+native cache continuity remain explicit caller inputs. See
+[composition and evidence](docs/SCALE9_PRIMARY_OUTPUT.md); independent comparison
+and the later combined executable are still pending at this checkpoint.
+
 **VERIFIED primary packed records:** the explicit twelve-byte writer now composes
 the native coordinate packer with supplied resolved color words and exact flag
 bytes. It preserves padding/tail bytes and rejects unsupported profiles atomically.
