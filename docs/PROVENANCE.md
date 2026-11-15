@@ -537,3 +537,8 @@ conditional native-to-render-state projection in original Rust. Prepared host
 updates preserve local/effective visibility separately and do not expose native
 allocator or backing-node internals as verified Rust behavior. [Attached names](REA_ATTACHED_NAME.md)
 requires an explicit current-name snapshot; no root name is inferred from a file.
+
+[Level payloads](UPK_LEVEL.md) registers the owned native serializer/getter
+evidence for actor, Model, ModelComponent, URL and sequence-link framing. Ordered
+links and opaque suffixes remain distinct; successful parsing does not execute
+the selected sequence or establish full Level dependency coverage.
