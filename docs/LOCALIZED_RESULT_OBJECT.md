@@ -8,6 +8,13 @@ prototype bindings intact, the object has three hidden metadata entries before
 the four localization data entries. This is a native allocation/assignment
 contract, not a captured client callback or an enabled Rust ExternalInterface.
 
+The original Rust `LocalizedObjectData::into_host_result` prepares exactly these
+four fields in saved reflection order. It passes them to the VM's fresh-object
+materializer, which retains ordinary setter behavior and its explicit constructor,
+value and budget gates. Resource origins remain Rust metadata, not extra AS2
+properties. This conversion alone does not bind a native movie handler or execute
+the original label-update lifecycle.
+
 All addresses refer to the owner's pinned 1.52.0.1700 Win64 executable, SHA-256
 `8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`.
 Recovered instructions, package payloads and detailed receipts remain private.

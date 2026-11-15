@@ -37,6 +37,28 @@ pub struct LocalizedObjectData {
     pub tooltip_source: StringSource,
 }
 
+impl LocalizedObjectData {
+    /// Prepare the saved, unpatched native return structure's four fields in
+    /// reflected order. The VM constructs a fresh Object and performs ordinary
+    /// setters after the host returns; source metadata stays outside that object.
+    /// This does not install ExternalInterface or select its engine receiver.
+    pub fn into_host_result(self) -> crate::avm1::vm::HostResult {
+        use crate::avm1::vm::{HostResult, Value, text};
+        HostResult::ObjectFields(vec![
+            (
+                text("localizedPrototypeIdStr"),
+                Value::string(&self.localized_prototype_id_str),
+            ),
+            (text("localizedText"), Value::string(&self.localized_text)),
+            (
+                text("localizedTooltipText"),
+                Value::string(&self.localized_tooltip_text),
+            ),
+            (text("hasTooltip"), Value::Bool(self.has_tooltip)),
+        ])
+    }
+}
+
 /// Select the original default entry and preserve its text for the established
 /// no-marker success path. The native callback supplies selector UINT64_MAX,
 /// matching the standard loader's base node before testing any alternates.
