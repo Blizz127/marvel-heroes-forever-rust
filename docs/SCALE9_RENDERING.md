@@ -346,3 +346,111 @@ Key new native records are:
 The capture index also retains the separate wire/constants, correctly mapped
 `.data` masks and pure PE import records. No target remains open; needed REA
 Evidence was exported and the resource close completed successfully.
+
+## Original executable arithmetic primitive
+
+`gfx::native_scale9` implements the recovered point, inverse, composition,
+three-point and nine-affine builder contracts. Its inputs are explicit native
+record roles. It does not select a scene ancestor, infer source bounds, resolve
+cache freshness, convert units, split triangles or choose image coordinates.
+The existing renderer and legacy CPU clipping helper are unchanged.
+
+The checked public API is:
+
+| API | Contract |
+| --- | --- |
+| `Matrix2x4::from_rows` | Native `[a,c,unused,tx]`, `[b,d,unused,ty]` layout; all eight lanes checked |
+| `RectF32::from_coordinates` | Ordered finite `[xmin,ymin,xmax,ymax]`; equality allowed for supplied point contexts |
+| `Matrix2x4::transform_point` | Exact recovered separate product/sum order |
+| `inverse_into(destination)` / `inverse()` | Native zero-determinant fallback and unused-lane behavior; value semantics avoid pointer aliasing |
+| `left_compose(left)` | `left * self`, including translation-add order and positive-zero lane masks |
+| `three_point_affine(source,destination)` | Exact basis/inverse/composition; no idealized fixed-edge slope substitution |
+| `NativeScale9Context::from_parts` | Explicit pre-transform, splitter, nine matrices and post-transform |
+| `context.transform_point` | Position plus both raw native outcode and selected region index |
+| `build_finite_ieee_nearest(SourceInputs)` | Callable nine-affine construction using standard `f32::sqrt` and the recovered bounds/length/undersize branches |
+
+`SourceInputs` supplies `grid`, `source_bounds`, `grid_matrix` (G),
+`shape_to_grid` (C) and `outer_matrix` (M). C's name identifies its observed
+accumulator role; it does not prove that an arbitrary Scene matrix is suitable.
+The resulting context preserves the original grid as its splitter and computes
+the post-transform as `M * inverse(C) * inverse(G)`. Accessors expose the explicit
+context components for audit and later integration.
+
+The builder admits positive grid dimensions and ordered source bounds, including
+source bounds equal to the grid. It preserves the native upper-bounds repair
+using the lower grid coordinate, exact-zero length replacement and undersize
+normalization. These paths are not silently replaced with a conventional
+nine-slice policy. All operations have fixed storage bounds: two-row matrices,
+nine regions and a four-by-four temporary point grid; there is no allocation or
+asset-derived loop count.
+
+### Floating-point admission and limits
+
+The explicitly selected profile is **finite IEEE binary32 nearest rounding**.
+Arithmetic results use separate f32 operations, with no fused multiply-add,
+combined transform or algebraic reassociation. Standard `f32::sqrt` makes the
+builder callable; exact agreement with the unobserved loaded retail
+`MSVCR120.dll!sqrtf` and its MXCSR remains **unverified**. The implementation does
+not inspect or modify host floating-environment state. A caller that changes
+rounding mode has not established this profile.
+
+Nonfinite values, subnormal inputs and subnormal-sensitive operations return
+typed errors. The latter admission also rejects tiny exact nonzero results
+that might round or flush to zero. A wider scalar calculation is used only to
+check that magnitude before each operation; it never supplies the f32 result.
+This is a deliberately narrower supported profile than all possible native
+bit patterns. No epsilon is introduced into native determinant or length tests.
+Positive and negative zero remain distinct except where the recovered native
+instruction order/masks change them. Unused lanes are checked and their native
+calculation/masking behavior is retained, rather than silently accepting an
+unproved floating-exception profile.
+
+### Focused implementation checks
+
+The standalone module's five synthetic checks cover all nine regions and exact
+splitter equalities, noncommuting stages, a cancellation that distinguishes
+separate multiplication from FMA, singular inversion, destination-lane retention,
+composition order, a hand-checkable two-unit-border builder profile, and rejected
+nonfinite/subnormal-sensitive inputs. Original asset bytes and actual modal
+fixtures stay outside git. These are arithmetic checks, not native execution or
+live pixel comparisons.
+
+The independent private oracle was frozen before its author inspected this
+module. It reuses the retained instruction-derived builder traces and separately
+derived matrix/point contracts. Original helper formulas match all **432** source
+and destination scalar bits across four retained builder profiles. The actual
+modal profile, quarter-scale undersize case, zero-horizontal-length case and
+equal-bounds repair case remain explicit supplied-input witnesses; no executing
+native cache invocation is claimed.
+
+**VERIFIED conditional math replay:** the private harness passes **37/37** checks
+in both debug and optimized Rust builds. Its exact-bit comparisons cover all
+36 builder matrices, 64 point probes, 16 matrix-helper cases, 36 three-point
+affines and 108 direct triangle-point evaluations. The total includes the five
+module checks and two additional Rust admission checks. The 108 point witnesses
+retain the native-operation rounding differences from ideal triangle endpoints;
+55 endpoints differ in at least one bit. They are not rounded back to an ideal
+geometry oracle. Standard host sqrt produces the retained builder outcomes for
+these four cases; broad loaded-CRT equivalence remains unverified.
+
+Additional original evidence lives under
+`~/.local/share/marvel-heroes-forever-rust/evidence/native-scale9-math/`:
+
+| Private source | Purpose / provenance |
+| --- | --- |
+| `builder-contract/CONTRACT.md` and `formula-comparison.json` | Original formulas derived from retained owned instructions; no outside implementation source |
+| `oracle/point-builder-oracle.json` | Frozen builder/point expected bits, independently prepared before product-source inspection |
+| `oracle/matrix-independent/matrix-oracle.json` | Original exact rational binary32 rounding oracle for matrix helper cases |
+| `oracle/verification.json` | Debug/optimized focused-check commands, results and unchanged implementation/oracle hashes |
+
+The original retained inputs are `scale9-rendering/builder-review/scalar-trace.json`
+(SHA256 `3473bcb64c633c6dcced9c4c921fdff0af649039a539c6e82c0a7f02eef6baa5`)
+and `scale9-rendering/matrix-helper-review/scalar-comparison.json`
+(`9ee2e152c361aeee957f37928d9409bd3650ad4f43193bd1bf0583a2dd6fa718`).
+The frozen point/builder oracle is
+`29389f0666fa7eaa4175bc9e5ce55a0f170743675a463aae53b92268c205dae0`;
+the matrix oracle is
+`da31e8936e60fc23c1671c10106c1532914f09e9ca4759e6bdc2c9b1925ed46d`.
+All source licensing remains as recorded above: owned proprietary files for
+compatibility evidence, original project arithmetic/checking code, no copied or
+linked outside parser/renderer implementation.
