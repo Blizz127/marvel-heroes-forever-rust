@@ -62,10 +62,10 @@ fn usage() {
         "  mhf frontend render-static <package.upk> <movie> <private-output.pam> [dependency.upk ...] [--font-library full.object.path]"
     );
     println!(
-        "  mhf frontend window-static <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N]"
+        "  mhf frontend window-static <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N] [--seconds N]"
     );
     println!(
-        "  mhf frontend window-pointer <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N]"
+        "  mhf frontend window-pointer <package.upk> <movie> [dependency.upk ...] [--font-library full.object.path] [--frames N] [--seconds N]"
     );
     println!("  mhf texture inspect <package.upk> <texture-name|1-based-index>");
     println!(

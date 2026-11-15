@@ -128,3 +128,6 @@ Moving outside the stage invalidates the pointer sample without moving the saved
 cursor. This bounded diagnostic still omits normal startup, constructors, other
 event handlers and animation. Escape closes its own window. See
 [pointer execution](docs/FRONTEND_POINTER.md) and [native scene host](docs/NATIVE_WINDOW.md).
+Both frontend window commands accept `--seconds N` for an optional QA deadline;
+ordinary use waits for the window to close. This deadline includes native host
+initialization time, but cannot interrupt a blocking platform call.

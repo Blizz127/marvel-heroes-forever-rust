@@ -58,6 +58,7 @@ pub fn run(args: &[OsString]) -> Result<()> {
         {
             let mut library_args = Vec::new();
             let mut frames = None;
+            let mut seconds = None;
             let mut index = 0;
             while index < extra.len() {
                 if extra[index] == "--frames" {
@@ -70,15 +71,25 @@ pub fn run(args: &[OsString]) -> Result<()> {
                     }
                     frames = Some(count);
                     index += 2;
+                } else if extra[index] == "--seconds" {
+                    if seconds.is_some() || index + 1 == extra.len() {
+                        return Err(invalid("--seconds requires one positive duration"));
+                    }
+                    let count = text(&extra[index + 1])?.parse::<u64>()?;
+                    if !(1..=86_400).contains(&count) {
+                        return Err(invalid("QA duration must be 1..86400 seconds"));
+                    }
+                    seconds = Some(count);
+                    index += 2;
                 } else {
                     library_args.push(extra[index].clone());
                     index += 1;
                 }
             }
             if operation == "window-pointer" {
-                window_pointer(package, text(selector)?, &library_args, frames)?;
+                window_pointer(package, text(selector)?, &library_args, frames, seconds)?;
             } else {
-                window_frontend(package, text(selector)?, &library_args, frames)?;
+                window_frontend(package, text(selector)?, &library_args, frames, seconds)?;
             }
         }
         [command, operation, package, selector]
@@ -547,15 +558,16 @@ fn window_frontend(
     selector: &str,
     extra: &[OsString],
     frames: Option<u64>,
+    seconds: Option<u64>,
 ) -> Result<()> {
     use marvel_heroes_forever::window::{PreviewImage, PreviewOptions, run_image_preview};
     let frame = frontend_frame(package, selector, extra, None)?;
     let mut options = PreviewOptions::new(frame.encoding);
     options.title = format!("Marvel Heroes Forever — {selector} (static diagnostic)");
     options.frame_limit = frames;
-    if frames.is_some() {
-        options.close_after = Some(std::time::Duration::from_secs(15));
-    }
+    options.close_after = seconds
+        .or_else(|| frames.map(|_| 15))
+        .map(std::time::Duration::from_secs);
     let report = run_image_preview(
         PreviewImage {
             width: frame.width,
@@ -572,7 +584,13 @@ fn window_frontend(
     Ok(())
 }
 #[cfg(not(feature = "window"))]
-fn window_frontend(_: &OsString, _: &str, _: &[OsString], _: Option<u64>) -> Result<()> {
+fn window_frontend(
+    _: &OsString,
+    _: &str,
+    _: &[OsString],
+    _: Option<u64>,
+    _: Option<u64>,
+) -> Result<()> {
     Err(invalid(
         "this build lacks native window support; build with --features window",
     ))
@@ -584,6 +602,7 @@ fn window_pointer(
     selector: &str,
     extra: &[OsString],
     frames: Option<u64>,
+    seconds: Option<u64>,
 ) -> Result<()> {
     use marvel_heroes_forever::{
         frontend::{
@@ -646,9 +665,9 @@ fn window_pointer(
     let mut options = ScenePreviewOptions::new(ImageEncoding::Linear);
     options.title = format!("Marvel Heroes Forever — {selector} (pointer diagnostic)");
     options.frame_limit = frames;
-    if frames.is_some() {
-        options.close_after = Some(std::time::Duration::from_secs(15));
-    }
+    options.close_after = seconds
+        .or_else(|| frames.map(|_| 15))
+        .map(std::time::Duration::from_secs);
     let result = run_scene_preview(
         prepared,
         entry.asset.movie.header.stage,
@@ -677,7 +696,13 @@ fn window_pointer(
     Ok(())
 }
 #[cfg(not(feature = "window"))]
-fn window_pointer(_: &OsString, _: &str, _: &[OsString], _: Option<u64>) -> Result<()> {
+fn window_pointer(
+    _: &OsString,
+    _: &str,
+    _: &[OsString],
+    _: Option<u64>,
+    _: Option<u64>,
+) -> Result<()> {
     Err(invalid(
         "this build lacks native window support; build with --features window",
     ))
