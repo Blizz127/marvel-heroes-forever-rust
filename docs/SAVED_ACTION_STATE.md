@@ -76,7 +76,7 @@ StoreRegister does nothing, even before looking for an operand. DefineLocal uses
 the target's normal member-write route, and DefineLocal2 converts/pops the name
 without declaring a property. Ordinary frames keep their existing semantics.
 
-Function definitions, With, target changes, SetVariable and ordinary script calls
+Function definitions, With, target changes and ordinary script calls
 remain explicit first-profile boundaries. The latter require a separate shared
 Environment stack/register proof; the current ordinary executor owns private
 vectors. Once an Environment is adopted, generic diagnostic `execute` and
@@ -92,6 +92,36 @@ returns `Completed { instructions, host_calls }`, discards the saved call's resu
 destination, and retains residual operands. Both paths restore the caller's
 origin, active context and depth. This halt policy and engineering budget
 failures are explicit Rust behavior, not claims about native exception recovery.
+
+### Simple saved assignment
+
+ActionSetVariable now admits a nonempty NUL-free ASCII String name without path
+delimiters, and a String or Boolean right-hand value. The independent native
+opcode proof in [SAVED_VARIABLE_ASSIGNMENT.md](SAVED_VARIABLE_ASSIGNMENT.md)
+routes this null-activation/empty-With profile directly through the current
+target's normal setter. A same-named global binding does not select the write
+destination. The VM retains both operands through setter dispatch and consumes
+the pair only on supported normal completion. Unsupported names, values or
+property routes preserve the pair before the Environment is halted.
+
+Exact `autoSize`, authenticated standard member48, is separately proved to fall
+through the case-3 MovieClip's native dispatcher to ordinary storage. The VM
+retains its Standard classification, then admits only that name/ID on this typed
+owner to the existing ordinary read/write path. Own Undefined, complete named
+children, prototype lookup, selected callbacks, resolver/watch invariants and
+ReadOnly behavior remain active. It is not a TextField implementation or an
+automatic successful native setter; see
+[ATTACHED_AUTOSIZE_FALLTHROUGH.md](ATTACHED_AUTOSIZE_FALLTHROUGH.md).
+
+Five focused checks pass: two saved assignment checks, one exact case-3
+fallthrough check, and both existing saved local-opcode checks. These cover
+global isolation, retained prior state, failed-property operand preservation,
+child shadowing, own Undefined, ReadOnly and selected accessor rejection.
+Private `evidence/avm1-runtime/saved-assignment-checks.json`, SHA256
+`174f18d38ee32a26820e2876ab54ac1907c3309596e9a77c78ad21e5ee7f893e`,
+retains the frozen source/binary hashes and outputs. Native diagnostic logging,
+name-cache bits, exceptional cleanup and allocation/page behavior are not
+claimed equivalent; these checks do not establish original Construct completion.
 
 ## Provenance and validation scope
 

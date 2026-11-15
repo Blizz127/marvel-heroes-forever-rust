@@ -2229,6 +2229,38 @@ impl Vm {
             self.write_member(id, key, value, host)
         }
     }
+    fn saved_set_variable(&mut self, frame: &mut Frame, host: &mut impl Host) -> Result<()> {
+        let len = frame.stack.len();
+        if len < 2 {
+            return self.fail(ErrorKind::StackUnderflow);
+        }
+        let Value::String(key) = &frame.stack[len - 2] else {
+            return self.fail(ErrorKind::Unsupported(
+                "saved SetVariable primitive String name profile",
+            ));
+        };
+        if key.is_empty() || key.iter().any(|unit| *unit == 0 || *unit > 127) {
+            return self.fail(ErrorKind::Unsupported(
+                "saved SetVariable simple ASCII name profile",
+            ));
+        }
+        self.simple_name(key)?;
+        let value = &frame.stack[len - 1];
+        if !matches!(value, Value::String(_) | Value::Bool(_)) {
+            return self.fail(ErrorKind::Unsupported(
+                "saved SetVariable String/Boolean value profile",
+            ));
+        }
+        let key = Arc::clone(key);
+        let value = value.clone();
+        // Empty captured/With scope and the saved null activation fence route
+        // directly to the current target. Reads' global fallback does not apply.
+        // Keep both operands during normal setter dispatch; unsupported writes
+        // stop before native normal-return cleanup would consume them.
+        self.write_member(frame.target, key, value, host)?;
+        frame.stack.truncate(len - 2);
+        Ok(())
+    }
     fn reset_execution(&mut self) {
         self.instructions = 0;
         self.host_calls = 0;
@@ -3428,18 +3460,23 @@ impl Vm {
                     }
                     0x1d | 0x3c => {
                         if frame.is_saved() && instruction.opcode == 0x1d {
-                            return self.fail(ErrorKind::Unsupported(
-                                "saved action SetVariable resolution profile",
-                            ));
-                        }
-                        let value = self.pop(frame)?;
-                        let key = self.pop(frame)?;
-                        let key = self.to_text(&key)?;
-                        if frame.is_saved() {
-                            self.simple_name(&key)?;
-                            self.write_member(frame.target, key, value, host)?;
+                            self.saved_set_variable(frame, host)?;
                         } else {
-                            self.set_variable(frame, key, value, instruction.opcode == 0x3c, host)?;
+                            let value = self.pop(frame)?;
+                            let key = self.pop(frame)?;
+                            let key = self.to_text(&key)?;
+                            if frame.is_saved() {
+                                self.simple_name(&key)?;
+                                self.write_member(frame.target, key, value, host)?;
+                            } else {
+                                self.set_variable(
+                                    frame,
+                                    key,
+                                    value,
+                                    instruction.opcode == 0x3c,
+                                    host,
+                                )?;
+                            }
                         }
                     }
                     0x41 => {

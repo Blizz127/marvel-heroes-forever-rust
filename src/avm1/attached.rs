@@ -601,6 +601,21 @@ impl Vm {
         Ok(())
     }
     pub(super) fn attached_member_name(&self, key: &Text) -> Result<()> {
+        if key.as_ref() == text("autoSize").as_ref() {
+            // Authenticated standard ID48 is NOT implemented by this case-3
+            // native dispatcher. Exact false-return branches continue into
+            // ordinary handling; this does not admit other standard members or
+            // the distinct case-4 TextField's autosize behavior.
+            return if self.attached_name_profile.as_ref().is_some_and(|profile| {
+                profile.classify_attached_name(key) == AttachedNameClass::Standard(48)
+            }) {
+                Ok(())
+            } else {
+                self.fail(ErrorKind::Unsupported(
+                    "attached autoSize native ID profile",
+                ))
+            };
+        }
         if let Some(profile) = &self.attached_name_profile {
             return match profile.classify_attached_name(key) {
                 AttachedNameClass::Ordinary => Ok(()),
@@ -1001,11 +1016,12 @@ mod tests {
         );
         for id in 0..117 {
             let alias = id <= 21 || (110..=115).contains(&id);
-            data.push_str(&format!(
-                "standard\t{id}\t{}\t{}native{id:03}\n",
-                u8::from(alias),
-                if alias { "_" } else { "" }
-            ));
+            let name = if id == 48 {
+                "autoSize".to_owned()
+            } else {
+                format!("{}native{id:03}", if alias { "_" } else { "" })
+            };
+            data.push_str(&format!("standard\t{id}\t{}\t{name}\n", u8::from(alias),));
         }
         let mut mc = vec!["constructor".to_owned(), "__proto__".to_owned()];
         mc.extend((0..42).map(|id| format!("mc{id:03}")));
@@ -1265,6 +1281,105 @@ mod tests {
         vm.install_attached_name_profile(synthetic_profile())
             .unwrap();
         assert!(vm.read_attached_member(child, "_visible").is_err());
+    }
+
+    #[test]
+    fn auto_size_case3_false_dispatch_keeps_ordinary_shadowing_and_write_guards() {
+        let mut vm = vm();
+        let root = vm.create_attached_movie_clip(spec(1, None)).unwrap();
+        let child = vm.create_attached_movie_clip(spec(2, Some(root))).unwrap();
+        assert!(vm.read_attached_member(root, "autoSize").is_err());
+        assert!(
+            vm.write_attached_member(root, "autoSize", Value::string("none"))
+                .is_err()
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        vm.install_attached_name_profile(synthetic_profile())
+            .unwrap();
+        assert_eq!(
+            vm.attached_name_profile
+                .as_ref()
+                .unwrap()
+                .classify_attached_name(&text("autoSize")),
+            AttachedNameClass::Standard(48)
+        );
+        vm.set_attached_children(
+            root,
+            vec![AttachedChild::Clip {
+                name: text("autoSize"),
+                clip: child,
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            vm.read_attached_member(root, "autoSize").unwrap(),
+            AttachedMember::Present(Value::DisplayClip(child))
+        );
+        assert!(vm.attached_info(root).unwrap().storage.is_none());
+        assert_eq!(
+            vm.write_attached_member(root, "autoSize", Value::string("none"))
+                .unwrap(),
+            AttachedWrite::Created
+        );
+        let storage = ObjectId(vm.attached_info(root).unwrap().storage.unwrap().0);
+        assert_eq!(
+            vm.read_attached_member(root, "autoSize").unwrap(),
+            AttachedMember::Present(Value::string("none"))
+        );
+        vm.raw_member(
+            storage,
+            text("autoSize"),
+            Property::Data(Value::Undefined),
+            4,
+        )
+        .unwrap();
+        assert_eq!(
+            vm.read_attached_member(root, "autoSize").unwrap(),
+            AttachedMember::Present(Value::Undefined)
+        );
+        assert_eq!(
+            vm.write_attached_member(root, "autoSize", Value::string("later"))
+                .unwrap(),
+            AttachedWrite::ReadOnly
+        );
+        assert_eq!(vm.own_flags(storage, &text("autoSize")), 4);
+        vm.raw_member(
+            storage,
+            text("autoSize"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        assert!(vm.read_attached_member(root, "autoSize").is_err());
+        assert!(
+            vm.write_attached_member(root, "autoSize", Value::string("later"))
+                .is_err()
+        );
+        assert!(vm.read_attached_member(root, "native047").is_err());
+        assert!(
+            vm.write_attached_member(root, "native047", Value::string("later"))
+                .is_err()
+        );
+        assert!(vm.attached_info(child).unwrap().storage.is_none());
+        let prototype = vm.object().unwrap();
+        vm.raw_member(
+            prototype,
+            text("autoSize"),
+            Property::Accessor {
+                getter: Value::Undefined,
+                setter: None,
+            },
+            0,
+        )
+        .unwrap();
+        vm.set_attached_prototype(child, Some(prototype)).unwrap();
+        assert!(
+            vm.write_attached_member(child, "autoSize", Value::string("none"))
+                .is_err()
+        );
     }
 
     #[test]

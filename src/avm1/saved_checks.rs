@@ -17,6 +17,8 @@ fn profile() -> Arc<NativeNameProfile> {
         let alias = id <= 21 || (110..=115).contains(&id);
         let name = if id == 17 {
             "_focusrect".to_owned()
+        } else if id == 48 {
+            "autoSize".to_owned()
         } else {
             format!("{}synthetic{id:03}", if alias { "_" } else { "" })
         };
@@ -208,6 +210,90 @@ fn saved_define_local_uses_target_normal_setter_and_preserves_global() {
         vm.saved_environment_state(env).unwrap().registers(),
         &supplied_registers()
     );
+}
+
+#[test]
+fn saved_set_variable_writes_current_target_not_existing_global_and_keeps_prior_state() {
+    let (mut vm, owner) = fixture();
+    vm.raw_member(
+        vm.global(),
+        text("autoSize"),
+        Property::Data(Value::string("outer")),
+        4,
+    )
+    .unwrap();
+    let env = environment(&mut vm, owner, vec![Value::Number(17.0)], 8);
+    let mut bytes = push(&[Value::string("autoSize"), Value::string("none")]);
+    bytes.push(0x1d);
+    bytes.extend(push(&[Value::string("disabled"), Value::Bool(false)]));
+    bytes.push(0x1d);
+    let (id, _) = install(&mut vm, owner, &bytes);
+    let objects = vm.object_count();
+    completed(vm.execute_saved_action(id, env, &mut RejectHost).unwrap());
+    assert_eq!(
+        vm.saved_environment_state(env).unwrap().stack(),
+        &[Value::Number(17.0)]
+    );
+    assert_eq!(
+        vm.saved_environment_state(env).unwrap().registers(),
+        &supplied_registers()
+    );
+    assert_eq!(
+        vm.get(vm.global(), "autoSize").unwrap(),
+        Value::string("outer")
+    );
+    assert_eq!(
+        vm.read_attached_member(owner, "autoSize").unwrap(),
+        AttachedMember::Present(Value::string("none"))
+    );
+    assert_eq!(
+        vm.read_attached_member(owner, "disabled").unwrap(),
+        AttachedMember::Present(Value::Bool(false))
+    );
+    assert_eq!(vm.object_count(), objects + 1); // Only the target's lazy storage.
+    let storage = ObjectId(vm.attached_info(owner).unwrap().storage.unwrap().0);
+    vm.raw_member(
+        storage,
+        text("autoSize"),
+        Property::Data(Value::string("retained")),
+        4,
+    )
+    .unwrap();
+    completed(vm.execute_saved_action(id, env, &mut RejectHost).unwrap());
+    assert_eq!(
+        vm.read_attached_member(owner, "autoSize").unwrap(),
+        AttachedMember::Present(Value::string("retained"))
+    );
+    assert_eq!(vm.own_flags(storage, &text("autoSize")), 4);
+    assert_eq!(
+        vm.saved_environment_state(env).unwrap().stack(),
+        &[Value::Number(17.0)]
+    );
+}
+
+#[test]
+fn saved_set_variable_unsupported_names_values_and_members_keep_assignment_operands() {
+    for (key, value) in [
+        (Value::string("a.b"), Value::Bool(false)),
+        (Value::string(""), Value::Bool(false)),
+        (Value::string("a\0b"), Value::Bool(false)),
+        (Value::Number(4.0), Value::Bool(false)),
+        (Value::string("autoSize"), Value::Number(4.0)),
+        (Value::string("_x"), Value::Bool(false)),
+    ] {
+        let (mut vm, owner) = fixture();
+        let expected = vec![Value::Number(17.0), key, value];
+        let env = environment(&mut vm, owner, expected.clone(), 8);
+        let (id, _) = install(&mut vm, owner, &[0x1d]);
+        assert!(vm.execute_saved_action(id, env, &mut RejectHost).is_err());
+        assert_eq!(vm.saved_environment_state(env).unwrap().stack(), expected);
+        assert_eq!(
+            vm.saved_environment_state(env).unwrap().registers(),
+            &supplied_registers()
+        );
+        assert!(vm.saved_environment_halted(env).unwrap());
+        assert!(vm.attached_info(owner).unwrap().storage.is_none());
+    }
 }
 
 #[test]
