@@ -5,6 +5,16 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
+#[path = "attached.rs"]
+mod attached;
+#[path = "attached_events.rs"]
+mod attached_events;
+pub use attached::{
+    AttachedChild, AttachedClipId, AttachedClipSource, AttachedClipSpec, AttachedInfo,
+    AttachedMember, AttachedStorageId, AttachedWrite, DisplayTargetId, LoadedMovieSourceId,
+};
+pub use attached_events::{AttachedEventKind, AttachedEventState};
+
 pub type Text = Arc<[u16]>;
 pub fn text(value: &str) -> Text {
     value.encode_utf16().collect::<Vec<_>>().into()
@@ -26,6 +36,8 @@ pub enum Value {
     Number(f64),
     String(Text),
     Object(ObjectId),
+    /// A supported live display reference, distinct from its owner and storage.
+    DisplayClip(AttachedClipId),
 }
 impl Value {
     pub fn string(value: &str) -> Self {
@@ -37,7 +49,7 @@ impl Value {
             Self::Bool(v) => *v,
             Self::Number(v) => *v != 0.0 && !v.is_nan(),
             Self::String(v) => !v.is_empty(),
-            Self::Object(_) => true,
+            Self::Object(_) | Self::DisplayClip(_) => true,
         }
     }
 }
@@ -84,6 +96,7 @@ pub enum ErrorKind {
     UnsupportedNativeFunction(&'static str),
     StackUnderflow,
     InvalidObject(ObjectId),
+    InvalidAttachedClip(AttachedClipId),
     InvalidCode(CodeId),
     InvalidRegister(u8),
     InvalidBranch(i128),
@@ -289,6 +302,8 @@ enum Kind {
     FunctionConversion,
     MovieClipConstructor,
     MovieClip(MovieClipRole),
+    AttachedOwner(AttachedClipId),
+    BoundStorage(AttachedClipId),
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
@@ -385,6 +400,9 @@ pub struct Vm {
     array_constructor: Option<ObjectId>,
     array_prototype: Option<ObjectId>,
     class_bases: BTreeMap<ObjectId, ClassBase>,
+    attached: Vec<attached::AttachedClip>,
+    attached_targets: BTreeMap<DisplayTargetId, Option<AttachedClipId>>,
+    attached_child_entries: usize,
 }
 impl Vm {
     /// This execution profile supports SWF 7+; legacy coercions are not guessed.
@@ -418,6 +436,9 @@ impl Vm {
             array_constructor: None,
             array_prototype: None,
             class_bases: BTreeMap::new(),
+            attached: Vec::new(),
+            attached_targets: BTreeMap::new(),
+            attached_child_entries: 0,
         };
         if !(7..=19).contains(&version) {
             return vm.fail(ErrorKind::Unsupported(
@@ -726,6 +747,14 @@ impl Vm {
         Ok(constructor)
     }
     fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::AttachedOwner(_) | Kind::BoundStorage(_)
+        ) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached owner/storage requires typed member route",
+            ));
+        }
         if matches!(
             self.objects[id.0].kind,
             Kind::MovieClip(MovieClipRole::UnboundInstance)
@@ -1198,10 +1227,35 @@ impl Vm {
         }
     }
     fn check_value(&self, value: &Value) -> Result<()> {
-        if let Value::Object(id) = value {
-            self.check_object(*id)
-        } else {
-            Ok(())
+        match value {
+            Value::Object(id) => {
+                self.check_object(*id)?;
+                if matches!(
+                    self.objects[id.0].kind,
+                    Kind::AttachedOwner(_) | Kind::BoundStorage(_)
+                ) {
+                    return self.fail(ErrorKind::Unsupported(
+                        "attached owner/storage is not an ordinary object value",
+                    ));
+                }
+                Ok(())
+            }
+            Value::DisplayClip(id) => self.check_attached(*id),
+            _ => Ok(()),
+        }
+    }
+    fn target_value(&self, id: ObjectId) -> Value {
+        match self.objects[id.0].kind {
+            Kind::AttachedOwner(clip) => Value::DisplayClip(clip),
+            _ => Value::Object(id),
+        }
+    }
+    /// Explicit member access may use a display owner's interface; generic
+    /// object coercion deliberately does not manufacture an Object value.
+    fn member_owner(&self, value: Value) -> Result<ObjectId> {
+        match value {
+            Value::DisplayClip(id) => self.attached_owner(id),
+            value => self.object_id(value),
         }
     }
     fn allocate_text(&mut self, units: Vec<u16>) -> Result<Text> {
@@ -1228,6 +1282,13 @@ impl Vm {
         self.set_key(id, text(key), value)
     }
     fn get_key(&self, mut id: ObjectId, key: &Text) -> Result<Value> {
+        self.check_object(id)?;
+        if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
+            return Ok(match self.attached_lookup(clip, key)? {
+                AttachedMember::Missing => Value::Undefined,
+                AttachedMember::Present(value) => value,
+            });
+        }
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
@@ -1264,6 +1325,13 @@ impl Vm {
         self.fail(ErrorKind::Budget("prototype lookup depth"))
     }
     fn has_key(&self, mut id: ObjectId, key: &Text) -> Result<bool> {
+        self.check_object(id)?;
+        if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
+            return Ok(matches!(
+                self.attached_lookup(clip, key)?,
+                AttachedMember::Present(_)
+            ));
+        }
         let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
@@ -1353,6 +1421,10 @@ impl Vm {
         }
     }
     fn read_member(&mut self, id: ObjectId, key: &Text, host: &mut impl Host) -> Result<Value> {
+        self.check_object(id)?;
+        if matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
+            return self.get_key(id, key);
+        }
         if let Some(Property::Accessor { getter, .. }) = self.descriptor(id, key)? {
             if matches!(self.objects[id.0].kind, Kind::MovieClip(_)) {
                 return self.fail(ErrorKind::Unsupported("MovieClip accessor read profile"));
@@ -1369,6 +1441,10 @@ impl Vm {
         value: Value,
         host: &mut impl Host,
     ) -> Result<()> {
+        self.check_object(id)?;
+        if matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
+            return self.set_key(id, key, value);
+        }
         self.check_value(&value)?;
         if let Some(Property::Accessor { setter, .. }) = self.descriptor(id, &key)? {
             if matches!(self.objects[id.0].kind, Kind::MovieClip(_)) {
@@ -1437,6 +1513,23 @@ impl Vm {
         Ok(())
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
+        self.check_object(id)?;
+        if let Kind::AttachedOwner(clip) = self.objects[id.0].kind {
+            self.check_value(&value)?;
+            if key.as_ref() == text("__proto__").as_ref() {
+                let prototype = match value {
+                    Value::Object(id) => Some(id),
+                    Value::Null => None,
+                    _ => {
+                        return self
+                            .fail(ErrorKind::Unsupported("attached prototype value profile"));
+                    }
+                };
+                return self.set_attached_prototype(clip, prototype);
+            }
+            self.attached_write(clip, key, value)?;
+            return Ok(());
+        }
         self.check_object(id)?;
         if let Kind::MovieClip(role) = self.objects[id.0].kind {
             if role != MovieClipRole::UnboundPrototype
@@ -1552,7 +1645,7 @@ impl Vm {
     }
     fn object_id(&self, value: Value) -> Result<ObjectId> {
         if let Value::Object(id) = value {
-            self.check_object(id)?;
+            self.check_value(&Value::Object(id))?;
             Ok(id)
         } else {
             self.fail(ErrorKind::Unsupported(
@@ -1598,7 +1691,7 @@ impl Vm {
             Value::Null => self.fail(ErrorKind::Unsupported(
                 "unverified AVM1 null-to-number conversion",
             )),
-            Value::Object(_) => self.fail(ErrorKind::Unsupported(
+            Value::Object(_) | Value::DisplayClip(_) => self.fail(ErrorKind::Unsupported(
                 "object primitive coercion requires valueOf/toString",
             )),
             Value::String(s) => {
@@ -1659,7 +1752,7 @@ impl Vm {
                 }
                 self.allocate_text(format!("{v:.0}").encode_utf16().collect())
             }
-            Value::Object(_) => self.fail(ErrorKind::Unsupported(
+            Value::Object(_) | Value::DisplayClip(_) => self.fail(ErrorKind::Unsupported(
                 "object primitive coercion requires valueOf/toString",
             )),
         }
@@ -1672,7 +1765,7 @@ impl Vm {
             return Ok(Value::Object(self.global));
         }
         if key.as_ref() == text("_root").as_ref() {
-            return Ok(Value::Object(self.root));
+            return Ok(self.target_value(self.root));
         }
         self.simple_name(key)?;
         if key.as_ref() == text("super").as_ref() {
@@ -1698,6 +1791,11 @@ impl Vm {
         }
         for id in &frame.scopes {
             self.check_object(*id)?;
+            if *id == frame.target && matches!(self.objects[id.0].kind, Kind::AttachedOwner(_)) {
+                // Explicit attached lookup performs storage/children/prototype
+                // admission; the historical Plain-root profile stays separate.
+                continue;
+            }
             if !matches!(self.objects[id.0].kind, Kind::Plain)
                 || self.objects[id.0].prototype.is_some()
             {
@@ -1738,8 +1836,13 @@ impl Vm {
             ));
         }
         for id in &frame.scopes {
-            if let Some(property) = self.objects[id.0].properties.get(&first) {
-                if !matches!(property, Property::Data(_)) {
+            if self.has_key(*id, &first)? {
+                if !matches!(self.objects[id.0].kind, Kind::AttachedOwner(_))
+                    && !matches!(
+                        self.objects[id.0].properties.get(&first),
+                        Some(Property::Data(_))
+                    )
+                {
                     return self.fail(ErrorKind::Unsupported(
                         "qualified variable first-segment accessor",
                     ));
@@ -1839,6 +1942,11 @@ impl Vm {
     ) -> Result<Execution> {
         self.reset_execution();
         self.check_object(target)?;
+        if matches!(self.objects[target.0].kind, Kind::BoundStorage(_)) {
+            return self.fail(ErrorKind::Unsupported(
+                "bound storage is not an execution target",
+            ));
+        }
         let program = self
             .code
             .get(code.0)
@@ -1850,7 +1958,7 @@ impl Vm {
             scopes: vec![target, self.global],
             pool: Arc::new(Vec::new()),
             target,
-            this: Value::Object(target),
+            this: self.target_value(target),
             this_visible: true,
             locals: target,
         };
@@ -2364,7 +2472,7 @@ impl Vm {
                 0x10,
                 super_reference.map_or(Value::Undefined, Value::Object),
             ),
-            (0x40, Value::Object(self.root)),
+            (0x40, self.target_value(self.root)),
             (0x100, Value::Object(self.global)),
         ] {
             if flags & mask != 0 {
@@ -2482,10 +2590,23 @@ impl Vm {
             self.set_variable(frame, name, Value::Object(function), true, host)
         }
     }
+    fn truth_value(&self, value: &Value) -> Result<bool> {
+        if matches!(value, Value::DisplayClip(_)) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached display Boolean conversion",
+            ));
+        }
+        Ok(value.truthy())
+    }
     fn strict_equal(&self, a: &Value, b: &Value) -> bool {
         a == b
     }
     fn equal(&self, a: &Value, b: &Value) -> Result<bool> {
+        if matches!(a, Value::DisplayClip(_)) || matches!(b, Value::DisplayClip(_)) {
+            return self.fail(ErrorKind::Unsupported(
+                "attached display equality semantics",
+            ));
+        }
         if std::mem::discriminant(a) == std::mem::discriminant(b) {
             return Ok(self.strict_equal(a, b));
         }
@@ -2576,7 +2697,7 @@ impl Vm {
                     self.define(code, instruction.span.offset, definition, frame, host)?
                 }
                 Operands::Branch(branch) => {
-                    if instruction.opcode == 0x99 || self.pop(frame)?.truthy() {
+                    if instruction.opcode == 0x99 || self.truth_value(&self.pop(frame)?)? {
                         jump =
                             Some(usize::try_from(branch.target).map_err(|_| {
                                 self.error(ErrorKind::InvalidBranch(branch.target))
@@ -2669,12 +2790,12 @@ impl Vm {
                         self.push(frame, b)?;
                     }
                     0x12 => {
-                        let value = !self.pop(frame)?.truthy();
+                        let value = !self.truth_value(&self.pop(frame)?)?;
                         self.push(frame, Value::Bool(value))?;
                     }
                     0x10 | 0x11 => {
-                        let a = self.pop(frame)?.truthy();
-                        let b = self.pop(frame)?.truthy();
+                        let a = self.truth_value(&self.pop(frame)?)?;
+                        let b = self.truth_value(&self.pop(frame)?)?;
                         self.push(
                             frame,
                             Value::Bool(if instruction.opcode == 0x10 {
@@ -2704,7 +2825,7 @@ impl Vm {
                     0x4e => {
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        let object = self.object_id(self.pop(frame)?)?;
+                        let object = self.member_owner(self.pop(frame)?)?;
                         let value = self.read_member(object, &key, host)?;
                         self.push(frame, value)?;
                     }
@@ -2712,7 +2833,7 @@ impl Vm {
                         let value = self.pop(frame)?;
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        let object = self.object_id(self.pop(frame)?)?;
+                        let object = self.member_owner(self.pop(frame)?)?;
                         self.write_member(object, key, value, host)?;
                     }
                     0x42 => {
@@ -2751,7 +2872,7 @@ impl Vm {
                         let args = self.args(frame)?;
                         let callable = self.variable(frame, &name, host)?;
                         let value =
-                            self.invoke(callable, Value::Object(frame.target), &args, host)?;
+                            self.invoke(callable, self.target_value(frame.target), &args, host)?;
                         self.push(frame, value)?;
                     }
                     0x52 => {
@@ -2764,7 +2885,7 @@ impl Vm {
                             receiver.clone()
                         } else {
                             let key = self.to_text(&method)?;
-                            let object = self.object_id(receiver.clone())?;
+                            let object = self.member_owner(receiver.clone())?;
                             self.read_member(object, &key, host)?
                         };
                         let value = self.invoke(callable, receiver, &args, host)?;
@@ -2784,7 +2905,7 @@ impl Vm {
                                 receiver
                             } else {
                                 let key = self.to_text(&name)?;
-                                let id = self.object_id(receiver)?;
+                                let id = self.member_owner(receiver)?;
                                 self.read_member(id, &key, host)?
                             }
                         };
@@ -2810,8 +2931,12 @@ impl Vm {
                         ) {
                             // Native standard constructors select their constructed object;
                             // this is distinct from a script constructor's return value.
-                            let object =
-                                self.invoke(callable, Value::Object(frame.target), &args, host)?;
+                            let object = self.invoke(
+                                callable,
+                                self.target_value(frame.target),
+                                &args,
+                                host,
+                            )?;
                             self.object_id(object.clone())?;
                             self.push(frame, object)?;
                         } else {
@@ -2945,6 +3070,13 @@ impl Vm {
                         let a = self.pop(frame)?;
                         let b = self.pop(frame)?;
                         let value = if instruction.opcode == 0x66 {
+                            if matches!(a, Value::DisplayClip(_))
+                                || matches!(b, Value::DisplayClip(_))
+                            {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "attached display strict equality semantics",
+                                ));
+                            }
                             self.strict_equal(&a, &b)
                         } else {
                             self.equal(&a, &b)?
@@ -3053,6 +3185,11 @@ impl Vm {
                             Value::Bool(_) => "boolean",
                             Value::Number(_) => "number",
                             Value::String(_) => "string",
+                            Value::DisplayClip(_) => {
+                                return self.fail(ErrorKind::Unsupported(
+                                    "attached display typeof semantics",
+                                ));
+                            }
                             Value::Object(id) => {
                                 self.check_object(id)?;
                                 if matches!(

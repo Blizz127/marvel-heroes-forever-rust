@@ -855,6 +855,89 @@ locale data or claim that a live native struct has no patched fields. The integr
 host owns those data and patch-profile decisions. Neither the focused checks nor the selected-script probe executes the retail
 native callback or establishes runtime parity.
 
+## Explicit attached source MovieClip bridge
+
+`Value::DisplayClip(AttachedClipId)` is distinct from an ordinary object value.
+`create_attached_movie_clip(AttachedClipSpec)` allocates a new owner identity and
+retains the host's DisplayTargetId, loaded movie identity, sprite definition,
+version, complete case-3 parent chain and actual raw event state. It never retags a
+Plain or unbound MovieClip object. Native MovieClip/prototype selection is admitted
+only through the unchanged own-data bindings. Each live target identity is unique.
+
+`attached_owner` supplies the separate ObjectId used as an execution context or
+explicit host mapping key. `attached_value` supplies the display reference.
+Bound script storage is lazy and has its own opaque diagnostic identity; it cannot
+be passed back as an ordinary Value. `set_attached_prototype` creates storage first,
+updates its linked parent and mouse-event marker, then updates the owner's prototype.
+The public `attached_info` record exposes these distinctions. `adopt_attached_root`
+requires a pristine old root and no registered programs/script closures; integration
+must call it before installing a host whose context depends on that root. Existing
+Plain-object diagnostics retain their separate behavior.
+
+**VERIFIED static admission:** The selected names `gfx`, `Function`, `disabled`,
+`enableInitCallback`, `localTextLabel`, `button` and `localizedText_tf` take the
+ordinary route under the original standard-member map and concrete case-3 owner.
+This is an exact-name profile backed by `rea-attached-member-names/combined-proof-receipt.json`,
+not an underscore heuristic. Native `enabled`, `tabEnabled`, `transform` and
+`scale9Grid` demonstrate why arbitrary non-underscore names cannot be accepted.
+The private finite inventory remains outside git.
+
+`read_attached_member` returns `Missing` or `Present(Value)`. Own storage is probed
+without inheritance, then the complete unique named-child snapshot, then the
+prototype. Own undefined/null values win. A supported matching child returns its
+public DisplayClip reference, not its storage. Unsupported named-child categories
+remain explicit entries and stop lookup rather than disappearing. The host installs
+one complete snapshot with `set_attached_children`; direct children must be created
+before that installation. Duplicate names/target identities, later addition,
+replacement, rename, removal and eligibility-bit changes reject. These restrictions
+keep the native child-cache profile unambiguous; they are not retail restrictions.
+
+Ordinary writes target storage and never replace a child. The normal setter skips
+inherited data while looking for deeper accessors, shadows inherited data including
+readonly data, preserves existing own flags, and leaves own readonly data unchanged.
+Accessors, watches, resolvers and native special effects stay explicit boundaries.
+Only the admitted names are written; their pre-write hook has no target-state write
+under the required homogeneous live case-3 parent chain. Generic/unbound setters
+are not reused to infer bound-storage semantics.
+
+The unchanged native MovieClip/Object/null fallback is separately verified to miss
+`Function`, `gfx` and `onLoad` without modifying its raw output. The attached path
+checks current own members, original builtin links and absence of resolver mutation
+history before using that fact. Other missing native prototype members reject.
+A found undefined remains found, preserving target-before-global lookup. The existing
+Plain-root fallback is not relaxed. The three-segment qualified class lookup may
+use this explicitly admitted attached first-segment route; all its other guards remain.
+
+`AttachedEventState` contains caller-owned target/load/source raw fields, without a
+universal Default. The concrete owner-offset byte at target +0x6d overlaps the high
+byte of target_flags and must be 0x52 in this profile. Updates preserve that byte and
+child eligibility bits 7/8; unmodeled cache/lifetime transitions cannot enter through
+a raw-state update. The separate attachment helper clears load bit 3 only on its
+proved raw-argument branch. Eligibility is captured before construction callbacks;
+presence marking never clears an existing bit. Wrapper admission checks target bit 4
+before clearing bit 5 for Load, then applies the extra load gate. No helper executes
+callbacks or proves delivery. `attached_load_present` consumes actual saved-load-event
+presence or raw storage/prototype presence, ignores named children, invokes no getter
+and does not require a callable value.
+
+**OBSERVED:** Eleven focused bridge/event checks pass, together with 37 existing
+VM checks. The original manager cursor handler at 7096+77 runs on an explicit attached
+source identity for character 27 (`cursor_mc`), with a controlled geometry host.
+It executes 14 instructions and six indexed-property callbacks, moving supplied
+coordinates (10,20) to (100,200). Owner and display reference remain distinct, and
+no script storage is created by the geometry host. Private
+`avm1-runtime/attached-bridge-evidence.json`, `run-owned-attached-cursor.rs`,
+`owned-attached-cursor.tsv` and the focused reports retain the result.
+
+This probe supplies declared raw state and geometry; it does not establish a native
+root binding, Scene association, placement/class lifecycle, event queue execution or
+retail display parity. Numeric/string/Boolean coercion, script equality/typeof,
+Function.apply display-receiver conversion, attached accessor execution, enumeration
+and retirement remain gated. Integration owns verified Scene/movie/target mappings.
+The static contracts are in `docs/ATTACHED_MOVIECLIP.md`,
+`docs/ATTACHED_MEMBER_NAMES.md`, `rea-prototype-function-miss/finding-summary.json`
+and the retained event-wrapper receipts cited by `attached_events.rs`.
+
 ## Indexed movie-property host seam
 
 GetProperty/SetProperty now use `Host::get_property` / `set_property`. Both have
