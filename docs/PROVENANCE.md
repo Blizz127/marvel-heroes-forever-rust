@@ -677,3 +677,22 @@ stores, conditional DataDef/getter identities and ordinary allocation
 assumptions through one specific owner checkpoint. Its evidence ledger retains
 all selected native ranges and independent checks privately. The values do not
 replace snapshots for already adopted targets or prove later preservation.
+
+[Mouse construction](REA_MOUSE_HIDE.md) and [user-event host selection](REA_MOUSE_HOST.md)
+record the owned executable's deferred graph, finite member contracts and
+state-4 cache/ownership paths. Original Rust implements only the bounded graph
+and an explicit rejecting host boundary. Their ledgers retain exact private
+REA inputs; no installed-handler or cursor-effect assumption is added.
+
+[Construct dynamic lookup](CONSTRUCT_DYNAMIC_LOOKUP.md) reuses the owned movie
+and existing original project code in one frozen controlled replay. The ledger
+preserves the supplied state and all original comparison rows; no third-party
+implementation or native initialization claim was introduced.
+
+[Scale9 geometry staging](SCALE9_GEOMETRY.md) records owned native source-path
+and generated-index contracts separately. Its original implementation and
+saved-source smoke do not infer triangle generation or actual provider inputs.
+[Texture archive and PostLoad](SCALE9_TEXTURE_LOAD.md) extends the same owned
+package/native lineage through conditional archive state and resource dispatch;
+later helper and lifecycle boundaries remain explicit. Both ledgers identify
+their retained source/tool inputs, with no copied external implementation.

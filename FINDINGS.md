@@ -17,10 +17,41 @@ pointers match the owned executable. Receipt:
 `evidence/fresh-target-state/receipt.json`, SHA-256
 `f5cee982cc7d0584d36aac0137df2f8217f9f77ff33a0668657dea335849741e`.
 
-The new Mouse host interface rejects unbound user-event delivery by default.
-It installs no Mouse object and performs no cursor mutation. Native factory
-and actual engine handler work continue separately. Dev18 remains the latest
-staged package; no dev19 build/startup result is claimed.
+**VERIFIED bounded Mouse implementation:** deferred global registration now
+materializes distinct constructor/prototype/native-method identities and the
+retained listener Array. Twelve focused checks and production metadata compile
+pass. Zero-argument hide reaches the explicit user-event host boundary, which
+rejects by default; no cursor effect is implemented. Static evidence identifies
+the native state-4 cache but does not establish the installed handler or its
+effect. Receipts: `evidence/avm1-runtime/mouse-checks.json` (SHA-256
+`cb9b6662bfcd534d43c170bf29badbd50dddd1bf41b6caece96aac52f856e21d`)
+and `evidence/mouse-host/receipt.json` (SHA-256
+`9ba87020394b02c314f453e17310941338efe826e9ce9f99c784ee5f91146797`).
+
+**OBSERVED original Construct lookup:** all 34 post-handler lookups return
+Missing in the supplied diagnostic state. The prior 2,505 observation rows,
+674 values and 1,686 instructions remain exact; no callback runs or fixture
+state changes. This does not establish native initialized absence or complete
+Construct delivery. Receipt: `evidence/construct-dynamic-lookup/receipt.json`,
+SHA-256 `9c09977c63d2c18b39262dcfb150d880227bcd04fc32d0d7d7b8bc2ec1510b32`.
+
+**VERIFIED bounded Scale9 geometry preparation:** the original source-path
+module preserves transformed endpoint order, closure, full style IDs and the
+resource-style union. A separate transfer maps explicitly supplied generated
+triangles to low-16-bit vertex ordinals; it generates no connectivity. Five
+focused checks and a saved Shape72 staging probe pass under supplied synthetic
+context/resource inputs. Receipt: `evidence/scale9-geometry/receipt.json`,
+SHA-256 `88b63fe5db9d8d5ced36f3c543a5fb37e5f3cec64769e3f0f6a04cce1b9eae87`.
+
+**VERIFIED static texture load path:** the owned package header supplies native
+archive version 868 on the recorded ordinary fresh-load route. Texture2D
+PostLoad dispatch and the immediate resource factory are grounded; later
+object-receiving helpers and lifecycle still limit dimension preservation.
+No renderer defaults follow. Receipt:
+`evidence/scale9-texture-load/final-index.json`, SHA-256
+`df9afdbbddf04acaad47ff708c40516daee12225a6cc10008dd4d0790dbc63f2`.
+
+Dev18 remains the latest staged package; no dev19 build/startup result is claimed.
 
 ## 2026-11-15 dev18 diagnostic increment
 
