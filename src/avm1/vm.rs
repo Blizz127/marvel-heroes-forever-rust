@@ -178,11 +178,20 @@ enum Kind {
     Script(ScriptFunction),
     Native(u32),
     ObjectConstructor,
+    AddProperty,
+}
+#[derive(Debug, Clone)]
+enum Property {
+    Data(Value),
+    Accessor {
+        getter: Value,
+        setter: Option<Value>,
+    },
 }
 #[derive(Debug, Clone)]
 struct Object {
     kind: Kind,
-    properties: BTreeMap<Text, Value>,
+    properties: BTreeMap<Text, Property>,
     prototype: Option<ObjectId>,
 }
 struct Frame {
@@ -311,6 +320,8 @@ impl Vm {
         let prototype = self.object()?;
         self.set(constructor, "prototype", Value::Object(prototype))?;
         self.set(prototype, "constructor", Value::Object(constructor))?;
+        let add_property = self.alloc(Kind::AddProperty, None)?;
+        self.set(prototype, "addProperty", Value::Object(add_property))?;
         self.set(self.global, "Object", Value::Object(constructor))?;
         self.object_constructor = Some(constructor);
         Ok(constructor)
@@ -389,8 +400,13 @@ impl Vm {
                     return Ok(Value::Number(f64::from(len)));
                 }
             }
-            if let Some(value) = object.properties.get(key) {
-                return Ok(value.clone());
+            if let Some(property) = object.properties.get(key) {
+                return match property {
+                    Property::Data(value) => Ok(value.clone()),
+                    Property::Accessor { .. } => self.fail(ErrorKind::Unsupported(
+                        "accessor requires executable property access",
+                    )),
+                };
             }
             if let Some(next) = object.prototype {
                 id = next;
@@ -419,9 +435,110 @@ impl Vm {
         }
         self.fail(ErrorKind::Budget("prototype lookup depth"))
     }
+    fn descriptor(&self, mut id: ObjectId, key: &Text) -> Result<Option<Property>> {
+        for _ in 0..self.limits.prototype_depth {
+            self.check_object(id)?;
+            let object = &self.objects[id.0];
+            if let Some(property) = object.properties.get(key) {
+                return Ok(Some(property.clone()));
+            }
+            if let Some(next) = object.prototype {
+                id = next;
+            } else {
+                return Ok(None);
+            }
+        }
+        self.fail(ErrorKind::Budget("prototype lookup depth"))
+    }
+    fn callable(&self, value: &Value) -> bool {
+        if let Value::Object(id) = value {
+            self.objects.get(id.0).is_some_and(|object| {
+                matches!(
+                    object.kind,
+                    Kind::Script(_) | Kind::Native(_) | Kind::ObjectConstructor | Kind::AddProperty
+                )
+            })
+        } else {
+            false
+        }
+    }
+    fn read_member(&mut self, id: ObjectId, key: &Text, host: &mut impl Host) -> Result<Value> {
+        if let Some(Property::Accessor { getter, .. }) = self.descriptor(id, key)? {
+            self.invoke(getter, Value::Object(id), &[], host)
+        } else {
+            self.get_key(id, key)
+        }
+    }
+    fn write_member(
+        &mut self,
+        id: ObjectId,
+        key: Text,
+        value: Value,
+        host: &mut impl Host,
+    ) -> Result<()> {
+        self.check_value(&value)?;
+        if let Some(Property::Accessor { setter, .. }) = self.descriptor(id, &key)? {
+            if let Some(setter) = setter {
+                self.invoke(setter, Value::Object(id), &[value], host)?;
+            }
+            // Adobe explicitly specifies ignored writes for a null setter.
+            Ok(())
+        } else {
+            self.set_key(id, key, value)
+        }
+    }
+    pub fn read_property(
+        &mut self,
+        id: ObjectId,
+        key: &str,
+        host: &mut impl Host,
+    ) -> Result<Execution> {
+        self.reset_execution();
+        let value = self.read_member(id, &text(key), host)?;
+        Ok(Execution {
+            value,
+            stack: Vec::new(),
+            instructions: self.instructions,
+            host_calls: self.host_calls,
+        })
+    }
+    pub fn write_property(
+        &mut self,
+        id: ObjectId,
+        key: &str,
+        value: Value,
+        host: &mut impl Host,
+    ) -> Result<Execution> {
+        self.reset_execution();
+        self.write_member(id, text(key), value, host)?;
+        Ok(Execution {
+            value: Value::Undefined,
+            stack: Vec::new(),
+            instructions: self.instructions,
+            host_calls: self.host_calls,
+        })
+    }
+    fn reserve_property(&mut self, id: ObjectId, key: &Text) -> Result<()> {
+        if !self.objects[id.0].properties.contains_key(key) {
+            if self.properties >= self.limits.properties {
+                return self.fail(ErrorKind::Budget("properties"));
+            }
+            if key.len() > self.limits.string_units.saturating_sub(self.string_units) {
+                return self.fail(ErrorKind::Budget("property name units"));
+            }
+            self.properties += 1;
+            self.string_units += key.len();
+        }
+        Ok(())
+    }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
         self.check_value(&value)?;
+        if matches!(self.descriptor(id, &key)?, Some(Property::Accessor { .. })) {
+            return self.fail(ErrorKind::Unsupported(
+                "accessor requires executable property assignment",
+            ));
+        }
         if key.as_ref() == text("__proto__").as_ref() {
             let prototype = match value {
                 Value::Null => None,
@@ -465,17 +582,10 @@ impl Vm {
                 }
             }
         }
-        if !self.objects[id.0].properties.contains_key(&key) {
-            if self.properties >= self.limits.properties {
-                return self.fail(ErrorKind::Budget("properties"));
-            }
-            if key.len() > self.limits.string_units.saturating_sub(self.string_units) {
-                return self.fail(ErrorKind::Budget("property name units"));
-            }
-            self.properties += 1;
-            self.string_units += key.len();
-        }
-        self.objects[id.0].properties.insert(key, value);
+        self.reserve_property(id, &key)?;
+        self.objects[id.0]
+            .properties
+            .insert(key, Property::Data(value));
         Ok(())
     }
     fn push(&self, frame: &mut Frame, value: Value) -> Result<()> {
@@ -575,7 +685,7 @@ impl Vm {
             )),
         }
     }
-    fn variable(&self, frame: &Frame, key: &Text) -> Result<Value> {
+    fn variable(&mut self, frame: &Frame, key: &Text, host: &mut impl Host) -> Result<Value> {
         if frame.this_visible && key.as_ref() == text("this").as_ref() {
             return Ok(frame.this.clone());
         }
@@ -590,9 +700,8 @@ impl Vm {
             return self.fail(ErrorKind::Unsupported("super lookup"));
         }
         for id in &frame.scopes {
-            let value = self.get_key(*id, key)?;
             if self.has_key(*id, key)? {
-                return Ok(value);
+                return self.read_member(*id, key, host);
             }
         }
         Ok(Value::Undefined)
@@ -606,7 +715,14 @@ impl Vm {
             Ok(())
         }
     }
-    fn set_variable(&mut self, frame: &Frame, key: Text, value: Value, local: bool) -> Result<()> {
+    fn set_variable(
+        &mut self,
+        frame: &Frame,
+        key: Text,
+        value: Value,
+        local: bool,
+        host: &mut impl Host,
+    ) -> Result<()> {
         self.simple_name(&key)?;
         let id = if local {
             frame.locals
@@ -620,7 +736,11 @@ impl Vm {
             }
             found
         };
-        self.set_key(id, key, value)
+        if local {
+            self.set_key(id, key, value)
+        } else {
+            self.write_member(id, key, value, host)
+        }
     }
     fn reset_execution(&mut self) {
         self.instructions = 0;
@@ -729,6 +849,40 @@ impl Vm {
                 return Ok(value);
             }
             Kind::Script(function) => function,
+            Kind::AddProperty => {
+                if args.len() != 3 {
+                    return self.fail(ErrorKind::Unsupported("addProperty argument count"));
+                }
+                let (Value::Object(receiver), Value::String(name)) = (&this, &args[0]) else {
+                    return Ok(Value::Bool(false));
+                };
+                if name.is_empty()
+                    || !self.callable(&args[1])
+                    || (!matches!(args[2], Value::Null) && !self.callable(&args[2]))
+                {
+                    return Ok(Value::Bool(false));
+                }
+                if name.as_ref() == text("__proto__").as_ref()
+                    || matches!(self.objects[receiver.0].kind, Kind::Array(_))
+                        && name.as_ref() == text("length").as_ref()
+                {
+                    return self.fail(ErrorKind::Unsupported("accessor over intrinsic property"));
+                }
+                self.reserve_property(*receiver, name)?;
+                let setter = if matches!(args[2], Value::Null) {
+                    None
+                } else {
+                    Some(args[2].clone())
+                };
+                self.objects[receiver.0].properties.insert(
+                    name.clone(),
+                    Property::Accessor {
+                        getter: args[1].clone(),
+                        setter,
+                    },
+                );
+                return Ok(Value::Bool(true));
+            }
             Kind::ObjectConstructor => {
                 if args.len() > 1 {
                     return self.fail(ErrorKind::Unsupported("Object constructor extra arguments"));
@@ -872,6 +1026,7 @@ impl Vm {
         offset: usize,
         definition: &Function,
         frame: &mut Frame,
+        host: &mut impl Host,
     ) -> Result<()> {
         let function = self.alloc(
             Kind::Script(ScriptFunction {
@@ -890,7 +1045,7 @@ impl Vm {
             self.push(frame, Value::Object(function))
         } else {
             let name = self.decode_text(&definition.name)?;
-            self.set_variable(frame, name, Value::Object(function), true)
+            self.set_variable(frame, name, Value::Object(function), true, host)
         }
     }
     fn strict_equal(&self, a: &Value, b: &Value) -> bool {
@@ -982,7 +1137,7 @@ impl Vm {
                     self.write_register(frame, *r, value)?;
                 }
                 Operands::Function(definition) => {
-                    self.define(code, instruction.span.offset, definition, frame)?
+                    self.define(code, instruction.span.offset, definition, frame, host)?
                 }
                 Operands::Branch(branch) => {
                     if instruction.opcode == 0x99 || self.pop(frame)?.truthy() {
@@ -1094,25 +1249,25 @@ impl Vm {
                     0x1c => {
                         let value = self.pop(frame)?;
                         let key = self.to_text(&value)?;
-                        let value = self.variable(frame, &key)?;
+                        let value = self.variable(frame, &key, host)?;
                         self.push(frame, value)?;
                     }
                     0x1d | 0x3c => {
                         let value = self.pop(frame)?;
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        self.set_variable(frame, key, value, instruction.opcode == 0x3c)?;
+                        self.set_variable(frame, key, value, instruction.opcode == 0x3c, host)?;
                     }
                     0x41 => {
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
-                        self.set_variable(frame, key, Value::Undefined, true)?;
+                        self.set_variable(frame, key, Value::Undefined, true, host)?;
                     }
                     0x4e => {
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
                         let object = self.object_id(self.pop(frame)?)?;
-                        let value = self.get_key(object, &key)?;
+                        let value = self.read_member(object, &key, host)?;
                         self.push(frame, value)?;
                     }
                     0x4f => {
@@ -1120,7 +1275,7 @@ impl Vm {
                         let key = self.pop(frame)?;
                         let key = self.to_text(&key)?;
                         let object = self.object_id(self.pop(frame)?)?;
-                        self.set_key(object, key, value)?;
+                        self.write_member(object, key, value, host)?;
                     }
                     0x42 => {
                         let args = self.args(frame)?;
@@ -1148,7 +1303,7 @@ impl Vm {
                         let name = self.pop(frame)?;
                         let name = self.to_text(&name)?;
                         let args = self.args(frame)?;
-                        let callable = self.variable(frame, &name)?;
+                        let callable = self.variable(frame, &name, host)?;
                         let value =
                             self.invoke(callable, Value::Object(frame.target), &args, host)?;
                         self.push(frame, value)?;
@@ -1164,7 +1319,7 @@ impl Vm {
                         } else {
                             let key = self.to_text(&method)?;
                             let object = self.object_id(receiver.clone())?;
-                            self.get_key(object, &key)?
+                            self.read_member(object, &key, host)?
                         };
                         let value = self.invoke(callable, receiver, &args, host)?;
                         self.push(frame, value)?;
@@ -1173,7 +1328,7 @@ impl Vm {
                         let callable = if instruction.opcode == 0x40 {
                             let name = self.pop(frame)?;
                             let name = self.to_text(&name)?;
-                            self.variable(frame, &name)?
+                            self.variable(frame, &name, host)?
                         } else {
                             let name = self.pop(frame)?;
                             let receiver = self.pop(frame)?;
@@ -1184,7 +1339,7 @@ impl Vm {
                             } else {
                                 let key = self.to_text(&name)?;
                                 let id = self.object_id(receiver)?;
-                                self.get_key(id, &key)?
+                                self.read_member(id, &key, host)?
                             }
                         };
                         let args = self.args(frame)?;
@@ -1215,7 +1370,10 @@ impl Vm {
                         for class in [superclass, subclass] {
                             if !matches!(
                                 self.objects[class.0].kind,
-                                Kind::Script(_) | Kind::Native(_) | Kind::ObjectConstructor
+                                Kind::Script(_)
+                                    | Kind::Native(_)
+                                    | Kind::ObjectConstructor
+                                    | Kind::AddProperty
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
                             }
@@ -1346,7 +1504,10 @@ impl Vm {
                                 self.check_object(id)?;
                                 if matches!(
                                     self.objects[id.0].kind,
-                                    Kind::Script(_) | Kind::Native(_) | Kind::ObjectConstructor
+                                    Kind::Script(_)
+                                        | Kind::Native(_)
+                                        | Kind::ObjectConstructor
+                                        | Kind::AddProperty
                                 ) {
                                     "function"
                                 } else {
@@ -1709,7 +1870,8 @@ mod tests {
             locals: inner,
         };
         assert_eq!(
-            vm.variable(&frame, &text("shadow")).unwrap(),
+            vm.variable(&frame, &text("shadow"), &mut RejectHost)
+                .unwrap(),
             Value::Undefined
         );
     }
@@ -1761,5 +1923,74 @@ mod tests {
             Value::Object(superclass)
         );
         assert_eq!(vm.get(prototype, "inherited").unwrap(), Value::Number(19.0));
+    }
+    #[test]
+    fn accessors_are_lazy_inherited_and_execute_with_instance_receiver() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let mut getter = push(&[Value::string("this")]);
+        getter.push(0x1c);
+        getter.extend(push(&[Value::string("stored")]));
+        getter.extend([0x4e, 0x3e]);
+        let mut setter = push(&[Value::string("this")]);
+        setter.push(0x1c);
+        setter.extend(push(&[Value::string("stored"), Value::string("value")]));
+        setter.extend([0x1c, 0x4f]);
+        let mut declaration = function("getter", &getter);
+        let mut params = vec![b's', 0, 1, 0, b'v', b'a', b'l', b'u', b'e', 0];
+        params.extend((setter.len() as u16).to_le_bytes());
+        declaration.extend(action(0x9b, &params));
+        declaration.extend(setter);
+        execute(&mut vm, &declaration).unwrap();
+        let prototype = vm.ordinary_object().unwrap();
+        let instance = vm.object().unwrap();
+        vm.set(instance, "__proto__", Value::Object(prototype))
+            .unwrap();
+        vm.set(instance, "stored", Value::Number(5.0)).unwrap();
+        let getter = vm.get(vm.root(), "getter").unwrap();
+        let setter = vm.get(vm.root(), "s").unwrap();
+        let add = vm.get(prototype, "addProperty").unwrap();
+        let registered = vm
+            .call(
+                add.clone(),
+                Value::Object(prototype),
+                &[Value::string("field"), getter.clone(), setter],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(registered.value, Value::Bool(true));
+        assert_eq!(registered.instructions, 0);
+        assert_eq!(vm.get(instance, "stored").unwrap(), Value::Number(5.0));
+        assert!(vm.get(instance, "field").is_err());
+        assert_eq!(
+            vm.read_property(instance, "field", &mut RejectHost)
+                .unwrap()
+                .value,
+            Value::Number(5.0)
+        );
+        vm.write_property(instance, "field", Value::Number(42.0), &mut RejectHost)
+            .unwrap();
+        assert_eq!(vm.get(instance, "stored").unwrap(), Value::Number(42.0));
+        assert_eq!(vm.get(prototype, "stored").unwrap(), Value::Undefined);
+        vm.call(
+            add.clone(),
+            Value::Object(prototype),
+            &[Value::string("field"), getter, Value::Null],
+            &mut RejectHost,
+        )
+        .unwrap();
+        vm.write_property(instance, "field", Value::Number(99.0), &mut RejectHost)
+            .unwrap();
+        assert_eq!(vm.get(instance, "stored").unwrap(), Value::Number(42.0));
+        let result = vm
+            .call(
+                add,
+                Value::Object(prototype),
+                &[Value::string("bad"), Value::Number(1.0), Value::Null],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Bool(false));
+        assert!(!vm.has_key(prototype, &text("bad")).unwrap());
     }
 }

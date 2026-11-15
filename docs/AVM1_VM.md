@@ -23,7 +23,7 @@ transactional, and retrying a stream is not an automatic recovery strategy.
 `instruction_count()` remains available after failure.
 
 `Value` distinguishes undefined, null, Boolean, double, UTF-16 string and object
-identity. Objects have data properties and an explicit prototype. Script functions
+identity. Objects have data/accessor properties and an explicit prototype. Script functions
 and native bindings are object kinds. Arrays expose indexed properties and length.
 Function bodies capture lexical object scopes and the current constant pool.
 Function2 parameter registers, supported preloads, local variables, arguments and
@@ -60,12 +60,13 @@ Host-created Rust values are supplied by trusted integration code; the VM's
 allocation counters cover its own allocations and installed property names.
 
 Unsupported operations return errors, including Try/Throw, enumeration,
-property flags/accessors, movieclip paths, super and parent preloads, automatic
+property flags, movieclip paths, super and parent preloads, automatic
 primitive boxing, and uninstalled standard-library/native functions. Missing
 ordinary properties correctly yield undefined; attempting to call that value
 stops with `UnboundCall`. The optional `install_object_constructor()` installs the documented Object
-constructor and prototype. Primitive boxing remains unsupported. It does not
-install native methods or Function, MovieClip, Stage, Mouse or Scaleform libraries.
+constructor, prototype and documented `Object.prototype.addProperty` method.
+Primitive boxing remains unsupported. It does not install other native methods or
+Function, MovieClip, Stage, Mouse or Scaleform libraries.
 
 Primitive conversion is deliberately narrower than the eventual compatibility
 profile. It supports modern Boolean behavior, ordinary decimal numeric strings,
@@ -117,7 +118,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Ten focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Eleven focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -157,6 +158,35 @@ instances; returning true without registering a class would be incorrect.
 `inheritance-evidence.json` retain the private ordering, dependency and execution
 measurements. The earlier isolated-inventory counts describe the core baseline;
 they do not claim that adding Extends completes those initializers.
+
+## Executable accessor increment
+
+`Object.prototype.addProperty` installs a getter/setter pair lazily and replaces
+an existing own property. Invalid names or callable arguments return false
+without creating a property. A read invokes the getter with zero arguments; a
+write invokes the setter with the assigned value and ignores its return. An
+inherited accessor receives the original instance as `this`. A null setter makes
+writes harmless, as Adobe explicitly specifies. No getter runs during registration.
+
+GetMember/SetMember and variable reads/assignments use executable access when a
+descriptor is present. Getter/setter functions consume the existing instruction,
+call and host budgets. `get`/`set` remain data-only integration helpers and return
+an explicit error on accessors. Integrators use `read_property`/`write_property`
+with a Host to execute an accessor and receive an Execution report.
+
+**OBSERVED:** `run-owned-accessor.rs` installs the original isolated login getter
+at 64967 as an accessor on a controlled prototype. Registration executes zero
+script instructions. Reads from a derived instance execute the original six/eight
+instructions and return 0/320 for absent/present child state. Writing the null-setter
+property preserves the child's width at 320. All operations use RejectHost and
+produce zero host calls. This tests original getter execution with controlled
+registration, not successful retail class initialization.
+
+`owned-accessor-results.tsv`, `accessor-evidence.json` and `vm-tests-accessor.txt`
+retain that evidence and eleven passing focused tests. The synthetic accessor test
+also verifies a real script setter mutates the instance, not the prototype, and
+invalid registration leaves no property behind. Ordered initialization still has
+the separately reported empty-Pop question; no instruction is silently skipped.
 
 ## Source and licence ledger
 
