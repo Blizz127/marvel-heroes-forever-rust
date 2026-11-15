@@ -36,7 +36,7 @@ The diagnostic bounds default to 10,000 dispatches plus the existing VM and disp
 limits. There is no unbounded heap collector or trace-history retention policy yet.
 
 The existing single-invocation `frontend pointer-probe` CLI uses this same
-controller. The native `frontend window-pointer` command is being integrated with
+controller. The native `frontend window-pointer` command integrates it with
 the persistent GPU scene and actual host cursor events; it remains separate from
 full startup and general event dispatch.
 

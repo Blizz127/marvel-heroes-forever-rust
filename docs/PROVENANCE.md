@@ -228,3 +228,6 @@ owned script/native callback, export linkage and prototype-ID formatting evidenc
 It does not replace the unresolved native callback aggregate or startup path.
 [Persistent pointer controller](FRONTEND_POINTER.md) composes the existing
 original VM and display bridge, with the same Adobe/private-script provenance.
+[Native scene host](NATIVE_WINDOW.md) registers the pinned winit/wgpu contracts
+for persistent surface rendering, physical pointer coordinates and lifecycle.
+It adds no dependency and retains the explicit native-platform validation limits.

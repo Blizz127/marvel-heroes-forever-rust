@@ -51,7 +51,7 @@ mhf upk exports /private/path/MarvelFrontEnd_SF.upk
 ```
 
 This reads object tables and supported property/native payloads through bounded
-LZO decoding. StaticMesh geometry can be read through the library; material/world
+LZO decoding. Static and skeletal mesh geometry can be read through the library; material/world
 rendering and the playable frontend remain unimplemented.
 
 Prototype bodies and supported asset properties now have separate commands:
@@ -101,6 +101,7 @@ mhf frontend render-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dial
 mhf frontend window-static /private/path/MarvelFrontEnd_SF.upk marvel_login_dialog /private/path/MarvelGame.upk /private/path/MarvelFonts_SF.upk --font-library MarvelFonts.fonts_en --frames 2
 mhf frontend init-probe /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager
 mhf frontend pointer-probe /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager 100 200 ~/.local/share/marvel-heroes-forever-rust/evidence/cursor.pam
+mhf frontend window-pointer /private/path/MarvelGame.upk MarvelFrontEnd.frontend_manager
 ```
 
 Static rendering reports its explicit sampling/color policy and omitted behavior.
@@ -119,3 +120,11 @@ multiple matching handlers because general event scheduling is unfinished.
 This checks original cursor code and display-property integration; it does not
 run constructors, initializers or the normal input loop. The source stage uses
 pixels in this command and twips internally. All image outputs remain private.
+
+`window-pointer` connects that same saved handler to native pointer movements in
+a resizable window. It retains VM/display state and GPU scene assets between
+movements, and converts physical window coordinates through the fitted viewport.
+Moving outside the stage invalidates the pointer sample without moving the saved
+cursor. This bounded diagnostic still omits normal startup, constructors, other
+event handlers and animation. Escape closes its own window. See
+[pointer execution](docs/FRONTEND_POINTER.md) and [native scene host](docs/NATIVE_WINDOW.md).
