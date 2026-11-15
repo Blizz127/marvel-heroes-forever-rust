@@ -23,13 +23,16 @@ The VM also enforces each action's instruction budget; the cumulative check runs
 after an action and can exceed its threshold by at most one bounded action.
 
 `setup_vm` permits explicit intrinsic/host bindings before execution starts.
-`install_movie_clip_metadata` installs Object and a MovieClip constructor identity
-with a prototype for inheritance study. This native constructor has no implicit
-implementation: any call still reaches the supplied Host. The setup does not
-create display objects, native methods, singleton namespaces or a player.
+`install_movie_clip_constructor` installs Object and the bounded typed unbound
+MovieClip intrinsic. It preserves the established native category and constructor
+callback profile; unproved subclass prototype-assignment effects reject before
+allocation. It does not create or attach a rendered display object. The older
+`install_movie_clip_metadata` API remains an explicitly non-executing inheritance
+study binding whose constructor calls reach the supplied Host; the CLI now uses
+the typed intrinsic. Neither setup creates a complete movie player.
 
-`mhf frontend init-probe <package.upk> <movie>` supplies those limited bindings,
-the explicitly supported property-flags intrinsic, and the bounded
+`mhf frontend init-probe <package.upk> <movie>` supplies the typed unbound binding,
+the explicitly supported Object/Array/Function/property-flags intrinsics, and the bounded
 [Selection listener host](FRONTEND_SELECTION_HOST.md) and
 [AS2 root class registry](FRONTEND_CLASS_REGISTRY.md). `FrontendHost` combines
 those stateful bindings and rejects other native operations. It compiles frame zero

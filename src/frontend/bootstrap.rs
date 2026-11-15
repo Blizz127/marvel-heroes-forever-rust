@@ -221,6 +221,15 @@ impl InitSession {
         Ok(&mut self.vm)
     }
 
+    /// Install the bounded native-backed, unbound MovieClip intrinsic. This
+    /// creates typed AS2 heap objects only; it does not attach display instances
+    /// or bypass unresolved prototype-assignment effects in subclass allocation.
+    pub fn install_movie_clip_constructor(&mut self) -> Result<ObjectId> {
+        let vm = self.setup_vm()?;
+        vm.install_object_constructor()?;
+        Ok(vm.install_movie_clip_constructor()?)
+    }
+
     /// Supply a non-executed MovieClip class/prototype identity for inheritance
     /// study. Calling this native constructor still goes through the given Host.
     /// This does not manufacture display objects or fake MovieClip methods.
