@@ -241,6 +241,9 @@ It adds no dependency and retains the explicit native-platform validation limits
 format study and independent original-byte comparisons for Loki's 72 sequences.
 Omitted codec defaults remain explicitly caller-supplied and are not presented as
 recovered retail defaults. Animation evaluation and runtime binding are separate.
+[Native animation contracts](ANIMATION_RUNTIME.md) records the saved Loki scene
+binding, class/default evidence and conditional codec timing/cache behavior;
+unresolved final defaults and runtime masks are not supplied by inference.
 [Saved HTML layout](HTML_TEXT_LAYOUT.md) records exact imported-font selection,
 original glyph/kerning geometry comparisons, and bounded REA evidence for FONT
 color, spacing and kerning attributes. Its unsupported wrapping and alpha cases
@@ -250,6 +253,9 @@ cursor, token and nested-drain evidence in an original bounded queue, without
 claiming a runtime executor. [Initializer submission](FRONTEND_INIT_LEDGER.md)
 applies the per-instance/frame native ledger with explicit bounded-failure policy;
 it is separate from actual loader triggers and bytecode execution.
+[Construct/onLoad dispatch](FRONTEND_EVENT_DISPATCH.md) records exact receiver,
+environment, retained source, handler and constructor ordering from REA, including
+remaining display lookup, delivery-state and error-policy gaps.
 [Native capture readiness](NATIVE_REFERENCE_CAPTURE.md)
 records local Wine/capture-tool inspection, namespace isolation checks and
 initialization of a new private Wine prefix. Retail execution and reference
