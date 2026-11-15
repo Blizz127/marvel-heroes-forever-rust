@@ -1662,6 +1662,18 @@ is preserved. The sealed increment6 receipt SHA256 is
 `bddc8d1f1a2593478db2f89e9008e61f21c67ac3403d92c5ca27bb32904e8d2f`.
 No native root-parent/default or complete GetFullPath behavior is inferred.
 
+**OBSERVED subsequent controlled probe, frozen `7bb0f19`:** the same supplied
+parent=None and synthetic current name pass those two native read boundaries.
+All452 initializers remain at49,244 instructions; the original frame reaches
+194 instructions and stores `m_fullPath` as the explicitly synthetic name. It
+then stops at SetMember60368, Code15, assigning `_bMouseOver=false`, because the
+current ordinary-name classifier keeps unproved underscore routes gated. The
+visibility profile remains unbound and no visibility setter runs. The sealed
+increment7 receipt SHA256 is
+`0b94d603e4a52a3cfec4bf8b85287af40d7015f796ef6573200a1dfcec843bc8`.
+This preserves the earlier unknown-name frontier and does not supply a retail
+root name, native parent observation or full initializer/runtime parity.
+
 ## Conditional staged attached visibility
 
 `bind_attached_visibility_policy(root, no_invisible_advance)` supplies the current
