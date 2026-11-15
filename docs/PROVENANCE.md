@@ -236,3 +236,7 @@ It adds no dependency and retains the explicit native-platform validation limits
 format study and independent original-byte comparisons for Loki's 72 sequences.
 Omitted codec defaults remain explicitly caller-supplied and are not presented as
 recovered retail defaults. Animation evaluation and runtime binding are separate.
+[Saved HTML layout](HTML_TEXT_LAYOUT.md) records exact imported-font selection,
+original glyph/kerning geometry comparisons, and bounded REA evidence for FONT
+color, spacing and kerning attributes. Its unsupported wrapping and alpha cases
+remain explicit rather than rendered through a substitute plain-text path.

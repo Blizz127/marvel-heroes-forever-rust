@@ -15,6 +15,7 @@ pub mod edit_layout;
 pub mod glyphs;
 #[path = "gfx/html_text.rs"]
 pub mod html_text;
+pub mod html_layout;
 #[path = "gfx/scale9.rs"]
 pub mod scale9;
 #[path = "gfx/scene.rs"]

@@ -892,6 +892,7 @@ mod tests {
     #[test]
     fn single_rotation_and_explicit_frames_preserve_source_coordinates() {
         let bytes = floats(&[0.0, 0.6, 0.0]);
+        let mut remaining = MAX_KEYS;
         // Single keys use Float96 even when the sequence format is None.
         let key = decode_keys::<4>(
             &bytes,
@@ -901,7 +902,7 @@ mod tests {
             7,
             Compression::None,
             KeyEncoding::VariableKeyLerp,
-            &mut MAX_KEYS,
+            &mut remaining,
         )
         .unwrap();
         assert_eq!(key.values[0][0..3], [0.0, 0.6, 0.0]);
@@ -916,6 +917,7 @@ mod tests {
         );
         let mut bytes = floats(&[3.0, -2.0, 1.0, 6.0, 8.0, 4.0]);
         bytes.extend_from_slice(&[0, 6, 0xff, 0xff]);
+        let mut remaining = MAX_KEYS;
         let keys = decode_keys::<3>(
             &bytes,
             80,
@@ -924,7 +926,7 @@ mod tests {
             7,
             Compression::None,
             KeyEncoding::VariableKeyLerp,
-            &mut MAX_KEYS,
+            &mut remaining,
         )
         .unwrap();
         assert_eq!(keys.values, [[3.0, -2.0, 1.0], [6.0, 8.0, 4.0]]);
@@ -940,6 +942,7 @@ mod tests {
         );
         assert_eq!(keys.source.length, 28);
         for end in 0..bytes.len() {
+            let mut remaining = MAX_KEYS;
             assert!(
                 decode_keys::<3>(
                     &bytes[..end],
@@ -949,7 +952,7 @@ mod tests {
                     7,
                     Compression::None,
                     KeyEncoding::VariableKeyLerp,
-                    &mut MAX_KEYS
+                    &mut remaining
                 )
                 .is_err()
             );
@@ -960,6 +963,7 @@ mod tests {
     fn frame_width_boundary_bad_times_and_hostile_counts() {
         let mut bytes = floats(&[0.0; 6]);
         bytes.extend_from_slice(&[0, 0, 255, 0]);
+        let mut remaining = MAX_KEYS;
         let keys = decode_keys::<3>(
             &bytes,
             0,
@@ -968,7 +972,7 @@ mod tests {
             256,
             Compression::Float96NoW,
             KeyEncoding::VariableKeyLerp,
-            &mut MAX_KEYS,
+            &mut remaining,
         )
         .unwrap();
         assert_eq!(
@@ -983,6 +987,7 @@ mod tests {
         );
         for times in [[0, 0, 0, 0], [0, 0, 0, 1], [3, 0, 2, 0]] {
             bytes[24..].copy_from_slice(&times);
+            let mut remaining = MAX_KEYS;
             assert!(
                 decode_keys::<3>(
                     &bytes,
@@ -992,7 +997,7 @@ mod tests {
                     256,
                     Compression::None,
                     KeyEncoding::VariableKeyLerp,
-                    &mut MAX_KEYS
+                    &mut remaining
                 )
                 .is_err()
             );
@@ -1020,6 +1025,7 @@ mod tests {
             );
         }
         bytes[..4].copy_from_slice(&f32::NAN.to_le_bytes());
+        let mut remaining = MAX_KEYS;
         assert!(
             decode_keys::<3>(
                 &bytes,
@@ -1029,7 +1035,7 @@ mod tests {
                 256,
                 Compression::None,
                 KeyEncoding::ConstantKeyLerp,
-                &mut MAX_KEYS
+                &mut remaining
             )
             .is_err()
         );
