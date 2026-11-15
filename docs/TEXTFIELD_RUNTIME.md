@@ -341,3 +341,117 @@ No native execution, live UI test, source implementation port, shared
 configuration edit, or broad test suite was performed for this docs-only
 increment. No Ghidra target was opened; the bounded target-free Rizin calls
 required no target close or shared-session changes.
+
+## Conditional replacement-state implementation
+
+`src/frontend/textfield_state.rs` adds an original, standalone state primitive.
+It has no VM, host, renderer, display-state, or module-registration hook. It does
+not instantiate the saved label or manufacture native initial values.
+
+The caller supplies `AttachedIdentity` (association domain, scene node, AVM
+owner), `Profile`, `Snapshot`, and `Limits` to
+`TextFieldState::from_snapshot`. The snapshot explicitly carries both raw native
+flag fields, separate last-input/document text, the document's uniform run
+profile, current default profiles, definition-derived HTML profiles, and pending
+invalidation. The association domain and nonzero typed format handles are
+caller-local identifiers, not native pointers. Non-null format handles are this
+module's restricted profile; they are not asserted to be universal native rules.
+The module cannot establish the truth of a caller's identity/resource evidence.
+
+Saved `EditText`, `FieldDefaults`, and the existing HTML declarations preserve
+authoring data; they do not represent the native current/default profile pair or
+format-factory results. The new module therefore retains opaque `TextFormat` and
+`ParagraphFormat` handles instead of guessing that conversion. The caller must
+bind those handles to validated effective profiles in the same domain. HTML
+input run format and defaults after a nonempty parse are supplied separately:
+the native default factory can normalize its input, so these handles need not
+have the same identity or value. No automatic renderer/font resolution occurs.
+
+Admission requires every explicit side-path observation to be `Absent`:
+watches, translation service, stylesheet, editor, variable binding, and image
+callbacks. `Present` and `Unknown` are errors. This is intentionally a restricted
+profile even where a particular operation could avoid one of those branches.
+Native target `+0xfc` bit 4 and view `+0x149` bit 2 must both be clear. They are
+not inferred from SWF flags. Re-admit a snapshot if external activity changes
+these conditions; the module is a closed conditional state, not a live observer.
+
+Accepted text is empty or printable ASCII (`0x20..0x7e`) without `<` or `&`.
+NUL, CR/LF, tabs, other controls, non-ASCII, markup, and entities are rejected
+with a byte offset. Both initial string stores are checked independently. The
+single uniform document requires a format for nonempty text and no character
+run for empty text. That projection does not assert the native empty-paragraph
+representation. Configurable byte limits cannot exceed 1 MiB per string. There
+is no retained operation log or unbounded run list.
+
+| API | Conditional effect |
+| --- | --- |
+| `set_html(bool)` | Change only public bit 1; return the old/new Boolean. No parse or invalidation. |
+| `set_text(&str)` | Request plain replacement without clearing public HTML enable. |
+| `set_html_text(&str)` | Request HTML or plain replacement according to public bit 1. |
+| `text()` | Return the current document text, independent of last input. |
+| `html_text()` | Return document text when HTML is disabled; otherwise return `HtmlSerializationUnproved`, including empty documents. |
+| `snapshot()`, `parse_mode()`, `force_rebuild()` | Inspect retained state without performing native calls. |
+
+The same-input / clear-force guard precedes mode, profile, or invalidation
+changes. It returns `Replacement::Unchanged`, a successful native-core no-op,
+not a failed property assignment. A changed or forced replacement allocates
+both bounded strings before mutation; input, limit, or allocation errors leave
+the snapshot unchanged. Replacement clears bit 16, selects bit 12, sets bit 13,
+ORs `0x106` into pending view invalidation, and requests render dirtying. Other
+target/view bits and prior pending requests are preserved. Invalidation is an
+explicit request for a future host, not proof of rendered output.
+
+### Follow-up: HTML completion updates current defaults
+
+Implementation tracing resolved a distinction left unstated in the earlier
+style-source section. In the retained nonempty, no-markup token-3 route,
+`0x140176090` leaves the HTML element stack depth zero. Completion at
+`0x140177ece` supplies local A/B to `0x14012b630` / `0x14012b810`, with calls at
+`0x140177ed5` / `0x140177ee1`. These install the resulting current defaults.
+Consequently a later plain replacement uses those new defaults, not the defaults
+from before the HTML write.
+
+Empty HTML instead calls `0x14012e010` at `0x1401760bc` and returns before the
+default-store tail. The new narrow finalizer capture checks its paragraph
+creation/final-NUL route: it takes current `C+0x30` / `C+0x38` as inputs through
+`0x14012d3d0` / `0x14012cad0`, rather than taking the definition's supplied HTML
+profiles. The module therefore preserves current defaults for empty HTML and
+plain replacement, and installs the explicitly supplied
+`DefinitionHtmlProfile::defaults_after_nonempty` only for a nonempty HTML
+replacement. Ordinary successful allocation/format-factory behavior remains a
+caller precondition; native heap identity is not modeled.
+
+The two added canonical REA records are private under
+`evidence/textfield-state/`:
+
+- `rea-empty-document-finalizer.json`,
+  `ev_27b32e521547ebdfbc3e5e0e72a8478e5b1c46d1f7b13f8ae2016b73a5ea2b95`.
+- `rea-finalizer-paragraph-helpers.json`,
+  `ev_3240e38e4bf52103e6341fa9e9d4c3f34ed759508fbb58dfe70f412928dd861c`.
+
+`native-finalizer-verification.json` checks all 848 bytes / 250 instructions
+against the same pinned executable's PE mapping, with complete, exit-zero,
+untruncated, unchanged receipts. `complete.bundle.json` in this directory
+contains these two records plus the 26 already retained records. No target was
+executed or opened, and no shared configuration changed. The source licence and
+workflow ledger above applies; the additional existing-project reads were
+`src/frontend/display_state.rs`, `scene_content.rs`, `src/gfx/html_text.rs`,
+`edit_layout.rs`, `html_layout.rs`, `glyphs.rs`, and `scene.rs`, solely to assess
+compatible API and style representations. No outside implementation was read.
+
+Focused validation passed **six module tests** and a standalone library compile
+with warnings denied. Tests cover independent last-input/document storage,
+HTML toggle followed by unchanged input, forced rebuild, plain replacement
+while HTML remains enabled, distinct input/result format handles, HTML default
+updates followed by plain replacement, empty clears, unknown/present gates,
+unsupported inputs, exact byte limits, and unchanged snapshots on rejection.
+
+Separately, `evidence/textfield-state/conditional-cases.json` contains **13**
+literal native-derived transition cases authored without inspecting the module.
+The original adapter `check_cases.py` checks their raw flags, both string stores,
+run/default profiles, new invalidation events, readback boundary, and identity;
+all 13 cases / 130 checks pass. `conditional-validation.json` pins the oracle,
+adapter, harness, and module hashes. These are conditional model checks using
+explicit supplied state, not evidence that the saved frontend has executed or
+that these flags are its live initial values. No broad suite, startup execution,
+layout comparison, or native runtime test was run for this increment.
