@@ -361,3 +361,101 @@ was exported/reset. Additional retained sources are the project's private
 header/version and binding-task evidence, recorded with exact paths and hashes
 under `optional-getters/`; their ownership/licence is the same private
 interoperability study described above.
+
+## Follow-up: cache publication and the later key release
+
+The `0x14004e645 → 0x14004c930` call is now bound to concrete cache/key
+objects. Let `F` be the live pending cache entry, `K` its resource-key payload,
+and `I` the key-interface object. `I` is the **object at `0x142adbe00`**;
+its first qword is vtable `0x142504598`. Confusing this object with the vtable
+would give the wrong indirect-call interpretation.
+
+`0x1400884c0` builds `K` from the original DataDef and state snapshot, then
+`0x14004b9a0` stores the pair `(I, K)` with a retained key reference. The
+concrete methods are:
+
+| Interface slot | Native body and effect |
+|---|---|
+| `+8` | `0x140086100 → 0x140031ce0`, retains `K` |
+| `+10` | `0x140126d70 → 0x140031cf0`, releases `K` |
+| `+18` | `0x140210e00`, returns key kind 1 |
+| `+20` | `0x140086df0`, hashes the DataDef and seven snapshot pointer identities |
+| `+28` | `0x140086e20`, compares interface, DataDef and those snapshot pointer identities |
+
+The complete hash/equality bodies have no calls or writes. Fresh entry
+constructor `0x14004c760` retains another copy of this same pair at
+`F + 28 / +30`, stores its cache owner at `F + 10`, and initializes resource
+`F + 20` to null and state `F + 18` to zero. Actual insertion into the cache's
+generic table uses helpers `0x14004bc40 / 0x14004bff0`, not expanded here.
+A valid matching pending entry is therefore an explicit publication
+precondition, not a consequence assumed from unchecked generic map code.
+
+Complete `0x14004c930` does perform real writes. It retains `D`, stores
+`F + 20 = D`, marks `F + 18 = 1`, replaces the matching table cell with `D`,
+and sets **`D + 10` to the cache owner**. It does not directly write
+`D + 20`, `C_D + 20` (parent), or `C_D + 28` (local map). Describing this
+routine as entirely read-only would be incorrect.
+
+Its lookup through `0x14004ba80` is bounded by encountered entry kinds:
+
+- A pending entry carrying original interface `I` uses the proved pure
+  comparator. The strongest preservation profile admits only these entries
+  along the traversed collision chain.
+- A resolved resource invokes its virtual `+8` at `0x14004baec`; a foreign
+  key interface can invoke an unknown comparator at `0x14004bb4b`. These
+  remain explicit callback boundaries.
+- The actual MovieDef table's `+8` is identified as `0x140088b10`, which
+  builds the same kind of key from that definition. This is useful positive
+  binding evidence, but its allocation/lifetime path is not silently included
+  in the pending-only profile.
+
+Publication then calls completion signaling `0x14002fe00` on event
+`Q = F + 40`. Fresh event construction passes `allow_handlers = false`,
+initializing both **`Q + 10`** and the nested mutex handler-container field
+**`(Q + 28) + 10`** to null. These are constructor checkpoints, not assertions
+about their current values after arbitrary loading or provider execution.
+
+The signal path changes event flags, processes its separate waiter list,
+and unlocks the nested mutex. Waiter processing invokes imported `SetEvent`,
+so it can schedule other threads. Null handler containers do not remove this
+concurrency boundary. If a handler container is nonnull, callbacks are real:
+
+| Current handler container | Native callback route |
+|---|---|
+| Nested mutex container | `0x140030bf5 → 0x14002f5a0` after the applicable unlock/count conditions |
+| Outer completion-event container | `0x14002fe54 → 0x14002f5a0` |
+
+The handler visitor invokes stored function pointers at `0x14002f5d1` or
+`0x14002f614`. No generic no-effect notification claim is justified.
+
+The later `0x14004e65a` call is also resolved: it invokes original `I + 10`
+on the caller's local `K`, not an arbitrary MovieDef method. With both the
+local pair and live pending entry retaining `K`, and no intervening reference
+mutation, this release cannot reach zero and cannot invoke `K`'s destructor.
+The caller's subsequent handle cleanup through `0x14004c720 / 0x140031cf0`
+is beyond this selected key-release endpoint and remains explicit.
+
+**DERIVED conditional preservation:** through publication and the selected
+local-key release, the bag fields remain unchanged when storage is live,
+distinct and well formed; original key/entry tables and a valid matching
+pending-only collision chain are supplied; both current handler containers
+remain null; and synchronization/imports, allocations and reference counts
+have ordinary effects without reentry or concurrent mutation. This profile
+still does not establish the current value of state 4 or `Mouse.hide` behavior.
+
+Private evidence is under `publication-cache/`. Four completed, untruncated
+REA records were exported/reset, with 966 instruction spans / 3,454 bytes and
+72 table bytes independently checked. Canonical records:
+
+- `ev_d3fac7b60e34b33571898b0f9475ba01d2496900f0de75261c066ca3f0351fd9`
+- `ev_5b70711e6e25577a118ebbefce5a1d37569c71a247bec63f0bac253d5e487654`
+- `ev_0e8f92d7acb96087d0654181027be288b9aaab59d3b864ccb249849139097433`
+- `ev_466fb8f1387baeba333c629825dd2b12d435c51441e73c72d0b31278d034388c`
+
+`publication-cache/finding-summary.json` SHA-256:
+`6ca05a479a72150e873258a518e4ad49df2259e4277845de4fab22a11b925880`.
+A client-side preview was truncated; the full exported record was reused and
+verified without repeating its producer. Semantic leaf ranges exclude trailing
+neighbor/padding decodes. Sources remain the owned pinned PE, retained original
+project evidence and REA workflow already listed; no runtime execution or
+repository implementation change was made.
