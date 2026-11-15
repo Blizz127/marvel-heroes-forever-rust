@@ -5,6 +5,22 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev25 work in progress
+
+**VERIFIED primary packed records:** the explicit twelve-byte writer now composes
+the native coordinate packer with supplied resolved color words and exact flag
+bytes. It preserves padding/tail bytes and rejects unsupported profiles atomically.
+Five focused tests and nine independent fixtures pass, comparing 351 destination
+bytes and 500 serialized source-field bytes. Source SHA-256:
+`ec87fa97103a062a9cf6b36de56130641665dad0f29005725cb9c7c93360468d`.
+Receipt: `evidence/scale9-primary-packing/receipt.json`, SHA-256
+`851a0f09d64d996c059848dc7d6d254def9a2cf43dc337a4f31e1952ecb5bd15`.
+Root production library checking with window support passes without warnings in
+12.41 seconds at clean source `a4566d25182f1e2d376629f1968bb97ae64170f8`;
+receipt: `evidence/dev25-packing-production-check.json`. No dev25 executable or
+startup check has run. Live format/color association and renderer enablement
+remain separate; dev24 is the latest staged artifact.
+
 ## 2026-11-15 dev24 diagnostic increment
 
 **VERIFIED private staging, 14:27 UTC:** all 447 packaged sizes/hashes and the

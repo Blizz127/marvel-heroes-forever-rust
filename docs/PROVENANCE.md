@@ -966,3 +966,16 @@ Colors remain explicit resolved native words, and the selected schema/stride
 must match exactly. The original writer preserves padding and rejects unsupported
 profiles atomically. Its five focused tests and nine independent byte fixtures
 are private; no bitmap color, cache state or live format association is inferred.
+
+## Conditional Model input-layout API study
+
+See [MODEL_INPUT_LAYOUT.md](MODEL_INPUT_LAYOUT.md). New outside sources were studied read-only for the conditional table-A graphics API contract; no implementation was copied. Exact private HTTP/source and licence identities are in `evidence/model-input-layout/primary-api/provenance.json` (SHA-256 `9315d4e4b3f443d1e2bb90ca5a357a6d89c68a83744ce60b5dea5caa816b50e7`).
+
+| Outside source and immutable revision | Licence and use |
+| --- | --- |
+| [Microsoft win32metadata](https://github.com/microsoft/win32metadata/tree/15fc870a5e96df7c560877ff30136c0fb5a21e9b), `generation/WinSDK/RecompiledIdlHeaders/um/d3d11.h` | Original Microsoft SDK-header licence retained; repository MIT does not relicense SDK headers. Device ABI, method order and descriptors. |
+| [Microsoft DirectX-Headers](https://github.com/microsoft/DirectX-Headers/tree/61c7718954ec73dbdd43c723240fe1a0452a3724), `include/directx/dxgiformat.h` | MIT. Numeric format definitions. |
+| [MicrosoftDocs/sdk-api](https://github.com/MicrosoftDocs/sdk-api/tree/656e9656bfaef34dd29cd7ee9e1146aec17e924c), CreateInputLayout, input-element and DXGI pages | Documentation CC BY 4.0, separate code licence MIT. API signature/validation contract. |
+| [Microsoft DirectX-Specs](https://github.com/microsoft/DirectX-Specs/tree/9c2586441fa2dd0d4953a5c4e9b9ff05717c19eb), `d3d/archive/D3D11_3_FunctionalSpec.htm` | Documentation CC BY 4.0, separate code licence MIT. Input conversion and precision; conceptual archived declarations excluded as ABI evidence. |
+| [MicrosoftDocs/cpp-docs](https://github.com/MicrosoftDocs/cpp-docs/tree/af4947c4bdf5993dcaee98e63d55a2d7a5744d7d), x64 software conventions | Documentation CC BY 4.0, separate code licence MIT. Pointer and aggregate layout. |
+
