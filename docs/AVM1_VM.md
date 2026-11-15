@@ -1387,6 +1387,29 @@ the containing-frame DoAction, clip handlers or display activation. The precreat
 saved-child snapshot and minimal globals do not establish native lifecycle order,
 complete global initialization or retail startup parity.
 
+The separate containing-frame diagnostic replays those same initializers in a
+fresh process, then runs the one original root-frame DoAction at 5967+518 on the
+same in-process VM and hosts. **OBSERVED:** its 33rd instruction stops at
+CallMethod 855918, CodeId 139, with `Function method null/primitive thisObject`.
+The entry program is CodeId 452. Original code has already assigned the root's
+prototype, leaving storage 15888 and prototype 15254; these effects are retained
+after failure. Focus/event words, Selection and class-registry state remain
+unchanged, and no unknown host callback runs.
+
+**INFERRED operand interpretation:** the original MarvelUtils adapter calls
+`Function(cls).apply(mc, null)`, where the frame passes its typed root as `mc`
+and `marvel.managers.MenuManager` as `cls`. The frozen FunctionMethod branch
+accepts only `Value::Object` receivers; its error also rejects a `DisplayClip`
+and does not prove that the actual source supplied a null or primitive receiver.
+The probe does not instrument the intrinsic argument list. Native attached
+receiver conversion must be established before broadening that gate. No clip
+handlers, native implicit sprite construction or additional global bindings are
+included in this containing-frame probe.
+`avm1-attached-manager-frame-action-increment1/receipt.json`, SHA256
+`f4a9e28ae9249cad6c0a491ffc043cfc8bdd9c8ded37fce3c4bdb41d92ac96bc`,
+retains the unchanged frozen sources, full initializer prefix, exact call-chain
+coordinates and build/run exit 0 with the explicit VM stop.
+
 ## Explicit attached TextField snapshot and native member seam
 
 `adopt_attached_text_field(AttachedTextFieldSpec)` accepts a caller-established
