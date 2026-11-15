@@ -5,7 +5,27 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
-## 2026-11-15 dev23 work in progress
+## 2026-11-15 dev23 diagnostic increment
+
+**VERIFIED combined build/startup:** clean source
+`d5d96eafdbe219b30961654bbe2ac5f8c94d4418` builds with window support in
+28.30 seconds without warnings. All eight focused preset/VM/image checks pass.
+The isolated Rust window presents two frames with empty stderr; saved cursor
+and login RGBA identities are unchanged. Five integrated changed-source hashes
+match their focused validation. Binary SHA-256:
+`0d149a19a128b76afd812f031164b5dca799dcc067c059e56eea532ba79bfc9b`.
+Receipts: `evidence/dev23-build-result.json`,
+`evidence/build-0.1.0-dev.23-smoke.json`, `evidence/dev23-native-html/receipt.json`
+and `evidence/dev23-integrated-source-identity.json`. No full suite, native-retail
+launch, service request, owner-device validation or retail parity is claimed.
+
+**OBSERVED controlled original replay:** after the constructor correction,
+all 452 original initializers still complete in 49,244 instructions. The frame
+stops after 290 instructions at the unchanged unbound `Mouse.hide` host,
+CodeId452/6391. The original global writes remain at 13566 and 6370; no host
+override or assumed state-bag absence was added. One build and run exit zero.
+Receipt: `evidence/avm1-attached-manager-frame-action-increment14/receipt.json`,
+SHA-256 `5098f7306247134ffbe20a3163784199b7181fc890b974f3039e1271cc81197c`.
 
 **VERIFIED Object/Function bootstrap correction:** the VM now keeps a stable
 cached Function identity, the thirteen early methods' null parents, all four
@@ -39,8 +59,8 @@ SHA-256 `ce196a99a9d0e217a71804e02497dab3297afa1e95ad206a77abd705635a4ac4`.
 Production library metadata compilation with window features passes without
 warnings in 12.70 seconds at clean source
 `0fb8d592140fada926ab8ca544c618ea316641e4`; receipt:
-`evidence/context-diagnostic-production/receipt.json`. A new executable/startup
-run has not occurred, and dev22 remains the latest staged build.
+`evidence/context-diagnostic-production/receipt.json`. That earlier library-only
+check is now supplemented by the combined dev23 build/startup checks above.
 
 **VERIFIED static formatter contract:** 23 complete bodies plus the selected
 generic-helper branch account for 957 distinct instructions / 3,515 bytes,

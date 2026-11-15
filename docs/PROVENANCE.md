@@ -905,3 +905,14 @@ preserves the focused harness corrections and failed assertions.
 factory, class and serialized link evidence to bound the action CDO's direct
 mutation paths. It adds no outside implementation, observed default value,
 runtime invocation or hold clearance.
+
+[Option-owner construction](SCALE9_OPTIONS_CONSTRUCTION.md) uses the same owned
+executable, exact tables and retained helper/import evidence to extend the
+eighteen-word store checkpoint through one conditional constructor return.
+The predicate-set backend and live mesh-owner joins remain open; the private
+receipt retains one provider timeout without promoting it to known completion.
+
+The dev23 Linux/window notice collection contains 121 registry dependencies and
+231 selected licence/notice files without collection issues. Private manifest:
+`evidence/dependency-notices-dev23-linux/manifest.json`, SHA-256
+`2fa9d39d6c75fc0dee953e15889225a84595c4ea54fdb20fc28c7364c7f80adb`.
