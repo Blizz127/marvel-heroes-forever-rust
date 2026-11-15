@@ -290,6 +290,8 @@ initialization of a new private Wine prefix, plus two bounded retail runs that
 did not reach the frontend. [Native startup postmortem](NATIVE_STARTUP_SETTINGS.md)
 ties the captured null hostname-resolution fault to the owned executable and
 distinguishes the later settings verification and error-handler fault.
+[Corrected hostname probe](NATIVE_HOSTNAME_PROBE.md) records a third isolated
+run that reached a launcher-required message and was stopped without UI input.
 [Native enumeration](REA_ENUMERATION.md) records the owned-binary string hash,
 collision, growth, hidden-literal metadata and visitor evidence. Derived orders
 remain distinguished from retail process observations.
@@ -302,6 +304,10 @@ onLoad gates without substituting generic-object behavior.
 [Attached member names](ATTACHED_MEMBER_NAMES.md) records the finite native
 standard-member map and exact ordinary-name admission gates, including the
 distinction between a missing property and a present Undefined value.
+[ExternalInterface binding](EXTERNAL_INTERFACE_BINDING.md) records deferred
+allocation, member metadata and handler selection through the current caller
+Environment; it does not establish preceding script-context selection or install
+a native engine receiver.
 [Native HTML wrapping](HTML_WRAPPING.md) records rounding and word-break evidence
 while retaining unresolved translator/font-state gates; the existing diagnostic
 layout is not promoted to native parity by a conditional mathematical model.

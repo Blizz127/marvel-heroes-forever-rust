@@ -454,3 +454,51 @@ from the tested source; the binary is identical. Artifact:
 `evidence/build-0.1.0-dev.8-package-validation.json`. The coordinator intake is
 queued and supersedes dev.7's Rust diagnostic only. Staging does not confirm
 publication or owner-device validation.
+
+## Dev.9 runtime integration foundations
+
+**VERIFIED (configured localization):** One pinned archive handle now resolves
+the native-selected Globals defaults, typed UI directory Asset, ASCII label
+identity and actual localized prototype membership. Four focused tests and the
+independent 27-key resource comparison pass. Effective text fields preserve
+parent origins and explicit zero overrides. In a separate controlled namespace,
+the original selected script functions return all 27 real texts and 54 distinct
+result objects through the new four-field VM conversion. That script check uses
+explicit known members; native configured lookup through the full script path,
+ExternalInterface installation and actual text-field lifecycle remain separate.
+Receipts: `evidence/localized-label-resolver-check/receipt.json` and
+`evidence/localized-vm-integration/known-members/MANIFEST.json`.
+
+**VERIFIED (persistent continuation):** A consuming initializer handoff refuses
+pending or halted phases and retains the same VM/code. Three focused tests pass.
+An original-data probe completes 452 manager initializers and reaches the same
+31-instruction first-frame MovieClip boundary. A separate integration then runs
+the original cursor handler through the same FrontendHost: 14 instructions,
+six property calls, retained Selection listener/class registry and the supplied
+cursor position. These remain explicit Plain-object scene associations.
+Receipts: `evidence/dev9-bootstrap-handoff/{receipt,display-host-receipt}.json`.
+
+**VERIFIED (explicit camera arithmetic):** Original camera math generates all
+16,384 table entries algorithmically and matches the frozen static oracle's
+1,061 checked float words. It requires explicit pose, viewport, FOV, depth and
+tangent provider. Actual camera selection, native floating-point environment,
+constrained cropping and GPU comparison remain unverified. Receipt:
+`evidence/camera-math/implementation-receipt.json`; its immutable
+`implementation-receipt-reconciliation.json` preserves the exact historical
+forward-oracle metadata bytes without changing expected outputs or source.
+
+**VERIFIED (dev.9 focused build/startup):** The window-enabled offline build,
+eight final CLI/image checks and two-frame fresh-Xvfb startup pass. Cursor and
+saved-login images keep their prior pixel identities; startup emits no stderr.
+Test source: `08d514cc167d1b914ade2ee2a45868c177054e22`; binary SHA-256:
+`24d806e96b0b5af9ca7a8cc21a6ce4d25451614e07b010cc6597d317fbd033e1`.
+Receipts: `evidence/build-0.1.0-dev.9-smoke.json` and
+`evidence/dev9-native-html/receipt.json`. This remains diagnostic tooling, with
+zero finished Forever upgrades and no playable-client or retail-parity claim.
+
+**OBSERVED (retail reference):** Correcting only the private namespace's hostname
+resolution advances the original client to a launcher-required Message dialog.
+The run stops without input; all 453 frozen game files remain unchanged. No
+missing-ClientConfig path was observed, so configuration retrieval was not
+triggered. The capture route is held at that prerequisite while normal launch
+requirements are studied read-only. See `docs/NATIVE_HOSTNAME_PROBE.md`.
