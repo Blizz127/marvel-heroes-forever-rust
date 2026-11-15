@@ -492,3 +492,9 @@ unverified; the native rendering profile is not enabled by numeric checks.
 The [saved-handler VM adapter](SAVED_HANDLER_TABLE.md) now reads installation
 identity from the retained VM arena. Neither successful binding nor the new
 bounded saved-mode executor alone proves native event eligibility or timing.
+
+The [complete scene adopter](LOGIN_INSTANCE_INPUTS.md) composes existing original
+readers and VM interfaces with explicitly supplied runtime state. Its retained
+147-node proof does not claim native fresh-state defaults or startup execution.
+[Attached tab state](REA_ATTACHED_TAB_ENABLED.md) grounds `tabEnabled` access in
+the owned executable and preserves its shared target-status word with focus state.

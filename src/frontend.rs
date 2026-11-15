@@ -51,6 +51,8 @@ pub mod preview;
 pub mod runtime_text;
 #[path = "frontend/saved_handlers.rs"]
 pub mod saved_handlers;
+#[path = "frontend/scene_adoption.rs"]
+pub mod scene_adoption;
 #[path = "frontend/scene_content.rs"]
 pub mod scene_content;
 #[path = "frontend/selection.rs"]
