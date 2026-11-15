@@ -81,8 +81,9 @@ constructor, prototype, documented `Object.prototype.addProperty`, the
 `Object.registerClass` host seam, and a shared Function-prototype intermediate
 with the supported call/apply methods. Primitive boxing remains unsupported.
 The separate `install_function_conversion()` enables the native-backed limited
-Function conversion below. MovieClip, Stage, Mouse and Scaleform bindings still
-require explicit integration.
+Function conversion below. `install_movie_clip_constructor()` enables the separate
+unbound MovieClip script-object profile below. Scene attachment, Stage, Mouse and
+other Scaleform interfaces still require explicit integration.
 
 Primitive conversion is deliberately narrower than the eventual compatibility
 profile. It supports modern Boolean behavior, ordinary decimal numeric strings,
@@ -252,8 +253,10 @@ is reported explicitly instead of being hidden behind a successful callback.
 ## Native-backed property flags
 
 `install_property_flags()` explicitly installs the bounded `ASSetPropFlags`
-intrinsic. It accepts a generic object, null selector and integer numeric masks;
-three or four arguments are supported. Other selectors, native object classes,
+intrinsic. It accepts a generic object with a null or supported exact own-name
+selector and integer numeric masks; three or four arguments are supported.
+The narrow unbound MovieClip prototype selected-name path is described below.
+Other selectors and native object classes,
 and unverified numeric coercions stop explicitly. Null selects stored own members,
 including already hidden members. It never visits a prototype, synthesizes absent
 virtual builtins, resolves a getter or invokes a native host. Successful calls
@@ -449,19 +452,95 @@ whose prototype is Tween.prototype; it is not the MovieClip function object. The
 host rejects this unresolved native boundary. Selection still retains one listener,
 and the original instance accessor returns that listener without adding another.
 
-This does not establish the native allocation category of a subclass of MovieClip.
-REA has identified selection of an allocation function through the prototype's
-public `constructor`, separately from the hidden `__constructor__` used in the
-recorded inheritance relation. The current generic allocation in this controlled
-probe does not implement that native selection or prove the retail receiver's
-category. Typed native-base allocation and MovieClip constructor behavior must be
-established before continuing past this boundary. No no-op MovieClip implementation is installed.
+That earlier controlled probe used generic Rust allocation and did not establish
+native receiver-category parity. Subsequent REA found that native construction
+consults the public `prototype.constructor` and produces a category-11 MovieClip
+object for the unchanged Tween chain. The typed profile below supersedes this
+placeholder; its allocation-side-effect gate is explicit.
 
 `run-init-order-super.rs`, `init-order-super.tsv`, `vm-tests-super.txt` and
 `constructor-super-evidence.json` preserve the controlled host request and24 passing
 focused VM checks. `tween-super-dispatch-private.json` records the unchanged source
 instructions and the following comma-list flag dependency. Primary source sections
 and licences are retained in `avm1-reference/super-sources.json`.
+
+## Typed unbound MovieClip profile
+
+`install_movie_clip_constructor()` installs a separate MovieClip constructor and
+unbound prototype after Object initialization. `movie_clip_role(ObjectId)` reports
+`UnboundPrototype` or `UnboundInstance` only for genuinely typed VM objects;
+inheriting a MovieClip prototype does not change a plain object's category.
+`movie_clip_has_mouse_event_names(ObjectId)` exposes the allocation-time marker
+for typed instances, separately from listener registration.
+These script objects have no Scene node, timeline, renderer, event dispatcher or
+native resource attached. This is an explicit standard intrinsic with no host
+callback or display allocation.
+
+**VERIFIED static native behavior:** The constructor callback returns the same
+receiver when its native category is 11; a different category or null receiver
+returns undefined. The callback does not allocate, read arguments, change receiver
+properties or create a display object. NewObject/NewMethod allocation is a
+separate operation. Native allocation consults the public `prototype.constructor`,
+selects its allocator, invokes the original script constructor and discards that
+constructor's return. It installs the original constructor as the receiver's own
+hidden `__constructor__` with flags 3, separately from the superclass reference
+stored on an Extends-created prototype.
+
+The supported native allocator creates a typed unbound instance for zero arguments
+with unchanged constructor/prototype links. Public-constructor mutation cannot
+fall through to a generic receiver: it stops explicitly. Typed instance mutation,
+native/display members, accessor behavior, typeof, event-name writes, prototype
+metadata replacement and display attachment remain gated. Existing stored ordinary
+method reads and non-event ordinary writes on the unbound prototype use the proved
+raw lookup/assignment paths. Missing native members stop instead of returning
+invented values. Generic subclass-prototype writes remain generic; assigning its
+`onLoad` does not invoke an inherited MovieClip assignment hook.
+
+**Current allocation gate:** Assigning a generic Tween prototype to a fresh native
+MovieClip instance invokes an additional member visitor. It may set an internal
+mouse-event-name marker based on own and inherited stored keys. Subclass allocation
+stops before creating a receiver until the complete input membership and marker
+behavior are grounded. The ordered original manager probe completes 52 initializers
+and then reports this gate at NewMethod 323687, CodeId 52. It retains one real
+Selection listener. Direct zero-argument MovieClip allocation is independently
+checked; no native executable or display instance was run.
+
+Evidence is joined in `rea-movieclip-constructor/combined-proof-receipt.json`,
+`rea-movieclip-binding/finding-summary.json`, `rea-script-allocation/finding-summary.json`
+and the research lane's `docs/REA_MOVIECLIP_CONSTRUCTOR.md`. The initial joined
+receipt covers 30 complete static records and 6,692 PE-matched instruction spans;
+the additional read/visitor algorithm is retained in
+`rea-script-allocation/instance-read-receipt.json`. The complete native inherited
+event-key inventory remains a separate dependency before subclass construction.
+`run-init-order-movieclip.rs`, `init-order-movieclip.tsv`,
+`vm-tests-movieclip.txt` and `movieclip-runtime-evidence.json` retain the private
+original-script probe and 28 passing focused implementation checks.
+
+## Exact own-name property flags
+
+ASSetPropFlags now accepts existing own ASCII identifiers, including nonempty
+comma-separated identifier lists. Every selected key is checked before mutation.
+There is no whitespace trimming, case folding, primitive conversion, inherited
+lookup or getter invocation. Missing/inherited keys, empty components, non-ASCII
+names and unsupported native descriptors stop explicitly. Selection parsing and
+both visitation passes consume allocation/member budgets.
+
+The same selected-name path is supported for stored ordinary members of the actual
+unbound MovieClip prototype. Public constructor metadata, native virtual members,
+null-selector visitation of that prototype, instance flags and display objects
+remain outside this profile. Flags preserve stored values and apply the existing
+low-three-bit mask rule and bound-target version default. Null selection of generic
+objects is unchanged. Read-only behavior and unsupported accessor ordering remain
+explicitly checked by the existing consumers.
+
+Native receipts are `rea-asflags-selected-name/finding-summary.json` and
+`rea-asflags-comma-selector/finding-summary.json`. The latter follows the original
+`tween__start,tween__to,tween__run` string through exact ASCII splitting in source
+order. MovieClip.prototype's raw lookup/flag-setter binding is established by the
+joined constructor evidence. Focused checks verify those three own values and
+flags, a generic `dispatchQueue` field, and rejection without partial flag writes
+for missing or unsupported selectors. This bounded rejection policy is not a claim
+about native failure handling outside the supported profile.
 
 ## Native Function conversion and empty apply lists
 
@@ -615,7 +694,7 @@ manager/login root-frame distributions and registration dependencies.
 | [Adobe AS2 Array reference](https://open-flash.github.io/mirrors/as2-language-reference/Array.html) | © 2004–2010 Adobe, all rights reserved | Array/Object inheritance and bounded documented constructor forms. Prototype-specific ECMAScript behavior is not assumed to be AS2 behavior. |
 | [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; Array conversion takes precedence over an identity cast. The native-backed Function conversion is separately constrained by owned REA evidence. |
 | [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage context; native implementation decisions use the cited owned REA evidence. |
-| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata, Array prototype state, Function conversion/apply and return-value behavior; static REA evidence only. |
+| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata, Array prototype state, Function conversion/apply, typed MovieClip construction/prototype hooks and return-value behavior; static REA evidence only. |
 | Owner's private frontend-manager and login GFX bytes | Proprietary retail material, private compatibility study | Original-script isolated probes and actual unsupported-dependency measurements. |
 
 The integrating lead owns additions to `docs/PROVENANCE.md`. This lane changes

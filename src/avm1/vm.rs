@@ -257,6 +257,12 @@ pub enum FunctionMethod {
     Call,
     Apply,
 }
+/// Script-object roles only. Neither role implies a Scene/display attachment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MovieClipRole {
+    UnboundPrototype,
+    UnboundInstance,
+}
 #[derive(Debug, Clone)]
 enum Kind {
     Plain,
@@ -266,6 +272,8 @@ enum Kind {
     ObjectConstructor,
     ArrayConstructor,
     FunctionConversion,
+    MovieClipConstructor,
+    MovieClip(MovieClipRole),
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
@@ -285,6 +293,7 @@ impl Kind {
                 | Self::ObjectConstructor
                 | Self::ArrayConstructor
                 | Self::FunctionConversion
+                | Self::MovieClipConstructor
                 | Self::AddProperty
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
@@ -350,6 +359,10 @@ pub struct Vm {
     object_constructor: Option<ObjectId>,
     function_prototype: Option<ObjectId>,
     function_conversion: Option<ObjectId>,
+    movie_clip_constructor: Option<ObjectId>,
+    movie_clip_prototype: Option<ObjectId>,
+    movie_clip_parent: Option<ObjectId>,
+    movie_clip_event_names: BTreeMap<ObjectId, bool>,
     array_constructor: Option<ObjectId>,
     array_prototype: Option<ObjectId>,
     class_bases: BTreeMap<ObjectId, ClassBase>,
@@ -378,6 +391,10 @@ impl Vm {
             object_constructor: None,
             function_prototype: None,
             function_conversion: None,
+            movie_clip_constructor: None,
+            movie_clip_prototype: None,
+            movie_clip_parent: None,
+            movie_clip_event_names: BTreeMap::new(),
             array_constructor: None,
             array_prototype: None,
             class_bases: BTreeMap::new(),
@@ -565,6 +582,56 @@ impl Vm {
         self.function_conversion = Some(function);
         Ok(function)
     }
+    /// Install the native-backed unbound AS2 MovieClip object profile.
+    /// It creates no display object, timeline instance, event queue or host binding.
+    pub fn install_movie_clip_constructor(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.movie_clip_constructor {
+            return Ok(id);
+        }
+        let Some(object) = self.object_constructor else {
+            return self.fail(ErrorKind::Unsupported("install Object before MovieClip"));
+        };
+        if self.has_key(self.global, &text("MovieClip"))? {
+            return self.fail(ErrorKind::Unsupported("MovieClip binding already exists"));
+        }
+        let parent = self.object_id(self.get(object, "prototype")?)?;
+        let constructor = self.alloc(Kind::MovieClipConstructor, None)?;
+        let prototype = self.alloc(
+            Kind::MovieClip(MovieClipRole::UnboundPrototype),
+            Some(parent),
+        )?;
+        self.raw_member(
+            constructor,
+            text("prototype"),
+            Property::Data(Value::Object(prototype)),
+            3,
+        )?;
+        self.raw_member(
+            prototype,
+            text("constructor"),
+            Property::Data(Value::Object(constructor)),
+            3,
+        )?;
+        self.set(self.global, "MovieClip", Value::Object(constructor))?;
+        self.movie_clip_constructor = Some(constructor);
+        self.movie_clip_prototype = Some(prototype);
+        self.movie_clip_parent = Some(parent);
+        Ok(constructor)
+    }
+    /// Inspect an actual VM category; prototype inheritance alone cannot grant it.
+    pub fn movie_clip_role(&self, id: ObjectId) -> Result<Option<MovieClipRole>> {
+        self.check_object(id)?;
+        Ok(match self.objects[id.0].kind {
+            Kind::MovieClip(role) => Some(role),
+            _ => None,
+        })
+    }
+    /// Allocation-time native mouse-event-name marker, not listener registration.
+    /// Only fresh typed unbound instances have this state; mutation is gated.
+    pub fn movie_clip_has_mouse_event_names(&self, id: ObjectId) -> Result<Option<bool>> {
+        self.check_object(id)?;
+        Ok(self.movie_clip_event_names.get(&id).copied())
+    }
     /// Installs the documented Array creation forms and the REA-verified empty
     /// Array prototype. Prototype mutation remains a separately gated profile.
     /// Install before defining script functions or creating array values.
@@ -598,6 +665,20 @@ impl Vm {
         Ok(constructor)
     }
     fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if matches!(
+            self.objects[id.0].kind,
+            Kind::MovieClip(MovieClipRole::UnboundInstance)
+        ) && key.as_ref() != text("__proto__").as_ref()
+            && key.as_ref() != text("__constructor__").as_ref()
+        {
+            // Grounded instance lookup resolves existing ordinary stored methods.
+            // Missing native members still reject at the end of get_key.
+            if !ordinary_movie_clip_name(key) {
+                return self.fail(ErrorKind::Unsupported(
+                    "unbound MovieClip native/display member",
+                ));
+            }
+        }
         if matches!(self.objects[id.0].kind, Kind::FunctionPrototype)
             && key.as_ref() == text("constructor").as_ref()
         {
@@ -621,6 +702,147 @@ impl Vm {
             }
         }
         Ok(self.array_prototype)
+    }
+    fn allocate_constructed_object(
+        &mut self,
+        constructor: ObjectId,
+        prototype: Option<ObjectId>,
+        argc: usize,
+    ) -> Result<ObjectId> {
+        let mut cursor = prototype;
+        let mut has_movie_clip = false;
+        for depth in 0..=self.limits.prototype_depth {
+            let Some(id) = cursor else { break };
+            if depth == self.limits.prototype_depth {
+                return self.fail(ErrorKind::Budget("constructor prototype depth"));
+            }
+            if matches!(self.objects[id.0].kind, Kind::MovieClip(_)) {
+                has_movie_clip = true;
+                break;
+            }
+            cursor = self.objects[id.0].prototype;
+        }
+        // Native selection consults public constructor, separate from super metadata.
+        let selected = match prototype {
+            Some(id) => self.get(id, "constructor")?,
+            None => Value::Undefined,
+        };
+        let clip = self.movie_clip_constructor;
+        let selects_clip = clip.is_some_and(|id| selected == Value::Object(id));
+        if has_movie_clip || selects_clip || clip == Some(constructor) {
+            if clip != Some(constructor) {
+                return self.fail(ErrorKind::Unsupported(
+                    "MovieClip subclass prototype-assignment hook",
+                ));
+            }
+            let Some(clip) = clip else {
+                return self.fail(ErrorKind::Unsupported("uninstalled MovieClip allocator"));
+            };
+            let clip_prototype = self.movie_clip_prototype.unwrap();
+            if argc != 0
+                || !selects_clip
+                || self.get(clip, "prototype")? != Value::Object(clip_prototype)
+                || self.get(clip_prototype, "constructor")? != Value::Object(clip)
+                || self.objects[clip_prototype.0].prototype != self.movie_clip_parent
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "modified/argument MovieClip allocation profile",
+                ));
+            }
+            let mut class = constructor;
+            let mut current_prototype = prototype;
+            for depth in 0..=self.limits.prototype_depth {
+                if class == clip {
+                    if current_prototype != Some(clip_prototype) {
+                        return self.fail(ErrorKind::Unsupported(
+                            "modified MovieClip constructor prototype",
+                        ));
+                    }
+                    let object =
+                        self.alloc(Kind::MovieClip(MovieClipRole::UnboundInstance), prototype)?;
+                    self.raw_member(
+                        object,
+                        text("__constructor__"),
+                        Property::Data(Value::Object(constructor)),
+                        3,
+                    )?;
+                    self.movie_clip_event_names.insert(object, false);
+                    return Ok(object);
+                }
+                if depth == self.limits.prototype_depth {
+                    return self.fail(ErrorKind::Budget("constructor inheritance depth"));
+                }
+                let Some(base) = self.class_bases.get(&class).copied() else {
+                    return self.fail(ErrorKind::Unsupported(
+                        "unrecorded MovieClip constructor inheritance",
+                    ));
+                };
+                if current_prototype != Some(base.prototype)
+                    || self.get(class, "prototype")? != Value::Object(base.prototype)
+                    || self.objects[base.prototype.0].prototype != Some(base.parent_prototype)
+                    || self.get(base.prototype, "__constructor__")?
+                        != Value::Object(base.constructor)
+                    || self.objects[base.prototype.0]
+                        .properties
+                        .contains_key(&text("constructor"))
+                {
+                    return self.fail(ErrorKind::Unsupported(
+                        "modified MovieClip subclass allocation",
+                    ));
+                }
+                class = base.constructor;
+                current_prototype = Some(base.parent_prototype);
+            }
+            unreachable!();
+        }
+        if let Value::Object(selected) = selected {
+            if matches!(self.objects[selected.0].kind, Kind::ArrayConstructor) {
+                return self.fail(ErrorKind::Unsupported("Array subclass allocation profile"));
+            }
+        }
+        self.alloc(Kind::Plain, prototype)
+    }
+    fn movie_clip_prototype_event_marker(&mut self, mut prototype: ObjectId) -> Result<bool> {
+        if self.movie_clip_role(prototype)? == Some(MovieClipRole::UnboundPrototype) {
+            // Native category11 prototype assignment skips the visitor. Fresh marker=0.
+            return Ok(false);
+        }
+        let names = [
+            "onPress",
+            "onRelease",
+            "onReleaseOutside",
+            "onRollOver",
+            "onRollOut",
+            "onDragOver",
+            "onDragOut",
+            "onPressAux",
+            "onReleaseAux",
+            "onReleaseOutsideAux",
+            "onDragOverAux",
+            "onDragOutAux",
+        ];
+        let mut found = false;
+        for _ in 0..self.limits.prototype_depth {
+            if !matches!(
+                self.objects[prototype.0].kind,
+                Kind::Plain | Kind::MovieClip(MovieClipRole::UnboundPrototype)
+            ) {
+                return self.fail(ErrorKind::Unsupported(
+                    "MovieClip prototype visitor object class",
+                ));
+            }
+            // Own/inherited keys, including hidden entries; values/getters are never read.
+            self.visit_members(self.objects[prototype.0].properties.len())?;
+            found |= self.objects[prototype.0]
+                .properties
+                .keys()
+                .any(|key| names.iter().any(|name| key.as_ref() == text(name).as_ref()));
+            match self.objects[prototype.0].prototype {
+                Some(parent) => prototype = parent,
+                None => return Ok(found),
+            }
+        }
+        self.fail(ErrorKind::Budget("MovieClip prototype visitor depth"))
     }
     fn ordinary_object(&mut self) -> Result<ObjectId> {
         let prototype = if let Some(constructor) = self.object_constructor {
@@ -711,14 +933,52 @@ impl Vm {
             ));
         }
         let target = self.object_id(args[0].clone())?;
-        if !matches!(self.objects[target.0].kind, Kind::Plain) {
-            return self.fail(ErrorKind::Unsupported(
-                "ASSetPropFlags non-generic object class",
-            ));
+        let prototype = matches!(
+            self.objects[target.0].kind,
+            Kind::MovieClip(MovieClipRole::UnboundPrototype)
+        );
+        if !matches!(self.objects[target.0].kind, Kind::Plain) && !prototype {
+            return self.fail(ErrorKind::Unsupported("ASSetPropFlags object class"));
         }
-        if !matches!(args[1], Value::Null) {
-            return self.fail(ErrorKind::Unsupported("ASSetPropFlags non-null selector"));
-        }
+        let keys: Vec<Text> = match &args[1] {
+            Value::Null if !prototype => {
+                self.visit_members(self.objects[target.0].properties.len().saturating_mul(2))?;
+                self.objects[target.0].properties.keys().cloned().collect()
+            }
+            Value::String(selector) => {
+                // Exact own ASCII identifiers and nonempty comma-separated lists.
+                // No trimming, case folding, coercion, getter or prototype walk.
+                let count = selector.split(|unit| *unit == u16::from(b',')).count();
+                self.visit_members(count.saturating_mul(2))?;
+                let mut keys = Vec::with_capacity(count);
+                for part in selector.split(|unit| *unit == u16::from(b',')) {
+                    if part.is_empty()
+                        || !part.iter().all(|unit| {
+                            u8::try_from(*unit).is_ok_and(|unit| {
+                                unit.is_ascii_alphanumeric() || matches!(unit, b'_' | b'$')
+                            })
+                        })
+                    {
+                        return self.fail(ErrorKind::Unsupported(
+                            "ASSetPropFlags ASCII selector profile",
+                        ));
+                    }
+                    let key = self.allocate_text(part.to_vec())?;
+                    if !self.objects[target.0].properties.contains_key(&key)
+                        || (prototype
+                            && (!ordinary_movie_clip_name(&key)
+                                || key.as_ref() == text("constructor").as_ref()))
+                    {
+                        return self.fail(ErrorKind::Unsupported(
+                            "ASSetPropFlags missing/inherited/native member",
+                        ));
+                    }
+                    keys.push(key);
+                }
+                keys
+            }
+            _ => return self.fail(ErrorKind::Unsupported("ASSetPropFlags selector profile")),
+        };
         let set = self.flag_mask(&args[2])?;
         let clear = args
             .get(3)
@@ -729,18 +989,16 @@ impl Vm {
                     .and_then(|target| self.loaded_movie_targets.get(&target))
                     .map(|version| if *version == 5 { 7 } else { 0 })
             });
-        self.visit_members(self.objects[target.0].properties.len().saturating_mul(2))?;
         // REA connects the cache to the header only for validated loaded targets.
         // Unbound/native/direct-call contexts retain outcome-independent gating.
         if clear.is_none() {
-            for key in self.objects[target.0].properties.keys() {
+            for key in &keys {
                 let old = self.own_flags(target, key);
                 if (old | set) != ((old & !7) | set) {
                     return self.fail(ErrorKind::AmbiguousPropertyFlags { old, set });
                 }
             }
         }
-        let keys: Vec<_> = self.objects[target.0].properties.keys().cloned().collect();
         for key in keys {
             let old = self.own_flags(target, &key);
             self.objects[target.0]
@@ -854,10 +1112,12 @@ impl Vm {
         self.set_key(id, text(key), value)
     }
     fn get_key(&self, mut id: ObjectId, key: &Text) -> Result<Value> {
+        let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
             self.check_member_target(id, key)?;
+            native_member_context |= matches!(object.kind, Kind::MovieClip(_));
             if key.as_ref() == text("__proto__").as_ref() {
                 return Ok(object.prototype.map_or(Value::Null, Value::Object));
             }
@@ -877,16 +1137,23 @@ impl Vm {
             if let Some(next) = object.prototype {
                 id = next;
             } else {
+                if native_member_context {
+                    return self.fail(ErrorKind::Unsupported(
+                        "unimplemented MovieClip native member",
+                    ));
+                }
                 return Ok(Value::Undefined);
             }
         }
         self.fail(ErrorKind::Budget("prototype lookup depth"))
     }
     fn has_key(&self, mut id: ObjectId, key: &Text) -> Result<bool> {
+        let mut native_member_context = false;
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
             self.check_member_target(id, key)?;
+            native_member_context |= matches!(object.kind, Kind::MovieClip(_));
             if object.properties.contains_key(key)
                 || key.as_ref() == text("__proto__").as_ref()
                 || (matches!(object.kind, Kind::Array(_))
@@ -897,6 +1164,11 @@ impl Vm {
             if let Some(next) = object.prototype {
                 id = next;
             } else {
+                if native_member_context {
+                    return self.fail(ErrorKind::Unsupported(
+                        "unimplemented MovieClip native member",
+                    ));
+                }
                 return Ok(false);
             }
         }
@@ -952,6 +1224,7 @@ impl Vm {
                         | Kind::ObjectConstructor
                         | Kind::ArrayConstructor
                         | Kind::FunctionConversion
+                        | Kind::MovieClipConstructor
                         | Kind::AddProperty
                         | Kind::RegisterClass
                         | Kind::SetPropertyFlags
@@ -964,6 +1237,9 @@ impl Vm {
     }
     fn read_member(&mut self, id: ObjectId, key: &Text, host: &mut impl Host) -> Result<Value> {
         if let Some(Property::Accessor { getter, .. }) = self.descriptor(id, key)? {
+            if matches!(self.objects[id.0].kind, Kind::MovieClip(_)) {
+                return self.fail(ErrorKind::Unsupported("MovieClip accessor read profile"));
+            }
             self.invoke(getter, Value::Object(id), &[], host)
         } else {
             self.get_key(id, key)
@@ -978,6 +1254,11 @@ impl Vm {
     ) -> Result<()> {
         self.check_value(&value)?;
         if let Some(Property::Accessor { setter, .. }) = self.descriptor(id, &key)? {
+            if matches!(self.objects[id.0].kind, Kind::MovieClip(_)) {
+                return self.fail(ErrorKind::Unsupported(
+                    "MovieClip accessor assignment profile",
+                ));
+            }
             let owner = self.property_owner(id, &key)?.unwrap();
             if self.own_flags(owner, &key) & 4 != 0 {
                 return self.fail(ErrorKind::Unsupported(
@@ -1039,6 +1320,16 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
+        if let Kind::MovieClip(role) = self.objects[id.0].kind {
+            if role != MovieClipRole::UnboundPrototype
+                || !ordinary_movie_clip_name(&key)
+                || key.as_ref() == text("constructor").as_ref()
+            {
+                return self.fail(ErrorKind::Unsupported(
+                    "unbound MovieClip member assignment",
+                ));
+            }
+        }
         self.check_member_target(id, &key)?;
         if self.array_prototype == Some(id)
             && (key.as_ref() == text("length").as_ref() || array_index(&key).is_some())
@@ -1453,7 +1744,7 @@ impl Vm {
             Kind::FunctionPrototype => {
                 return self.fail(ErrorKind::Unsupported(
                     "Function prototype invocation semantics",
-                ))
+                ));
             }
             Kind::Native(binding) => {
                 self.host_budget()?;
@@ -1578,6 +1869,9 @@ impl Vm {
                 let (Value::Object(receiver), Value::String(name)) = (&this, &args[0]) else {
                     return Ok(Value::Bool(false));
                 };
+                if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) {
+                    return self.fail(ErrorKind::Unsupported("MovieClip addProperty profile"));
+                }
                 if name.is_empty()
                     || !self.callable(&args[1])
                     || (!matches!(args[2], Value::Null) && !self.callable(&args[2]))
@@ -1609,6 +1903,18 @@ impl Vm {
                     },
                 );
                 return Ok(Value::Bool(true));
+            }
+            Kind::MovieClipConstructor => {
+                // The native callback only tests category and returns that receiver;
+                // allocation is a distinct NewObject/NewMethod operation above.
+                return Ok(match this {
+                    Value::Object(receiver)
+                        if matches!(self.objects[receiver.0].kind, Kind::MovieClip(_)) =>
+                    {
+                        Value::Object(receiver)
+                    }
+                    _ => Value::Undefined,
+                });
             }
             Kind::FunctionConversion => {
                 if constructor_context.is_some() || args.len() != 1 {
@@ -2194,9 +2500,7 @@ impl Vm {
                         };
                         if matches!(
                             self.objects[constructor.0].kind,
-                            Kind::ObjectConstructor
-                                | Kind::ArrayConstructor
-                                | Kind::FunctionConversion
+                            Kind::ObjectConstructor | Kind::ArrayConstructor
                         ) {
                             // Native standard constructors select their constructed object;
                             // this is distinct from a script constructor's return value.
@@ -2205,7 +2509,11 @@ impl Vm {
                             self.object_id(object.clone())?;
                             self.push(frame, object)?;
                         } else {
-                            let object = self.alloc(Kind::Plain, prototype)?;
+                            let object = self.allocate_constructed_object(
+                                constructor,
+                                prototype,
+                                args.len(),
+                            )?;
                             self.invoke_in_context(
                                 callable,
                                 Value::Object(object),
@@ -2228,6 +2536,7 @@ impl Vm {
                                     | Kind::ObjectConstructor
                                     | Kind::ArrayConstructor
                                     | Kind::FunctionConversion
+                                    | Kind::MovieClipConstructor
                                     | Kind::AddProperty
                                     | Kind::RegisterClass
                                     | Kind::SetPropertyFlags
@@ -2441,7 +2750,9 @@ impl Vm {
                                 self.check_object(id)?;
                                 if matches!(
                                     self.objects[id.0].kind,
-                                    Kind::FunctionPrototype | Kind::ConstructorSuper { .. }
+                                    Kind::FunctionPrototype
+                                        | Kind::ConstructorSuper { .. }
+                                        | Kind::MovieClip(_)
                                 ) {
                                     return self.fail(ErrorKind::Unsupported(
                                         "special prototype/super typeof semantics",
@@ -2454,6 +2765,7 @@ impl Vm {
                                         | Kind::ObjectConstructor
                                         | Kind::ArrayConstructor
                                         | Kind::FunctionConversion
+                                        | Kind::MovieClipConstructor
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
@@ -2542,6 +2854,15 @@ fn array_index(key: &Text) -> Option<u32> {
     }
 }
 
+fn ordinary_movie_clip_name(key: &Text) -> bool {
+    !key.is_empty()
+        && key[0] != u16::from(b'_')
+        && !key.starts_with(&[u16::from(b'o'), u16::from(b'n')])
+        && key.iter().all(|v| {
+            u8::try_from(*v).is_ok_and(|v| v.is_ascii_alphanumeric() || matches!(v, b'_' | b'$'))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2603,9 +2924,10 @@ mod tests {
         assert!(!vm.equal(&object, &Value::Null).unwrap());
         assert!(!vm.equal(&Value::Undefined, &object).unwrap());
         assert!(vm.equal(&object, &Value::Number(0.0)).is_err());
-        assert!(vm
-            .equal(&Value::string("12.5"), &Value::Number(12.5))
-            .unwrap());
+        assert!(
+            vm.equal(&Value::string("12.5"), &Value::Number(12.5))
+                .unwrap()
+        );
         assert!(vm.number(&Value::string("")).is_err());
         assert!(vm.number(&Value::Null).is_err());
         assert!(vm.number(&Value::string("0x10")).is_err());
@@ -2853,22 +3175,24 @@ mod tests {
         assert_eq!(vm.get(sized, "0").unwrap(), Value::Undefined);
         assert_eq!(vm.get(prototype, "0").unwrap(), Value::Undefined);
         assert!(vm.set(prototype, "0", Value::Null).is_err());
-        assert!(vm
-            .call(
+        assert!(
+            vm.call(
                 Value::Object(constructor),
                 Value::Object(root),
                 &[Value::Number(-1.0)],
                 &mut RejectHost
             )
-            .is_err());
-        assert!(vm
-            .call(
+            .is_err()
+        );
+        assert!(
+            vm.call(
                 Value::Object(constructor),
                 Value::Object(root),
                 &[Value::Number(1.25)],
                 &mut RejectHost
             )
-            .is_err());
+            .is_err()
+        );
         let huge = vm
             .call(
                 Value::Object(constructor),
@@ -3004,6 +3328,170 @@ mod tests {
             ErrorKind::Unsupported(_)
         ));
         assert_eq!(host.0.len(), 2);
+    }
+    #[test]
+    fn movie_clip_allocation_keeps_typed_receiver_and_public_constructor_selection() {
+        let mut vm = setup();
+        assert!(vm.install_movie_clip_constructor().is_err());
+        vm.install_object_constructor().unwrap();
+        let movie_clip = vm.install_movie_clip_constructor().unwrap();
+        assert_eq!(vm.install_movie_clip_constructor().unwrap(), movie_clip);
+        let Value::Object(prototype) = vm.get(movie_clip, "prototype").unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            vm.movie_clip_role(prototype).unwrap(),
+            Some(MovieClipRole::UnboundPrototype)
+        );
+        assert_eq!(
+            vm.own_property_flags(prototype, "constructor").unwrap(),
+            Some(3)
+        );
+        let root = vm.root();
+        assert_eq!(
+            vm.call(
+                Value::Object(movie_clip),
+                Value::Object(root),
+                &[],
+                &mut RejectHost
+            )
+            .unwrap()
+            .value,
+            Value::Undefined
+        );
+        assert_eq!(
+            vm.call(
+                Value::Object(movie_clip),
+                Value::Object(prototype),
+                &[],
+                &mut RejectHost
+            )
+            .unwrap()
+            .value,
+            Value::Object(prototype)
+        );
+        let mut body = push(&[Value::Number(0.0)]);
+        body.extend(action(0x96, &[4, 2, 3])); // zero args, super register2, undefined name
+        body.extend([0x52, 0x3e]);
+        let mut payload = b"Tween\0".to_vec();
+        payload.extend([0, 0, 2, 0x19, 0]);
+        payload.extend((body.len() as u16).to_le_bytes());
+        let mut definition = action(0x8e, &payload);
+        definition.extend(body);
+        definition.extend(push(&[Value::string("Tween")]));
+        definition.push(0x1c);
+        definition.extend(push(&[Value::string("MovieClip")]));
+        definition.extend([0x1c, 0x69]);
+        execute(&mut vm, &definition).unwrap();
+        let Value::Object(tween) = vm.get(root, "Tween").unwrap() else {
+            panic!()
+        };
+        let Value::Object(tween_proto) = vm.get(tween, "prototype").unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            vm.get(tween_proto, "constructor").unwrap(),
+            Value::Object(movie_clip)
+        );
+        assert_eq!(
+            vm.get(tween_proto, "__constructor__").unwrap(),
+            Value::Object(movie_clip)
+        );
+        for name in ["MovieClip"] {
+            let mut code = push(&[Value::Number(0.0), Value::string(name)]);
+            code.push(0x40);
+            let result = execute(&mut vm, &code).unwrap();
+            assert_eq!(result.host_calls, 0);
+            let Value::Object(instance) = result.stack[0] else {
+                panic!()
+            };
+            assert_eq!(
+                vm.movie_clip_role(instance).unwrap(),
+                Some(MovieClipRole::UnboundInstance)
+            );
+            let expected = if name == "Tween" { tween } else { movie_clip };
+            assert_eq!(
+                vm.get(instance, "__constructor__").unwrap(),
+                Value::Object(expected)
+            );
+            assert_eq!(
+                vm.own_property_flags(instance, "__constructor__").unwrap(),
+                Some(3)
+            );
+            assert_eq!(
+                vm.call(
+                    Value::Object(movie_clip),
+                    Value::Object(instance),
+                    &[],
+                    &mut RejectHost
+                )
+                .unwrap()
+                .value,
+                Value::Object(instance)
+            );
+            assert!(vm.get(instance, "_x").is_err());
+            assert!(vm.has_key(instance, &text("missingNativeMember")).is_err());
+            assert!(vm.set(instance, "ordinary", Value::Bool(true)).is_err());
+        }
+        let mut wrong_args = push(&[
+            Value::Number(1.0),
+            Value::Number(1.0),
+            Value::string("Tween"),
+        ]);
+        wrong_args.push(0x40);
+        assert!(execute(&mut vm, &wrong_args).is_err());
+        // A public rewrite controls allocation; hidden superclass alone must not grant type11.
+        vm.set(tween_proto, "constructor", Value::Object(tween))
+            .unwrap();
+        let before = vm.object_count();
+        let mut new = push(&[Value::Number(0.0), Value::string("Tween")]);
+        new.push(0x40);
+        assert!(matches!(
+            execute(&mut vm, &new).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
+        assert_eq!(vm.object_count(), before);
+        assert_eq!(
+            vm.get(tween_proto, "__constructor__").unwrap(),
+            Value::Object(movie_clip)
+        );
+    }
+    #[test]
+    fn movie_clip_prototype_marker_visits_hidden_inherited_names_without_values() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let clip = vm.install_movie_clip_constructor().unwrap();
+        let Value::Object(clip_proto) = vm.get(clip, "prototype").unwrap() else {
+            panic!()
+        };
+        let Value::Object(object_proto) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        let generic = vm.alloc(Kind::Plain, Some(clip_proto)).unwrap();
+        assert!(!vm.movie_clip_prototype_event_marker(generic).unwrap());
+        let getter = vm.native(99).unwrap();
+        vm.raw_member(
+            object_proto,
+            text("onPress"),
+            Property::Accessor {
+                getter: Value::Object(getter),
+                setter: None,
+            },
+            1,
+        )
+        .unwrap();
+        vm.set(generic, "onPress", Value::Null).unwrap_err(); // inherited accessor requires executable write
+        assert!(vm.movie_clip_prototype_event_marker(generic).unwrap());
+        // Assigning a category11 prototype skips visitation even with event-named ancestors.
+        assert!(!vm.movie_clip_prototype_event_marker(clip_proto).unwrap());
+        assert_eq!(vm.host_calls, 0);
+        vm.limits.member_visits = 0;
+        assert!(matches!(
+            vm.movie_clip_prototype_event_marker(generic)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Budget(_)
+        ));
     }
     #[test]
     fn inherited_undefined_shadows_outer_scope() {
@@ -3205,14 +3693,15 @@ mod tests {
             )
             .unwrap();
         assert_eq!(result.value, Value::Object(receiver));
-        assert!(vm
-            .call(
+        assert!(
+            vm.call(
                 Value::Object(apply),
                 function,
                 &[Value::Object(receiver), Value::Number(0.0)],
                 &mut RejectHost
             )
-            .is_err());
+            .is_err()
+        );
         let mut vm = Vm::new(
             15,
             Limits {
@@ -3310,14 +3799,15 @@ mod tests {
                 Value::Null
             );
         }
-        assert!(vm
-            .call(
+        assert!(
+            vm.call(
                 Value::Object(conversion),
                 Value::Object(root),
                 &[],
                 &mut RejectHost
             )
-            .is_err());
+            .is_err()
+        );
         let mut nested = function("", &[0]);
         nested.push(0x3e);
         execute(&mut vm, &function("outer", &nested)).unwrap();
@@ -3667,6 +4157,82 @@ mod tests {
         assert_eq!(vm.own_property_flags(child, "__proto__").unwrap(), Some(2));
     }
     #[test]
+    fn selected_own_flags_preserve_values_and_reject_unproved_selectors_atomically() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let clip = vm.install_movie_clip_constructor().unwrap();
+        let flags = vm.install_property_flags().unwrap();
+        let Value::Object(prototype) = vm.get(clip, "prototype").unwrap() else {
+            panic!()
+        };
+        let f = vm.native(55).unwrap();
+        for name in ["tween__start", "tween__to", "tween__run"] {
+            vm.set(prototype, name, Value::Object(f)).unwrap();
+        }
+        let call = |vm: &mut Vm, selector: Value| {
+            vm.call(
+                Value::Object(flags),
+                Value::Object(vm.global()),
+                &[
+                    Value::Object(prototype),
+                    selector,
+                    Value::Number(1.0),
+                    Value::Number(0.0),
+                ],
+                &mut RejectHost,
+            )
+        };
+        assert_eq!(
+            call(&mut vm, Value::string("tween__start,tween__to,tween__run"))
+                .unwrap()
+                .value,
+            Value::Undefined
+        );
+        for name in ["tween__start", "tween__to", "tween__run"] {
+            assert_eq!(vm.own_property_flags(prototype, name).unwrap(), Some(1));
+            assert_eq!(vm.get(prototype, name).unwrap(), Value::Object(f));
+        }
+        for bad in [
+            "",
+            "tween__start,",
+            ",tween__start",
+            "tween__start,,tween__to",
+            "tween__start, missing",
+            "tween__start,missing",
+            "constructor",
+            "é",
+        ] {
+            assert!(call(&mut vm, Value::string(bad)).is_err());
+            assert_eq!(
+                vm.own_property_flags(prototype, "constructor").unwrap(),
+                Some(3)
+            );
+        }
+        assert!(call(&mut vm, Value::Null).is_err());
+        let plain = vm.object().unwrap();
+        vm.set(plain, "dispatchQueue", Value::Object(f)).unwrap();
+        let result = vm
+            .call(
+                Value::Object(flags),
+                Value::Object(vm.global()),
+                &[
+                    Value::Object(plain),
+                    Value::string("dispatchQueue"),
+                    Value::Number(4.0),
+                    Value::Number(0.0),
+                ],
+                &mut RejectHost,
+            )
+            .unwrap();
+        assert_eq!(result.host_calls, 0);
+        assert_eq!(
+            vm.own_property_flags(plain, "dispatchQueue").unwrap(),
+            Some(4)
+        );
+        vm.set(plain, "dispatchQueue", Value::Null).unwrap();
+        assert_eq!(vm.get(plain, "dispatchQueue").unwrap(), Value::Object(f));
+    }
+    #[test]
     fn property_flag_consumers_and_value_replacement_preserve_attributes() {
         let mut vm = setup();
         let intrinsic = vm.install_property_flags().unwrap();
@@ -3772,9 +4338,10 @@ mod tests {
         let root = vm.root();
         vm.bind_loaded_movie_target(root, 15).unwrap();
         assert!(vm.bind_loaded_movie_target(root, 14).is_err());
-        assert!(vm
-            .bind_loaded_movie_target(ObjectId(usize::MAX), 15)
-            .is_err());
+        assert!(
+            vm.bind_loaded_movie_target(ObjectId(usize::MAX), 15)
+                .is_err()
+        );
         let other = vm.object().unwrap();
         let parent = vm.object().unwrap();
         let victim = vm.alloc(Kind::Plain, Some(parent)).unwrap();
