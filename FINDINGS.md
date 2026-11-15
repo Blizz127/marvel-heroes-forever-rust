@@ -24,6 +24,15 @@ unused test-only import warning; it is not a runtime failure. No original
 constructor visibility change, native frontend, login or gameplay parity is
 claimed. This build still contains zero finished Forever upgrades.
 
+**VERIFIED private staging, 12:08 UTC:** `builds/0.1.0-dev.15` contains 375
+original-only selected files. Every manifest size/hash and the complete file
+set match; packaged version and Original-preset readback pass. Clean packaged
+source is `823d50530bf9dc01971d806a343db3f625c58cc8`; only findings/provenance
+prose differs from the tested code above. Receipt:
+`evidence/build-0.1.0-dev.15-package-validation.json`. This supersedes dev14's
+Rust diagnostic staging. Publication and owner-device validation remain
+unconfirmed; the existing retail client is separate.
+
 **VERIFIED later bounded execution:** all 34 original login Construct saved
 phases completed 1,686 instructions and 674 writes with zero host calls. Each
 returned `DynamicLookupPending`; no dynamic handler or registered constructor
