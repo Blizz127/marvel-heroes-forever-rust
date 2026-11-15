@@ -236,3 +236,22 @@ global initialization or the label-display lifecycle. Inputs are the owner's
 proprietary frontend-manager movie, Calligraphy package and English locale files;
 their exact paths and hashes remain in the private receipt. No native process,
 rendering, account or server was run, and no original data enters git.
+
+The follow-up **configured-label stage also passes**. A private Cargo harness
+uses the complete integrated crate at `da102e9` in a frozen Git worktree. All 145
+tracked crate files remain unchanged across the build and execution. This stage
+uses `ConfiguredLabels::resolve` for 27 initial observations and every one of the
+81 original-script host requests, then `prototype().localized_data` and
+`into_host_result`; it has no explicit member-map lookup or hardcoded resource
+directory.
+
+A separate frozen configuration oracle matches 16 configuration values/origins
+and all 108 joined-path/hash/ID observations. The unchanged resource oracle
+again matches all 27 string returns, 54 distinct result objects and 1,242 scalar
+comparisons. The configuration path adds 324 exact path/hash/identity comparisons.
+Receipts, binary, full source/input hashes and reproduction scripts remain in
+`evidence/localized-vm-integration/configured-labels/`. Owner inputs and the binary
+also remain unchanged across execution. This verifies the configured-resource
+to VM result connection under controlled bindings; it does not observe native
+live configuration, ExternalInterface registration, global initialization or
+the label-display lifecycle.
