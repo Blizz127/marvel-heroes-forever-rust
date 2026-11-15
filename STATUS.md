@@ -50,6 +50,12 @@ notices; no retail executable, game assets, captures or extracted data.
   integrated Mouse factory now builds the bounded native graph and reaches an
   explicit default-rejecting user-event host boundary. No cursor effect is
   implemented; the next controlled replay reaches that rejecting boundary.
+- **OBSERVED dev21 typed-global boundary:** with the new opt-in native-global
+  profile and unknown initial extension byte, one initializer completes; the
+  next stops at original numeric1 assignment to gfxExtensions (offset13566).
+  The current subset accepts exact Booleans. No frame/Mouse call runs in that
+  replay. Native conversion proof is next; the prior Plain-global run remains
+  a separate controlled profile. Dev21 has not been built or staged.
 - **VERIFIED current-frame handoff:** a separate frozen probe runs those 452
   initializers and the original MouseMove handler through the same host, then
   prepares and renders the current scene. The handler executes 14 instructions

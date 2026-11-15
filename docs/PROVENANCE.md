@@ -749,3 +749,16 @@ The dev20 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev20-linux/manifest.json`, SHA-256
 `c663f0fe8d2042ba6081d3041f7fcbd9ce03451b8f7c1701a2f34b80556ddea8`.
+
+[Native global extension state](REA_GLOBAL_EXTENSIONS.md) records exact owned
+getter/setter and property-order evidence. Original Rust implements an opt-in
+same-context subset, preserving unknown adopted state. The original manager12
+replay demonstrates the unsupported numeric input separately from earlier
+Plain-global fixtures; no coerced value or startup success was substituted.
+
+[Hardware cursor calls](REA_HARDWARE_CURSOR.md), [fresh movie default state](FRESH_MOVIE_DEFAULT_STATE.md)
+and [texture manager updates](SCALE9_TEXTURE_UPDATES.md) retain exact owned
+package/native producer, layout and dispatch evidence in their source ledgers.
+Actual backend receivers, nested default-copy effects and later resource
+lifecycle remain explicit boundaries. No new external implementation, live
+service action or native runtime state was introduced.

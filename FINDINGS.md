@@ -5,6 +5,52 @@ file observations from execution. Earlier entries retain the state when recorded
 later dated build/probe entries supersede them. Isolated offline retail probes
 have now run; no server login or playable Rust frontend has been demonstrated.
 
+## 2026-11-15 dev21 work in progress
+
+**VERIFIED bounded native-global property effects:** the opt-in same-context
+profile preserves unknown current extension state and orders exact-Boolean
+writes as native context byte, version-property effect, then marker write.
+A final ReadOnly rejection retains the earlier effects. Fifteen focused checks
+and production metadata compilation pass without warnings. Receipt:
+`evidence/avm1-runtime/global-extensions-checks/receipt.json`, SHA-256
+`19e059a0e1d9605eb02a8329b7439cc16f2bb5919bdcf7077f3a680810a0c38b`.
+
+**OBSERVED earlier typed-profile boundary:** the single manager12 replay
+completes one initializer (220 instructions), then stops after 112 instructions
+in the next initializer at original `SetMember` offset 13566. That original
+instruction writes Integer1 to `gfxExtensions`; the exact-Boolean subset rejects
+it. The adopted native byte remains unknown with no version/marker write.
+Selection's earlier listener registration is retained. No manager frame or
+Mouse.hide call runs. The earlier 452-initializer/290-frame results used a Plain
+global and remain distinct controlled evidence. Receipt:
+`evidence/avm1-attached-manager-frame-action-increment12/receipt.json`, SHA-256
+`85d8e4fead6ab94cecec88af7883b2c325bf53ac64b997dc1cd405427a5a05f4`.
+Numeric conversion is the next native proof/implementation dependency; neither
+original bytes nor the unknown state were replaced to advance the run.
+
+**VERIFIED static hardware-cursor route:** selected controller/viewport routines
+establish ordered movie-player/HUD updates, conditional centering, unconditional
+visibility assignment and forced update. Concrete platform backend effects and
+current receiver identities remain separate from this contract and from
+Mouse.hide's state-4 route. Receipt: `evidence/hardware-cursor/receipt.json`,
+SHA-256 `676fc410b711d449d4fd463eec7dc18a9fc9a7f339c5899f6693d5fb0f91f270`.
+
+**VERIFIED static default-layout checkpoint:** conditional property-link replay
+places action StartPaused at +0x120 mask4; inherited copy headers end at +0x108.
+Nested copy callbacks and later lifecycle writes remain outside the current
+preservation proof, so absent saved StartPaused is not promoted to false.
+Receipt: `evidence/fresh-movie-default-state/receipt.json`, SHA-256
+`f2caaa48b9409927287f6c7c57a27f60d7f576b2df6ae70dfca45db252beefec`.
+
+**VERIFIED static texture-manager update path:** exact producer and appended
+child tables connect both selected update methods to owner-index bookkeeping
+at +0x1ec. Under the recorded storage/identity conditions, they preserve the
+dimension fields. Remaining resource/backend effects prevent a lifetime-wide
+or current-input claim. Receipt: `evidence/scale9-texture-updates/final-index.json`,
+SHA-256 `7eb1f851612741b7f867475e03ef0977e23a06a4520bcbb9eb6ee507293131b8`.
+
+Dev20 remains the latest built and staged diagnostic. Dev21 has not been built.
+
 ## 2026-11-15 dev20 diagnostic increment
 
 **VERIFIED combined build/startup:** clean tested source
