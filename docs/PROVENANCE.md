@@ -186,3 +186,22 @@ records its explicit diagnostic color, texture and unsupported-effect policy.
 [Scaling grids](GFX_SCALE9.md) registers the Adobe/Autodesk references and exact
 private geometry observations behind the original bounded deformation helper;
 native bitmap-fill paint averaging remains unresolved.
+[Saved materials](MATERIALS.md) records the exact read-only UE Viewer source
+files, license and private tagged-property/native-tail evidence used for the
+original material dependency reader. Shader behavior is not inferred from graph
+or parameter decoding.
+[Saved scene objects](WORLD_SCENE.md) adds the exact pinned actor/component
+property evidence and inherited package-reference source ledger.
+[Selection listener state](FRONTEND_SELECTION_HOST.md) records the Adobe-authored
+contracts used by the original bounded native-binding host, separately from
+unverified GFx focus-event behavior.
+[Focus-handler dependencies](FRONTEND_FOCUS.md) records the exact primary Adobe
+contract and owned constructor/callback spans, including GFx controller extensions
+that are not established by Adobe's two-argument focus-event documentation.
+[Mutable display state](FRONTEND_DISPLAY_STATE.md) records Adobe MovieClip and
+Autodesk cursor documentation, the actual saved MouseMove handler and original
+bounded affine/property integration. It does not establish startup or native
+event delivery parity.
+[Saved HTML text](GFX_HTML_TEXT.md) records Adobe htmlText documentation, exact
+owner formatting/token/font-linkage evidence and original bounded parsing.
+Paragraph/run representation is separate from pending HTML layout and rendering.

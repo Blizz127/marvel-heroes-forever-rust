@@ -9,6 +9,7 @@ pub mod calligraphy;
 pub mod frontend;
 pub mod gfx;
 pub mod localization;
+pub mod material;
 pub mod options;
 pub mod prototype_catalog;
 pub mod prototype_values;
@@ -21,3 +22,4 @@ pub mod texture_cache;
 pub mod upk;
 #[cfg(feature = "window")]
 pub mod window;
+pub mod world_scene;

@@ -28,7 +28,29 @@ pub fn run(args: &[OsString]) -> Result<()> {
         [command, operation, package, selector, output, extra @ ..]
             if command == "frontend" && operation == "render-static" =>
         {
-            render_frontend(package, text(selector)?, Path::new(output), extra)?;
+            render_frontend(package, text(selector)?, Path::new(output), extra, None)?;
+        }
+        [
+            command,
+            operation,
+            package,
+            selector,
+            x,
+            y,
+            output,
+            extra @ ..,
+        ] if command == "frontend" && operation == "pointer-probe" => {
+            let point = [text(x)?.parse::<f64>()?, text(y)?.parse::<f64>()?];
+            if point.iter().any(|value| !value.is_finite()) {
+                return Err(invalid("pointer coordinates must be finite stage pixels"));
+            }
+            render_frontend(
+                package,
+                text(selector)?,
+                Path::new(output),
+                extra,
+                Some(point),
+            )?;
         }
         [command, operation, package, selector, extra @ ..]
             if command == "frontend" && operation == "window-static" =>
@@ -58,8 +80,11 @@ pub fn run(args: &[OsString]) -> Result<()> {
             if command == "frontend" && operation == "init-probe" =>
         {
             use marvel_heroes_forever::{
-                avm1::vm::{Limits, RejectHost},
-                frontend::bootstrap::{InitOutcome, InitSession},
+                avm1::vm::Limits,
+                frontend::{
+                    bootstrap::{InitOutcome, InitSession},
+                    selection::{Limits as SelectionLimits, SelectionHost},
+                },
             };
             let archive = PackageArchive::open(package)?;
             let export = select(archive.package(), text(selector)?)?;
@@ -68,6 +93,8 @@ pub fn run(args: &[OsString]) -> Result<()> {
             let mut session =
                 InitSession::new(asset.movie.header.version, Limits::default(), 2_000_000)?;
             session.install_movie_clip_metadata(u32::MAX)?;
+            session.setup_vm()?.install_property_flags()?;
+            let mut host = SelectionHost::install(session.setup_vm()?, SelectionLimits::default())?;
             let plan = session.compile_frame(0, &asset, 0)?;
             println!(
                 "OBSERVED {} frame 0: {} saved initializers; {} ordinary frame actions retained separately.",
@@ -76,9 +103,15 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 plan.frame_actions.len()
             );
             println!(
-                "Probe bindings: Object intrinsic and MovieClip class metadata; all external calls rejected."
+                "Probe bindings: Object/property-flags intrinsics, MovieClip metadata and Selection listener state; other host operations rejected."
             );
-            match session.initialize(&plan, &mut RejectHost)? {
+            let outcome = session.initialize(&plan, &mut host)?;
+            println!(
+                "OBSERVED Selection: {} retained listeners; {:?}.",
+                host.listeners().len(),
+                host.stats()
+            );
+            match outcome {
                 InitOutcome::Complete {
                     initializers,
                     instructions,
@@ -346,6 +379,7 @@ fn frontend_frame(
     package: &OsString,
     selector: &str,
     extra: &[OsString],
+    pointer: Option<[f64; 2]>,
 ) -> Result<marvel_heroes_forever::render::Readback> {
     use marvel_heroes_forever::{
         frontend::{
@@ -371,8 +405,11 @@ fn frontend_frame(
         &library,
         Limits::default(),
     )?;
-    let prepared =
+    let mut prepared =
         scene_content::prepare(&assets, &library, &scene, scene_content::Limits::default())?;
+    if let Some(pointer) = pointer {
+        apply_pointer_probe(&scene, &mut prepared, pointer)?;
+    }
     let renderer = pollster::block_on(QuadRenderer::headless(
         wgpu::TextureFormat::Rgba8Unorm,
         false,
@@ -390,7 +427,7 @@ fn frontend_frame(
     let frame =
         preview::render_static(&renderer, &prepared, entry.asset.movie.header.stage, policy)?;
     println!(
-        "OBSERVED {} static geometry: {}x{}, {} submitted fills, {} submitted triangles, {} uploaded textures.",
+        "OBSERVED {} geometry diagnostic: {}x{}, {} submitted fills, {} submitted triangles, {} uploaded textures.",
         entry.asset.object_path,
         frame.readback.width,
         frame.readback.height,
@@ -404,11 +441,18 @@ fn frontend_frame(
         policy
     );
     println!(
-        "Limitations: {}; text instances omitted: {}; script bindings unexecuted: {}; unbound action tags: {}.",
+        "Limitations: {}; text instances omitted: {}; script binding records: {}; unbound action tags: {}.",
         frame.limitations.len(),
         frame.coverage.text_instances_omitted,
         frame.coverage.source_actions_unexecuted,
         frame.coverage.unbound_action_tags_unexecuted
+    );
+    println!(
+        "Saved text: {}/{} fields prepared, {} glyph fills submitted, {} field clips; runtime text updates have not run.",
+        frame.coverage.text_instances_prepared,
+        frame.coverage.text_instances,
+        frame.coverage.text_fill_draws,
+        frame.coverage.text_fields_clipped
     );
     println!(
         "Saved background: {:?}. Filters, scale9, non-normal blends and runtime visibility remain unverified; this is not a playable frontend.",
@@ -417,24 +461,103 @@ fn frontend_frame(
     Ok(frame.readback)
 }
 
+/// A single explicit original clip-handler invocation. This is not an event
+/// scheduler, class constructor or initialized movie player.
+#[cfg(feature = "renderer")]
+fn apply_pointer_probe(
+    scene: &marvel_heroes_forever::gfx::scene::Scene<'_>,
+    prepared: &mut marvel_heroes_forever::frontend::scene_content::PreparedScene,
+    pointer: [f64; 2],
+) -> Result<()> {
+    use marvel_heroes_forever::{
+        avm1::{
+            Program,
+            vm::{Limits as VmLimits, Vm},
+        },
+        frontend::display_state::{DisplayState, Limits},
+        gfx::scene::ActionKind,
+    };
+    let mut bindings = scene.actions.iter().filter(|action| {
+        matches!(action.kind,
+        ActionKind::Clip { event_flags, .. } if event_flags & 0x08 != 0)
+    });
+    let action = bindings
+        .next()
+        .ok_or_else(|| invalid("scene has no saved MouseMove clip handler"))?;
+    if bindings.next().is_some() {
+        return Err(invalid(
+            "multiple MouseMove handlers require an established event dispatch order",
+        ));
+    }
+    let movie = scene
+        .movies
+        .get(&action.movie_id)
+        .ok_or_else(|| invalid("clip action movie is missing"))?;
+    let mut vm = Vm::new(movie.header.version, VmLimits::default())?;
+    let target = vm.object()?;
+    let mut display = DisplayState::from_scene(scene, Limits::default())?;
+    display.bind_object(target, action.owner)?;
+    display.set_pointer_stage_twips(Some([pointer[0] * 20.0, pointer[1] * 20.0]))?;
+    let code = vm.register(std::sync::Arc::new(Program::parse_at(
+        action.bytes.bytes(movie.bytes())?,
+        action.bytes.offset,
+    )?))?;
+    let result = vm.execute(code, target, &mut display)?;
+    let nodes = display.snapshot_nodes();
+    if nodes.len() != prepared.nodes.len() {
+        return Err(invalid("display snapshot node count changed"));
+    }
+    for (prepared_node, current) in prepared.nodes.iter_mut().zip(nodes) {
+        if prepared_node.instance.id != current.id
+            || prepared_node.instance.raw != current.raw
+            || prepared_node.instance.parent != current.parent
+        {
+            return Err(invalid("display snapshot changed source identity"));
+        }
+        prepared_node.instance = current;
+    }
+    println!(
+        "OBSERVED one saved MouseMove invocation: node {}, source {}+{}, pointer {:?} stage pixels, {} instructions, {} host calls.",
+        action.owner,
+        action.bytes.offset,
+        action.bytes.len,
+        pointer,
+        result.instructions,
+        result.host_calls
+    );
+    println!(
+        "OBSERVED geometry host: {:?}; resulting local transform {:?}.",
+        display.stats(),
+        display.node(action.owner)?.local_matrix
+    );
+    println!(
+        "The probe supplied one instance binding and pointer. Initializers, constructors, event ordering and normal startup were not run; renderer script counts describe retained source bindings."
+    );
+    Ok(())
+}
+
 #[cfg(feature = "renderer")]
 fn render_frontend(
     package: &OsString,
     selector: &str,
     output: &Path,
     extra: &[OsString],
+    pointer: Option<[f64; 2]>,
 ) -> Result<()> {
     let destination = private_output(output)?;
-    let frame = frontend_frame(package, selector, extra)?;
+    let frame = frontend_frame(package, selector, extra, pointer)?;
     write_private_pam(&destination, &frame)?;
-    println!(
-        "OBSERVED private static-scene PAM: {}",
-        destination.display()
-    );
+    println!("OBSERVED private scene PAM: {}", destination.display());
     Ok(())
 }
 #[cfg(not(feature = "renderer"))]
-fn render_frontend(_: &OsString, _: &str, _: &Path, _: &[OsString]) -> Result<()> {
+fn render_frontend(
+    _: &OsString,
+    _: &str,
+    _: &Path,
+    _: &[OsString],
+    _: Option<[f64; 2]>,
+) -> Result<()> {
     Err(invalid(
         "this build lacks renderer support; build with --features renderer",
     ))
@@ -448,7 +571,7 @@ fn window_frontend(
     frames: Option<u64>,
 ) -> Result<()> {
     use marvel_heroes_forever::window::{PreviewImage, PreviewOptions, run_image_preview};
-    let frame = frontend_frame(package, selector, extra)?;
+    let frame = frontend_frame(package, selector, extra, None)?;
     let mut options = PreviewOptions::new(frame.encoding);
     options.title = format!("Marvel Heroes Forever — {selector} (static diagnostic)");
     options.frame_limit = frames;

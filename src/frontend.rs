@@ -18,6 +18,8 @@ use std::{
 
 #[path = "frontend/bootstrap.rs"]
 pub mod bootstrap;
+#[path = "frontend/display_state.rs"]
+pub mod display_state;
 #[path = "frontend/library.rs"]
 pub mod library;
 #[cfg(feature = "renderer")]
@@ -25,6 +27,8 @@ pub mod library;
 pub mod preview;
 #[path = "frontend/scene_content.rs"]
 pub mod scene_content;
+#[path = "frontend/selection.rs"]
+pub mod selection;
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())

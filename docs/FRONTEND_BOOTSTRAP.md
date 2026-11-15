@@ -29,7 +29,9 @@ implementation: any call still reaches the supplied Host. The setup does not
 create display objects, native methods, singleton namespaces or a player.
 
 `mhf frontend init-probe <package.upk> <movie>` supplies those limited bindings,
-compiles frame zero, and executes its initializer phase with RejectHost. It
+the explicitly supported property-flags intrinsic, and the bounded
+[Selection listener host](FRONTEND_SELECTION_HOST.md). It compiles frame zero
+and executes its initializer phase; unsupported host operations are rejected. It
 reports a nonzero exit when an unsupported operation stops execution. Completion
 of this isolated phase would still not establish movie startup or retail parity.
 

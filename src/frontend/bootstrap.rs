@@ -354,6 +354,8 @@ impl InitSession {
         } else {
             self.plans.insert((movie_id, frame), plan.clone());
         }
+        self.vm
+            .bind_loaded_movie_target(self.vm.root(), movie.header.version)?;
         Ok(plan)
     }
 
