@@ -265,6 +265,7 @@ enum Kind {
     Native(u32),
     ObjectConstructor,
     ArrayConstructor,
+    FunctionConversion,
     AddProperty,
     RegisterClass,
     SetPropertyFlags,
@@ -283,6 +284,7 @@ impl Kind {
                 | Self::Script(_)
                 | Self::ObjectConstructor
                 | Self::ArrayConstructor
+                | Self::FunctionConversion
                 | Self::AddProperty
                 | Self::RegisterClass
                 | Self::SetPropertyFlags
@@ -347,6 +349,7 @@ pub struct Vm {
     root: ObjectId,
     object_constructor: Option<ObjectId>,
     function_prototype: Option<ObjectId>,
+    function_conversion: Option<ObjectId>,
     array_constructor: Option<ObjectId>,
     array_prototype: Option<ObjectId>,
     class_bases: BTreeMap<ObjectId, ClassBase>,
@@ -374,6 +377,7 @@ impl Vm {
             root: ObjectId(0),
             object_constructor: None,
             function_prototype: None,
+            function_conversion: None,
             array_constructor: None,
             array_prototype: None,
             class_bases: BTreeMap::new(),
@@ -541,6 +545,26 @@ impl Vm {
         self.object_constructor = Some(constructor);
         Ok(constructor)
     }
+    /// Install the native-backed single-argument Function conversion, separately
+    /// from dynamic construction or arbitrary source compilation.
+    pub fn install_function_conversion(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.function_conversion {
+            return Ok(id);
+        }
+        let Some(prototype) = self.function_prototype else {
+            return self.fail(ErrorKind::Unsupported(
+                "install Object before Function conversion",
+            ));
+        };
+        if self.has_key(self.global, &text("Function"))? {
+            return self.fail(ErrorKind::Unsupported("Function binding already exists"));
+        }
+        let function = self.alloc(Kind::FunctionConversion, None)?;
+        self.set(function, "prototype", Value::Object(prototype))?;
+        self.set(self.global, "Function", Value::Object(function))?;
+        self.function_conversion = Some(function);
+        Ok(function)
+    }
     /// Installs the documented Array creation forms and the REA-verified empty
     /// Array prototype. Prototype mutation remains a separately gated profile.
     /// Install before defining script functions or creating array values.
@@ -573,7 +597,14 @@ impl Vm {
         self.array_prototype = Some(prototype);
         Ok(constructor)
     }
-    fn reject_super_member_access(&self, id: ObjectId) -> Result<()> {
+    fn check_member_target(&self, id: ObjectId, key: &Text) -> Result<()> {
+        if matches!(self.objects[id.0].kind, Kind::FunctionPrototype)
+            && key.as_ref() == text("constructor").as_ref()
+        {
+            return self.fail(ErrorKind::Unsupported(
+                "Function prototype constructor descriptor",
+            ));
+        }
         if matches!(self.objects[id.0].kind, Kind::ConstructorSuper { .. }) {
             return self.fail(ErrorKind::Unsupported("super member lookup/assignment"));
         }
@@ -826,7 +857,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
-            self.reject_super_member_access(id)?;
+            self.check_member_target(id, key)?;
             if key.as_ref() == text("__proto__").as_ref() {
                 return Ok(object.prototype.map_or(Value::Null, Value::Object));
             }
@@ -855,7 +886,7 @@ impl Vm {
         for _ in 0..self.limits.prototype_depth {
             self.check_object(id)?;
             let object = &self.objects[id.0];
-            self.reject_super_member_access(id)?;
+            self.check_member_target(id, key)?;
             if object.properties.contains_key(key)
                 || key.as_ref() == text("__proto__").as_ref()
                 || (matches!(object.kind, Kind::Array(_))
@@ -880,7 +911,7 @@ impl Vm {
                     return Ok(Some(Property::Data(Value::Number(f64::from(length)))));
                 }
             }
-            self.reject_super_member_access(id)?;
+            self.check_member_target(id, key)?;
             if let Some(property) = object.properties.get(key) {
                 return Ok(Some(property.clone()));
             }
@@ -920,6 +951,7 @@ impl Vm {
                         | Kind::Native(_)
                         | Kind::ObjectConstructor
                         | Kind::ArrayConstructor
+                        | Kind::FunctionConversion
                         | Kind::AddProperty
                         | Kind::RegisterClass
                         | Kind::SetPropertyFlags
@@ -1007,7 +1039,7 @@ impl Vm {
     }
     fn set_key(&mut self, id: ObjectId, key: Text, value: Value) -> Result<()> {
         self.check_object(id)?;
-        self.reject_super_member_access(id)?;
+        self.check_member_target(id, &key)?;
         if self.array_prototype == Some(id)
             && (key.as_ref() == text("length").as_ref() || array_index(&key).is_some())
         {
@@ -1455,7 +1487,7 @@ impl Vm {
                                 .fail(ErrorKind::Unsupported("Function.apply extra arguments"));
                         }
                         match args.get(1) {
-                            None => Vec::new(),
+                            None | Some(Value::Null) | Some(Value::Undefined) => Vec::new(),
                             Some(Value::Object(array)) => {
                                 let Kind::Array(length) = self.objects[array.0].kind else {
                                     return self.fail(ErrorKind::Unsupported(
@@ -1477,7 +1509,7 @@ impl Vm {
                             }
                             _ => {
                                 return self.fail(ErrorKind::Unsupported(
-                                    "Function.apply null/undefined argument-array profile",
+                                    "Function.apply primitive argument-array profile",
                                 ));
                             }
                         }
@@ -1577,6 +1609,32 @@ impl Vm {
                     },
                 );
                 return Ok(Value::Bool(true));
+            }
+            Kind::FunctionConversion => {
+                if constructor_context.is_some() || args.len() != 1 {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Function conversion arity/construction profile",
+                    ));
+                }
+                if let Value::Object(argument) = args[0] {
+                    if matches!(self.objects[argument.0].kind, Kind::ConstructorSuper { .. }) {
+                        return self.fail(ErrorKind::Unsupported(
+                            "Function conversion of super reference",
+                        ));
+                    }
+                    if let Kind::Script(function) = &self.objects[argument.0].kind {
+                        if function.scopes.as_slice() != [function.target, self.global] {
+                            return self.fail(ErrorKind::Unsupported(
+                                "Function conversion auxiliary activation/With capture",
+                            ));
+                        }
+                    }
+                }
+                return Ok(if self.callable(&args[0]) {
+                    args[0].clone()
+                } else {
+                    Value::Null
+                });
             }
             Kind::ArrayConstructor => {
                 if constructor_context.is_some() {
@@ -2120,6 +2178,11 @@ impl Vm {
                         };
                         let args = self.args(frame)?;
                         let constructor = self.object_id(callable.clone())?;
+                        if matches!(self.objects[constructor.0].kind, Kind::FunctionConversion) {
+                            return self.fail(ErrorKind::Unsupported(
+                                "Function dynamic construction profile",
+                            ));
+                        }
                         let prototype = match self.get(constructor, "prototype")? {
                             Value::Object(id) => Some(id),
                             Value::Undefined | Value::Null => None,
@@ -2131,7 +2194,9 @@ impl Vm {
                         };
                         if matches!(
                             self.objects[constructor.0].kind,
-                            Kind::ObjectConstructor | Kind::ArrayConstructor
+                            Kind::ObjectConstructor
+                                | Kind::ArrayConstructor
+                                | Kind::FunctionConversion
                         ) {
                             // Native standard constructors select their constructed object;
                             // this is distinct from a script constructor's return value.
@@ -2162,6 +2227,7 @@ impl Vm {
                                     | Kind::Native(_)
                                     | Kind::ObjectConstructor
                                     | Kind::ArrayConstructor
+                                    | Kind::FunctionConversion
                                     | Kind::AddProperty
                                     | Kind::RegisterClass
                                     | Kind::SetPropertyFlags
@@ -2387,6 +2453,7 @@ impl Vm {
                                         | Kind::Native(_)
                                         | Kind::ObjectConstructor
                                         | Kind::ArrayConstructor
+                                        | Kind::FunctionConversion
                                         | Kind::AddProperty
                                         | Kind::RegisterClass
                                         | Kind::SetPropertyFlags
@@ -3142,7 +3209,7 @@ mod tests {
             .call(
                 Value::Object(apply),
                 function,
-                &[Value::Object(receiver), Value::Null],
+                &[Value::Object(receiver), Value::Number(0.0)],
                 &mut RejectHost
             )
             .is_err());
@@ -3167,6 +3234,115 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Budget("function call depth"));
+    }
+    #[test]
+    fn function_conversion_preserves_callable_and_empty_apply_lists_without_capture_guessing() {
+        let mut vm = setup();
+        assert!(vm.install_function_conversion().is_err());
+        vm.install_object_constructor().unwrap();
+        vm.install_array_constructor().unwrap();
+        let conversion = vm.install_function_conversion().unwrap();
+        assert_eq!(vm.install_function_conversion().unwrap(), conversion);
+        let root = vm.root();
+        let mut body = push(&[Value::string("this")]);
+        body.extend([0x1c, 0x3e]);
+        execute(&mut vm, &function("f", &body)).unwrap();
+        let f = vm.get(root, "f").unwrap();
+        assert_eq!(
+            vm.call(
+                Value::Object(conversion),
+                Value::Object(root),
+                &[f.clone()],
+                &mut RejectHost
+            )
+            .unwrap()
+            .value,
+            f
+        );
+        let Value::Object(f_id) = f else { panic!() };
+        assert_eq!(
+            vm.get(conversion, "prototype").unwrap(),
+            vm.get(f_id, "__proto__").unwrap()
+        );
+        let receiver = vm.object().unwrap();
+        let apply = vm.get(f_id, "apply").unwrap();
+        for list in [Value::Null, Value::Undefined] {
+            let r = vm
+                .call(
+                    apply.clone(),
+                    Value::Object(f_id),
+                    &[Value::Object(receiver), list],
+                    &mut RejectHost,
+                )
+                .unwrap();
+            assert_eq!(r.value, Value::Object(receiver));
+            assert_eq!(r.host_calls, 0);
+        }
+        let native = vm.native(12).unwrap();
+        assert_eq!(
+            vm.call(
+                Value::Object(conversion),
+                Value::Object(root),
+                &[Value::Object(native)],
+                &mut RejectHost
+            )
+            .unwrap()
+            .value,
+            Value::Object(native)
+        );
+        for value in [
+            Value::Null,
+            Value::Undefined,
+            Value::Bool(true),
+            Value::Number(1.0),
+            Value::string("function source"),
+            Value::Object(receiver),
+        ] {
+            assert_eq!(
+                vm.call(
+                    Value::Object(conversion),
+                    Value::Object(root),
+                    &[value],
+                    &mut RejectHost
+                )
+                .unwrap()
+                .value,
+                Value::Null
+            );
+        }
+        assert!(vm
+            .call(
+                Value::Object(conversion),
+                Value::Object(root),
+                &[],
+                &mut RejectHost
+            )
+            .is_err());
+        let mut nested = function("", &[0]);
+        nested.push(0x3e);
+        execute(&mut vm, &function("outer", &nested)).unwrap();
+        let outer = vm.get(root, "outer").unwrap();
+        let closure = vm
+            .call(outer, Value::Object(root), &[], &mut RejectHost)
+            .unwrap()
+            .value;
+        assert!(matches!(
+            vm.call(
+                Value::Object(conversion),
+                Value::Object(root),
+                &[closure],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Unsupported(_)
+        ));
+        let mut new = push(&[Value::Number(0.0), Value::string("Function")]);
+        new.push(0x40);
+        assert!(matches!(
+            execute(&mut vm, &new).unwrap_err().kind,
+            ErrorKind::Unsupported(_)
+        ));
     }
     #[test]
     fn native_observed_empty_pop_is_scoped_to_action_pop() {

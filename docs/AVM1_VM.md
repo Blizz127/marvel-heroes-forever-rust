@@ -80,8 +80,9 @@ stops with `UnboundCall`. The optional `install_object_constructor()` installs t
 constructor, prototype, documented `Object.prototype.addProperty`, the
 `Object.registerClass` host seam, and a shared Function-prototype intermediate
 with the supported call/apply methods. Primitive boxing remains unsupported.
-It does not install a global Function conversion, MovieClip, Stage, Mouse or
-Scaleform libraries.
+The separate `install_function_conversion()` enables the native-backed limited
+Function conversion below. MovieClip, Stage, Mouse and Scaleform bindings still
+require explicit integration.
 
 Primitive conversion is deliberately narrower than the eventual compatibility
 profile. It supports modern Boolean behavior, ordinary decimal numeric strings,
@@ -133,7 +134,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Twenty-four focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Twenty-five focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -213,16 +214,16 @@ remaining default-clear stop are described below.
 values for an explicitly installed function prototype. It does not invent a
 global Function constructor or assume a Function-cast contract. Both methods
 support an explicit object receiver; Call forwards trailing arguments, and Apply
-reads a supplied array in index order or accepts an omitted argument list.
-
-Null/primitive receivers and explicit null/undefined array lists remain named
-unsupported cases: Adobe's AS2 documentation does not settle every interaction
-with timeline scope, despite ECMAScript specifying broader cases. The actual
-`Function(cls).apply(mc,null)` bootstrap chain therefore remains unfinished.
+reads a supplied array in index order or accepts omitted/null/undefined argument
+lists as zero arguments. The latter cases are grounded by the later native study
+below. Null/primitive receivers and other primitive argument lists remain explicit
+unsupported profiles; timeline fallback and boxing are not guessed. Full document
+class setup still depends on typed allocation and native behavior beyond this
+method adapter.
 All invocations, including recursive builtin Call/Apply chains, consume nesting
 budget. A cyclic Apply argument array reaches a bounded error rather than Rust
-stack exhaustion. These method paths currently have focused synthetic validation;
-they have not been compared with the native retail runtime.
+stack exhaustion. Focused tests and the owned adapter probes below validate this implementation;
+no native runtime comparison has been performed.
 
 ## REA-backed zero-depth ActionPop
 
@@ -355,9 +356,11 @@ identifies Function's Object inheritance and inherited `addProperty`. The VM now
 creates one shared Function-prototype intermediate linked to Object.prototype;
 script and builtin function values link through it. Existing call/apply method
 values are installed there. The function object's separate `prototype` member
-continues to describe constructed instances. No Function global or string-based
-function construction is fabricated. Invocation and typeof of the intermediate
-prototype itself remain explicit unsupported cases pending exact native metadata.
+continues to describe constructed instances. This foundation alone does not
+install global Function; its limited native conversion is installed separately.
+String-based function construction is unsupported. Invocation, typeof and the
+constructor descriptor of the intermediate prototype itself remain explicit gaps
+pending their complete native contracts.
 Object construction must be installed before script function definitions; late
 installation is rejected rather than silently retrofitting script-modified state.
 
@@ -459,6 +462,46 @@ established before continuing past this boundary. No no-op MovieClip implementat
 focused VM checks. `tween-super-dispatch-private.json` records the unchanged source
 instructions and the following comma-list flag dependency. Primary source sections
 and licences are retained in `avm1-reference/super-sources.json`.
+
+## Native Function conversion and empty apply lists
+
+`install_function_conversion()` installs the verified one-argument global Function
+path after Object initialization. An existing supported callable returns the same
+underlying VM function object. Noncallable values return null. Other arities,
+`new Function`, superclass construction and internal super references stop
+explicitly; no source-string function construction is inferred.
+
+The native function-reference getter clears auxiliary reference/frame fields while
+retaining the underlying function object. The VM currently models ordinary
+function-object references, not every native wrapper form. Script functions with
+nested activation or With scopes therefore stop at conversion; the supported
+script profile retains only the target/global scopes. This is deliberately not
+an assertion that a native function-value wrapper is byte-for-byte unchanged.
+
+Native apply forwards zero arguments for omitted, null and undefined lists and
+preserves the supplied object receiver. This does not replace lexical scope,
+`_root`, `_global` or the captured movie target. Primitive/null receiver fallback,
+other primitive list types and constructor-super semantics through call/apply
+remain outside the supported profile. Evidence is in
+`rea-function-calls/finding-receipt.json` and `final.bundle.json`; the detailed
+native trace is documented in `docs/REA_FUNCTION_CALLS.md` by the research lane.
+
+**OBSERVED:** The original manager adapter at 855879+41 executes its eight original
+instructions, assigning the supplied receiver's prototype and invoking the original
+empty MarvelUtils constructor at 855764 (body 855772+0) through Function/apply. It
+uses a controlled plain receiver and zero host calls. A second controlled case
+supplies the original login getter at 64967 as the callable, producing 16 total
+instructions; the supplied child width remains 320, and a direct getter call
+confirms its 320 return. These are selected original constant pools/functions;
+full containing initializers and a native MovieClip receiver are not substituted
+or claimed to have run.
+
+`run-owned-function-conversion.rs`, `owned-function-conversion-results.tsv`,
+`vm-tests-function-conversion.txt` and `function-conversion-evidence.json` retain
+these probes and 25 passing focused checks. They cover callable identity, explicit
+receivers, zero-argument list forms, native/noncallable values, arity, captured
+activation rejection and unsupported construction. Native typed MovieClip
+allocation remains a separate boundary in ordered startup.
 
 ## Indexed movie-property host seam
 
@@ -570,9 +613,9 @@ manager/login root-frame distributions and registration dependencies.
 | [Adobe AS2 Object reference](https://open-flash.github.io/mirrors/as2-language-reference/Object.html) and [Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html) | Adobe copyrighted documentation, all rights reserved | Object construction and prototype behavior; registerClass and function call/apply contracts for remaining bootstrap work. |
 | [Adobe AS2 super statement](https://open-flash.github.io/mirrors/as2-language-reference/statements.html#super) | © 2004–2010 Adobe, all rights reserved | Constructor-super invocation/receiver semantics, combined with SWF19 preload flags and NewObject/NewMethod behavior; no general method-super implementation inferred. |
 | [Adobe AS2 Array reference](https://open-flash.github.io/mirrors/as2-language-reference/Array.html) | © 2004–2010 Adobe, all rights reserved | Array/Object inheritance and bounded documented constructor forms. Prototype-specific ECMAScript behavior is not assumed to be AS2 behavior. |
-| [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; Array conversion takes precedence over an identity cast. `Function(value)` adoption remains unimplemented in this increment. |
+| [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; Array conversion takes precedence over an identity cast. The native-backed Function conversion is separately constrained by owned REA evidence. |
 | [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage context; native implementation decisions use the cited owned REA evidence. |
-| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata and return-value behavior; static REA evidence only. |
+| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch, zero-depth ActionPop, property-flag transformation/visitor/consumers, metadata, Array prototype state, Function conversion/apply and return-value behavior; static REA evidence only. |
 | Owner's private frontend-manager and login GFX bytes | Proprietary retail material, private compatibility study | Original-script isolated probes and actual unsupported-dependency measurements. |
 
 The integrating lead owns additions to `docs/PROVENANCE.md`. This lane changes
