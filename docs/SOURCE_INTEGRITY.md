@@ -19,3 +19,7 @@ README and both licence files, and its
 [primary versioned API documentation](https://docs.rs/sha2/0.10.9/sha2/).
 Their private hashes are in `evidence/source-integrity/source-ledger.json`.
 Cargo.lock pins the dependency graph; private build notices must include it.
+
+**VERIFIED Rust checks:** two focused tests pass for changed/truncated/extra
+bytes, exact returned buffers, empty input, and rejection before reading when
+the declared size exceeds its budget. The window-feature compilation also passes.

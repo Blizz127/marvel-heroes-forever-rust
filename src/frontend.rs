@@ -49,6 +49,8 @@ pub mod preview;
 pub mod scene_content;
 #[path = "frontend/selection.rs"]
 pub mod selection;
+#[path = "frontend/stage_state.rs"]
+pub mod stage_state;
 #[path = "frontend/textfield_state.rs"]
 pub mod textfield_state;
 

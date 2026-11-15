@@ -248,3 +248,9 @@ This uses explicit known source identity and raw-state fixtures, without class
 initialization, automatic attachment, child snapshots, event dispatch or timing
 claims. Earlier product/harness compile failures remain preserved as attempts
 1 and 2; they are not counted as passing runs.
+
+The scene bridge also retains bounded tag-code metadata and exposes read-only
+source/movie/version and typed-parent bindings. This allows a later TextField
+binding to require an actual DefineEditText tag (37), rather than accepting every
+character classified as text. Tag counts are charged to the existing source-item
+budget. Window-feature compilation passed with this metadata addition.

@@ -122,6 +122,7 @@ pub struct DisplayState {
     bindings: BTreeMap<ObjectId, NodeId>,
     node_bindings: BTreeMap<NodeId, ObjectId>,
     movie_versions: BTreeMap<MovieId, u8>,
+    movie_tag_codes: BTreeMap<MovieId, Vec<u16>>,
     source_bindings: BTreeMap<LoadedMovieSourceId, MovieId>,
     movie_sources: BTreeMap<MovieId, LoadedMovieSourceId>,
     attached_bindings: BTreeMap<AttachedClipId, NodeId>,
@@ -147,6 +148,14 @@ impl DisplayState {
             limits.max_source_items,
             "source movies",
         )?;
+        for movie in scene.movies.values() {
+            charge(
+                &mut items,
+                movie.tags.len(),
+                limits.max_source_items,
+                "source tag codes",
+            )?;
+        }
         for (id, source) in scene.nodes.iter().enumerate() {
             if source.id != id {
                 return Err(malformed(id, "node identity differs from arena index"));
@@ -314,6 +323,11 @@ impl DisplayState {
                 .iter()
                 .map(|(&id, movie)| (id, movie.header.version))
                 .collect(),
+            movie_tag_codes: scene
+                .movies
+                .iter()
+                .map(|(&id, movie)| (id, movie.tags.iter().map(|tag| tag.code).collect()))
+                .collect(),
             source_bindings: BTreeMap::new(),
             movie_sources: BTreeMap::new(),
             attached_bindings: BTreeMap::new(),
@@ -341,6 +355,18 @@ impl DisplayState {
     }
     pub fn bindings(&self) -> &BTreeMap<ObjectId, NodeId> {
         &self.bindings
+    }
+    pub fn node_for_attached(&self, clip: AttachedClipId) -> Option<NodeId> {
+        self.attached_bindings.get(&clip).copied()
+    }
+    pub fn movie_for_source(&self, source: LoadedMovieSourceId) -> Option<MovieId> {
+        self.source_bindings.get(&source).copied()
+    }
+    pub fn movie_version(&self, movie: MovieId) -> Option<u8> {
+        self.movie_versions.get(&movie).copied()
+    }
+    pub fn tag_code(&self, movie: MovieId, tag: usize) -> Option<u16> {
+        self.movie_tag_codes.get(&movie)?.get(tag).copied()
     }
     pub fn pointer_stage_twips(&self) -> Option<[f64; 2]> {
         self.pointer_stage_twips
