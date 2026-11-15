@@ -213,3 +213,141 @@ No third-party implementation, new dependency, website or new REA/native session
 was used. Existing native contract provenance remains in the referenced project
 studies; no source bytes, extracted scripts, names inventory or private build
 artifact enters git with this documentation.
+
+## Complete adoption from explicitly supplied state
+
+The original `frontend::scene_adoption::adopt_saved_scene` orchestration adds a
+bounded product path over the existing binding, attached-object, display and
+TextField APIs. Its implementation is frozen at `daa8e34`; this section describes
+a later capability than the immutable inventory above. It neither discovers
+native startup state nor runs initializers, constructors, events, ExternalInterface,
+saved actions or a scheduler.
+
+`SuppliedSceneState` has no `Default`. The caller provides the conditional
+movie-binding profile, an explicit assertion that all admissible Clip owners
+share this VM's builtin context, a nonzero association domain, distinct loaded
+source identities for exactly the Scene movies, and a unique target identity
+for every adopted Clip, field and named unsupported leaf. Root/Sprite inputs
+carry the complete event-state words and separate focus-rectangle state. Field
+inputs carry their raw `+6a` flags, prototype handle, watch state, first marked
+Environment ancestor, restricted text `Profile` and complete current `Snapshot`.
+No current field document is manufactured from saved initial text or HTML.
+
+The result owns the adopted root, node-to-Clip and node-to-field maps, complete
+`DisplayState` and bound `TextFieldHost`. The source Scene remains borrowed and
+unchanged. Clip owners receive the existing builtin-context binding only under
+the explicit one-context assertion; the existing VM does not admit TextField
+owners as direct builtin targets. Fields retain their separately checked
+ancestor context route.
+
+Before any VM mutation the helper:
+
+- Checks the complete preorder/tree and exact registered source identities,
+  then validates every Root/Sprite through `movie_binding::Validator`.
+- Requires each field to be an exact local tag-37 definition in its admitted
+  parent's selected movie, with matching dictionary, raw placement, ID, bounds
+  and original parsed EditText body. Other admitted unsupported categories must
+  remain local definition leaves. Imported or class-only non-Clip variants
+  reject explicitly in this initial profile.
+- Requires exact category-map coverage, globally distinct supplied targets and
+  complete named unsupported-target coverage. Unnamed Shape leaves stay in the
+  Scene without acquiring fabricated MovieClip owners.
+- Checks each Clip's supplied `+6a` bit 14 against saved **local** visibility.
+  It never compares this flag with effective inherited visibility or writes a
+  synthetic `_visible` property to make the states agree.
+- Checks field owner/prototype/absent-watch conditions and walks the complete
+  supplied parent chain to the first `+6a & 0x400` ancestor. A later marked
+  ancestor cannot substitute for the first one.
+- Replays every admitted parent's complete saved first frame and compares all
+  child depths, order, raw placements, names, source movies and parent links.
+  Sibling names must be nonempty, NUL-free and unique. Named unsupported leaves
+  remain explicit `AttachedChild::Unsupported` entries.
+
+Source replay has independent tag-visit and output-object budgets, in addition
+to existing Scene/binding budgets; parsed field-definition bytes and retained
+text are bounded separately. Caller-owned input allocations are not counted as
+module-created memory. Existing VM and host budgets remain authoritative.
+
+After preflight, Clips are created in preorder; the root goes through the
+unchanged authoritative `Vm::adopt_attached_root` fresh-phase guard. Display,
+focus and builtin contexts bind to those real owners. Fields then pass through
+existing parent-movie adoption, current-snapshot admission and TextFieldHost
+binding. Every Clip receives its complete frozen named-child list only after
+all owners exist. This replaces fixed selected-node loops without introducing a
+second metadata-only receiver representation.
+
+`AdoptionFailure` reports the failing node, stage and `vm_may_be_partial`.
+Preflight failures report false and leave the VM untouched. **Every failure once
+mutation begins reports true and requires discarding the partial VM/session.**
+There is no rollback or safe retry claim. In particular, a non-fresh root, VM
+capacity failure, or rejected current field `Profile`/`Snapshot` can occur after
+Clip allocation. Snapshot validation remains in `TextFieldState::from_snapshot`
+with the actual allocated owner identity; the helper does not duplicate that
+contract using a fabricated owner.
+
+Four focused synthetic test groups pass: complete adoption with an explicit
+named unsupported Shape; hidden-parent versus locally visible nested Clip;
+source/category/identity/context/first-ancestor/budget/name rejection before VM
+mutation; and fresh-root/current-field rejection after mutation with mandatory
+discard. Their fabricated package, names, geometry and text are original test
+inputs, contain no game data, and create no temporary files. These checks prove
+Rust orchestration behavior only.
+
+The implementation reads only the original project APIs and existing
+`ATTACHED_VISIBILITY`, movie-binding and TextField contract documentation;
+no new third-party source, dependency, REA session or native execution is used.
+The previously recorded owner-package and native-name-profile provenance applies
+to the separate private actual-scene check below.
+
+**VERIFIED controlled actual-scene adoption:** a new immutable private harness
+loads the same three packages and explicit English alias, then supplies complete
+controlled state to the frozen product helper. It uses a clean detached copy of
+`daa8e34de05d997842bc50c4e79511df3f4cf365`; all 210 tracked source files, harness
+inputs and owner-file hashes remain unchanged. A private module wrapper adds the
+unhooked helper without editing any product source. The old inventory remains
+immutable and supplies the independent source oracle.
+
+The focused build and run both exit zero. A separate comparator passes 4,255
+scalar/collection checks covering all 75 Clip source/header/parent/target/event/
+focus/display bindings, all 33 field source/Environment/prototype/watch/profile/
+current-snapshot bindings, 108 distinct targets/owners and all 95 typed named-child
+lookups. Twenty supplied field Environment routes deliberately climb above the
+immediate parent. All 75 child snapshots are frozen. The 39 unnamed unsupported
+leaves remain structural Scene nodes without fabricated AS2 owners.
+
+Each child lookup uses the existing native-name inventory authenticated against
+its SHA-256 and the owned executable's hash; it does not inject plain object
+members as lookup substitutes. The original 147 Scene nodes, 123 action bindings
+and all 26 decoded movie byte buffers are unchanged. Instruction count, text-host
+calls and display-property calls remain zero. No scripts, constructors, events,
+ExternalInterface, renderer, native process or server operation runs.
+
+The controlled target/event/focus words, Environment marks, prototypes, watch
+conditions, one-context assertion, current text and format handles are **fixture
+inputs**, not native observations or defaults. Actual saved visibility has no
+local/effective disagreement in this corpus; that distinction is exercised only
+by the fabricated hidden-parent test. The six saved HTML definitions remain
+unchanged, while supplied current field documents are explicitly controlled
+ASCII strings. This does not establish their native construction or formatting.
+
+The private first build attempt exposed two harness-only mistakes (a Result
+alias and output placeholder). Its source/log and correction notes are retained;
+the successful run uses the subsequent frozen harness and unchanged product code.
+
+| New private artifact under `evidence/scene-adoption/` | SHA-256 |
+| --- | --- |
+| `module-check/focused-result.json` | `a71be81af03a30938cc0760178702d9164ab6a6380224b018b1ebbd6d0a8dbba` |
+| `actual/receipt.json` | `533e88e3618ea05d0ae7ff0083eac3b51a43ef97f445bd8658b3b49839b90aad` |
+| `actual/execution.json` | `95e1fd6aace619802ab7cf4b8eb509284a6fdb2e4bbf4f18406fbd6720f197bb` |
+| `actual/MANIFEST.json` | `2e7eb1b3ffe12e267f6dd09bacf222d6c46ea79a588b513526ef4690494cf554` |
+| `actual/expected-structure.json` | `ee9dd833d202c2aff1bdfd2c526ed33fce734ea47d40b13ab463dc7734e00265` |
+| `actual/fixture-inputs.json` | `c06d1fee8e947454e0229b20b388c8760af3bb9efec4259a83614826d6c091e1` |
+
+The only additional outside input is the existing private extracted name
+inventory `evidence/rea-attached-name-classification/native-name-profile.v1.tsv`
+(SHA-256 `902b4f15629d3ae32aa6867165d275f2ef3ea289ced3696b9bf132155fd00b91`),
+used solely for authenticated name membership. Its source is the owner's
+proprietary `MarvelHeroesOmega.exe`, SHA-256
+`8b7212d6376c9f86b0180efb34448935b7c6a3e8dee090a8ab24385c23392fc1`.
+Neither file enters git. The execution receipt records their exact private
+paths and unchanged hashes alongside the three previously documented packages.
