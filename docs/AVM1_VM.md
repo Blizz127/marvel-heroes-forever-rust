@@ -796,6 +796,36 @@ captured-frame rejection. These are selected-script observations, with plain
 controlled receivers; no full containing initializer or native wrapper execution
 is claimed.
 
+## Active host-call context
+
+`HostCall.context: Option<ObjectId>` exposes the active interpreter target,
+separately from the supplied `this` value and call-site `CodeOrigin`. It is copied
+only from the current execution frame. A direct native `Vm::call` has no script
+Environment and supplies None. A script call runs with its captured target; nested
+calls and Object-result setter reentry restore the caller's target on success or
+failure. An attached target is identified by its owner ObjectId, which the frontend
+must explicitly associate with the correct live movie/root/handler.
+
+**VERIFIED static:** The original named CallMethod builds its native FnCall from
+the current interpreter Environment. ExternalInterface.call selects its handler
+through that Environment's target, AS2 root and MovieImpl. The function's creation
+origin and its `this` receiver do not select that handler. This specific native
+bridge is documented in `docs/EXTERNAL_INTERFACE_BINDING.md`, including REA record
+`ev_13a35134d29edfd62e7aecc19583c957c3182e870d48cd99b5cf85505ec9f4ba`.
+That evidence does not independently prove all preceding script target-selection
+semantics; the seam preserves the VM's existing bounded frame model.
+
+**OBSERVED:** Two focused tests cover distinct receiver/context/origin identities,
+cross-target calls, Object-result script-setter reentry, error restoration and a
+subsequent direct native call with no context. The original selected localization
+caller still executes 40 instructions and its two direct wrapper calls execute 25
+each. All three host requests carry the original functions' captured root target,
+distinct from their controlled ExternalInterface receiver. Private
+`avm1-runtime/host-context-evidence.json`, `run-owned-host-context.rs`,
+`owned-host-context.tsv` and `vm-tests-host-context.txt` retain these checks.
+The controlled namespace/host fixture does not install a native ExternalInterface
+factory, select a retail handler or resolve actual locale resources.
+
 ## Fresh Object results from native hosts
 
 `Host::call_result` is backward compatible: its default calls the existing `call`

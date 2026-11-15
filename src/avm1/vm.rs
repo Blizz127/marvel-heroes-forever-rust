@@ -159,6 +159,9 @@ pub enum HostCommand {
 #[derive(Debug, Clone)]
 pub struct HostCall<'a> {
     pub origin: Option<CodeOrigin>,
+    /// Active interpreter target, independent of `this` and code provenance.
+    /// A direct native Vm::call has no script Environment and supplies None.
+    pub context: Option<ObjectId>,
     pub binding: u32,
     pub this: Value,
     pub args: &'a [Value],
@@ -2152,6 +2155,7 @@ impl Vm {
                 let value = host
                     .call_result(HostCall {
                         origin: self.origin(),
+                        context: self.current_target,
                         binding,
                         this,
                         args,
@@ -3900,6 +3904,166 @@ mod tests {
     struct ObjectResultHost {
         fields: Vec<(Text, Value)>,
         calls: Vec<(u32, Value, Vec<Value>)>,
+    }
+    #[derive(Default)]
+    struct ContextHost {
+        calls: Vec<(u32, Option<ObjectId>, Value, Option<CodeOrigin>)>,
+        fail_binding: Option<u32>,
+        fields_binding: Option<u32>,
+    }
+    impl Host for ContextHost {
+        fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+            Err("unsupported test command".into())
+        }
+        fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String> {
+            self.calls
+                .push((call.binding, call.context, call.this, call.origin));
+            if self.fail_binding == Some(call.binding) {
+                Err("controlled native failure".into())
+            } else {
+                Ok(Value::Undefined)
+            }
+        }
+        fn call_result(&mut self, call: HostCall<'_>) -> std::result::Result<HostResult, String> {
+            let fields = self.fields_binding == Some(call.binding);
+            self.call(call).map(|value| {
+                if fields {
+                    HostResult::ObjectFields(vec![(text("field"), Value::string("payload"))])
+                } else {
+                    HostResult::Value(value)
+                }
+            })
+        }
+    }
+    fn method_call(receiver: &str, method: &str) -> Vec<u8> {
+        let mut bytes = push(&[Value::Number(0.0), Value::string(receiver)]);
+        bytes.push(0x1c);
+        bytes.extend(push(&[Value::string(method)]));
+        bytes.push(0x52);
+        bytes
+    }
+    #[test]
+    fn host_context_tracks_active_target_not_receiver_or_definition_origin() {
+        let mut vm = setup();
+        let a = vm.root();
+        let b = vm.object().unwrap();
+        let receiver = vm.object().unwrap();
+        let native = vm.native(10).unwrap();
+        vm.set(receiver, "bound", Value::Object(native)).unwrap();
+        vm.set(vm.global(), "receiver", Value::Object(receiver))
+            .unwrap();
+        let mut body = method_call("receiver", "bound");
+        body.push(0x3e);
+        let definition = vm
+            .register(Arc::new(Program::parse(&function("f", &body)).unwrap()))
+            .unwrap();
+        vm.execute(definition, b, &mut RejectHost).unwrap();
+        let f = vm.get(b, "f").unwrap();
+        vm.set(a, "f", f.clone()).unwrap();
+        let mut bytes = push(&[Value::Number(0.0), Value::string("f")]);
+        bytes.extend([0x3d, 0x17]);
+        bytes.extend(method_call("receiver", "bound"));
+        let caller = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let mut host = ContextHost::default();
+        vm.execute(caller, a, &mut host).unwrap();
+        assert_eq!(host.calls.len(), 2);
+        assert_eq!(
+            (host.calls[0].1, &host.calls[0].2),
+            (Some(b), &Value::Object(receiver))
+        );
+        assert_eq!(host.calls[0].3.unwrap().code, definition);
+        assert_eq!(
+            (host.calls[1].1, &host.calls[1].2),
+            (Some(a), &Value::Object(receiver))
+        );
+        assert_eq!(host.calls[1].3.unwrap().code, caller);
+        // Failure inside a cross-target script call restores its caller context.
+        host.fail_binding = Some(10);
+        vm.current_target = Some(a);
+        assert!(
+            vm.invoke(f, Value::Object(receiver), &[], &mut host)
+                .is_err()
+        );
+        assert_eq!(vm.current_target, Some(a));
+        host.fail_binding = None;
+        // A subsequent direct native call resets execution; neither receiver nor
+        // a previously active movie is invented as a native Environment target.
+        vm.call(
+            Value::Object(native),
+            Value::Object(receiver),
+            &[],
+            &mut host,
+        )
+        .unwrap();
+        assert_eq!(host.calls.last().unwrap().1, None);
+        assert_eq!(host.calls.last().unwrap().3, None);
+    }
+    #[test]
+    fn host_context_survives_object_result_setter_reentry_and_error() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let Value::Object(prototype) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        let a = vm.root();
+        let b = vm.object().unwrap();
+        let receiver = vm.object().unwrap();
+        for (name, binding) in [("materialize", 10), ("setter", 20), ("after", 30)] {
+            let native = vm.native(binding).unwrap();
+            vm.set(receiver, name, Value::Object(native)).unwrap();
+        }
+        vm.set(vm.global(), "receiver", Value::Object(receiver))
+            .unwrap();
+        let mut body = method_call("receiver", "setter");
+        body.push(0x3e);
+        let definition = vm
+            .register(Arc::new(
+                Program::parse(&function("setter", &body)).unwrap(),
+            ))
+            .unwrap();
+        vm.execute(definition, b, &mut RejectHost).unwrap();
+        let setter = vm.get(b, "setter").unwrap();
+        vm.raw_member(
+            prototype,
+            text("field"),
+            Property::Accessor {
+                getter: setter.clone(),
+                setter: Some(setter),
+            },
+            0,
+        )
+        .unwrap();
+        let mut bytes = method_call("receiver", "materialize");
+        bytes.push(0x17);
+        bytes.extend(method_call("receiver", "after"));
+        let caller = vm
+            .register(Arc::new(Program::parse(&bytes).unwrap()))
+            .unwrap();
+        let mut host = ContextHost {
+            fields_binding: Some(10),
+            ..ContextHost::default()
+        };
+        vm.execute(caller, a, &mut host).unwrap();
+        assert_eq!(
+            host.calls
+                .iter()
+                .map(|call| (call.0, call.1))
+                .collect::<Vec<_>>(),
+            vec![(10, Some(a)), (20, Some(b)), (30, Some(a))]
+        );
+        host.calls.clear();
+        host.fail_binding = Some(20);
+        assert!(vm.execute(caller, a, &mut host).is_err());
+        assert_eq!(
+            host.calls
+                .iter()
+                .map(|call| (call.0, call.1))
+                .collect::<Vec<_>>(),
+            vec![(10, Some(a)), (20, Some(b))]
+        );
+        assert_eq!(vm.current_target, Some(a));
     }
     impl Host for ObjectResultHost {
         fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String> {
