@@ -1287,7 +1287,9 @@ impl Vm {
                         self.command(frame.target, command, host)?;
                     }
                     0x17 => {
-                        self.pop(frame)?;
+                        // Owned native opcode 0x17 restores the zero-depth stack
+                        // sentinel and returns normally. Other pops stay checked.
+                        frame.stack.pop();
                     }
                     0x4c => {
                         let value = frame
@@ -2127,5 +2129,13 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Budget("function call depth"));
+    }
+    #[test]
+    fn native_observed_empty_pop_is_scoped_to_action_pop() {
+        let result = execute(&mut setup(), &[0x17, 0x17, 0]).unwrap();
+        assert!(result.stack.is_empty());
+        assert_eq!(result.instructions, 3);
+        let error = execute(&mut setup(), &[0x1c]).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::StackUnderflow);
     }
 }

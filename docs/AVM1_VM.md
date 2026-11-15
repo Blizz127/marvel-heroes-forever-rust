@@ -118,7 +118,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Twelve focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Thirteen focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -138,16 +138,19 @@ normal frame actions and implicit sprite creation. The ordinary root action at
 5967 appears earlier in the file than the first initializer at 7239; executing
 all tags as encountered would therefore use the wrong phase order.
 
-`run-init-order.rs` registers the 452 programs, preserves a single VM, installs
-only the standard Object constructor, and stops on the first error. It executes
-14 instructions of initializer 7239, creates `_global.gfx`, then stops on empty
-Pop at offset 8511. Zero initializers complete. Both original branch paths reach
-that Pop with an empty stack under the documented operand rules. Native behavior
-is being investigated separately; no implicit stack-underflow compatibility mode
-or silent skip has been introduced.
-
-The next measured requirements are UIComponent extending MovieClip at 8705,
-six prototype `addProperty` calls starting at 12178, and `ASSetPropFlags` at 12374.
+`run-init-order.rs` registers the 452 programs and preserves one VM. It installs
+the standard Object constructor/accessor method and an explicit MovieClip native
+constructor binding with a linked prototype. RejectHost rejects any attempt to
+invoke that native constructor; no unrelated namespace is precreated. The
+original initializer itself constructs `_global.gfx`, `gfx.core.UIComponent` and
+its prototype. It executes 218 instructions before stopping at the unbound
+`ASSetPropFlags` call at 12374. Zero initializers complete, and subsequent
+initializers are not executed after that failure. Current results are in
+`init-order-after-pop.tsv`; `init-order-results.tsv` records the earlier strict
+stack-underflow investigation.
+The first initializer reaches UIComponent extending MovieClip at 8705 and six
+prototype `addProperty` calls starting at 12178 before requiring `ASSetPropFlags`
+at 12374.
 The second initializer creates FocusHandler and invokes its singleton constructor,
 which calls `Selection.addListener` at 13552. These are specific dependencies,
 not authorization to manufacture all missing namespaces or stub their effects.
@@ -185,8 +188,8 @@ registration, not successful retail class initialization.
 `owned-accessor-results.tsv`, `accessor-evidence.json` and `vm-tests-accessor.txt`
 retain that evidence and eleven passing focused tests. The synthetic accessor test
 also verifies a real script setter mutates the instance, not the prototype, and
-invalid registration leaves no property behind. Ordered initialization still has
-the separately reported empty-Pop question; no instruction is silently skipped.
+invalid registration leaves no property behind. Ordered initialization still stops at the unresolved property-flags binding;
+no native effect is silently stubbed.
 
 ## Explicit function method values
 
@@ -205,6 +208,30 @@ budget. A cyclic Apply argument array reaches a bounded error rather than Rust
 stack exhaustion. These method paths currently have focused synthetic validation;
 they have not been compared with the native retail runtime.
 
+## REA-backed zero-depth ActionPop
+
+**VERIFIED by static owned-binary REA evidence:** The native raw-opcode dispatcher
+maps 0x17 to handler 0x140209749. Its boundary helper 0x140185840 reaches
+0x1401858e3 for the last stack page. That branch restores the decremented top
+pointer, resets the sentinel tag to zero and returns normally. The same
+dispatcher's depth calculation establishes that one page with top at page base
+has logical depth zero. The original manager's empty Pop at 8511 is therefore
+accepted by the VM, preserving an empty stack. This change applies only to
+ActionPop; other underflows remain explicit errors.
+
+Private evidence:
+`evidence/rea-native-alternative/avm1-pop-boundary.bundle.json`, REA evidence
+`ev_22b3e9316258dea0ee949de2291bbf916ba35f5605696c3d60877a53959d8dcd`, plus dispatch
+mapping evidence `ev_9ad09fdbeaf5ea2d7e1863c3061aebe83f0432cd76e1d6119d12299f6dbb4853`.
+`native-pop-execution-evidence.json` records the resulting 218-instruction ordered
+probe and thirteen passing focused tests. Static REA evidence and original-code
+execution are distinct from running the native client; no native comparison has
+been claimed.
+
+The ASSetPropFlags research verifies part of its bit-mask transformation but does
+not yet settle every flag's meaning, visitor coverage and default return value.
+Those gaps remain explicit. No successful property-flags callback is installed.
+
 ## Source and licence ledger
 
 | Source | Licence/rights | Use |
@@ -217,6 +244,7 @@ they have not been compared with the native retail runtime.
 | [Adobe AS2 Object reference](https://open-flash.github.io/mirrors/as2-language-reference/Object.html) and [Function reference](https://open-flash.github.io/mirrors/as2-language-reference/Function.html) | Adobe copyrighted documentation, all rights reserved | Object construction and prototype behavior; registerClass and function call/apply contracts for remaining bootstrap work. |
 | [Macromedia Learning AS2](https://open-flash.github.io/mirrors/learning-as2.pdf) | © 2005 Macromedia, all rights reserved | Cast behavior study; `Function(value)` adoption remains unverified and unimplemented. |
 | [Autodesk VisitMembers](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/cpp_ref/01886.html) and [cursor example](https://help.autodesk.com/cloudhelp/ENU/Scaleform-Help/scaleform_help/as2_reference/mouse_extensions/changing_cursor.html) | Autodesk proprietary documentation | ASSetPropFlags usage evidence; insufficient to implement its complete contract. |
+| Owner's pinned retail Win64 executable; exact path/hash in the cited REA bundles | Proprietary owner-held client, private compatibility study | Native opcode dispatch and zero-depth ActionPop behavior; static REA evidence only. |
 | Owner's private frontend-manager and login GFX bytes | Proprietary retail material, private compatibility study | Original-script isolated probes and actual unsupported-dependency measurements. |
 
 The integrating lead owns additions to `docs/PROVENANCE.md`. This lane changes
