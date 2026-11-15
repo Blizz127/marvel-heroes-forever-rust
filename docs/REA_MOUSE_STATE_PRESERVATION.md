@@ -459,3 +459,151 @@ verified without repeating its producer. Semantic leaf ranges exclude trailing
 neighbor/padding decodes. Sources remain the owned pinned PE, retained original
 project evidence and REA workflow already listed; no runtime execution or
 repository implementation change was made.
+
+## Follow-up: successful fresh-handle cleanup
+
+**VERIFIED (static):** this follow-up supersedes the earlier cleanup frontier
+only for the selected successful **fresh status-3** path. The caller's
+discriminator is material:
+
+| `0x14004d1a0` result | Selected handle/cleanup distinction |
+|---|---|
+| 1 | Already resolved resource; later `0x14004c720` branch |
+| 2 | Existing pending entry; separate wait/lookup continuation |
+| 3 | Fresh pending entry `F`; the successful path later calls `0x140031cf0(F)` |
+
+The fresh producer stores `F` in the caller's output and writes status 3 at
+`0x14004d2c6`. `0x14004e4ff` selects that fresh route. After publication and
+local-key release, the status-1 test at `0x14004e660` is false; the
+status-at-least-2 test at `0x14004e6d1` reaches `0x14004e6da`, releasing `F`.
+The selected normal path does not rewrite the local discriminator or pass its
+address to later calls. The `0x14004c720(D)` call at `0x14004e5ae` belongs to
+task-construction failure and is not part of successful publication.
+
+The entry release cannot be replaced by a generic no-effect operation. Fresh
+`F` starts with one reference. Its cache insertion stores the tagged pointer
+without retaining `F`; the key-hash work balances its temporary **key** retains
+and releases. The map's existing-entry resize happens before insertion of the
+new `F`. Under the existing no-reentry/no-concurrency/reference-preservation
+profile, `F` therefore still has one reference at `0x14004e6da`, so this call
+executes its actual destructor.
+
+The original local key is likewise not an arbitrary callback object. `K`
+starts at one reference, the local pair adds one, and its construction temporary
+then drops one. `F` adds its retained key reference. With the balanced hash work
+and no other reference changes, the local `I +10` release at `0x14004e65a`
+changes `K` from two references to one. Final `F` cleanup must follow the
+actual key destructor when it releases that remaining reference.
+
+The independent surviving holds are essential:
+
+- The caller retains the original new `D` result in `RBX` and returns that
+  same pointer at `0x14004e6df`. Publication separately retains `D` in `F +20`.
+- `D +30` owns a retained reference to the same snapshot used by `K`.
+- `D +38` owns the binding task, whose `+18` retains the same DataDef used
+  by `K`.
+- The outer loader `O +28` and live load context `B +60` retain the cache
+  owner `H`, independently of `F +10`. `O +28` is the object loaded from
+  the resource library's `+10`, not the public resource-library object itself.
+
+These are concrete ownership sources, not an invented cache-held `F`
+reference. Extra unrelated references may exist; the named live holds suffice
+as lower bounds when assessing releases of `D`, its DataDef/snapshot and `H`.
+They do not justify omitting the final `F` or `K` destructor.
+
+The selected entry's deleting destructor is `0x14004cf00`, which invokes
+`0x14004c830` and then frees `F` through the allocator. Its body first locks
+`H +18`. Only unpublished state zero removes the pending-map entry through
+`0x14004bdc0`; published state one follows the `F +20` resource release instead.
+The separate caller hold keeps `D` alive, so this release does not reach the
+cache-owner detach virtual or `D`'s deleting destructor. The lock is then
+released before the entry's event, string, key and cache-owner cleanup.
+
+The final key release is the same original-interface dispatch identified at
+`0x14004e65a`: `I +10 → 0x140126d70 → 0x140031cf0`. The actual key's deleting
+destructor is `0x140088460`. It releases its snapshot once through
+`0x140031cf0`, releases its DataDef once through `0x14004c720`, then performs
+base cleanup and allocator release. The shared base destructor `0x140031cb0`
+only installs its base table and returns; it invokes no callback. The surviving
+`D +30` and binding-task
+`+18` references prevent either member release from invoking their destructors
+under this profile. Thus `0x14004c720` does occur inside final key cleanup,
+although the caller's status-1 handle branch was not selected. The two uses
+must not be conflated.
+
+The event teardown is concrete rather than an omitted notification:
+
+- `Q = F +40` is destroyed by `0x14002f760`. Its `Q +50` pointer, when
+  nonnull, owns the waiter manager destroyed by `0x140030940 → 0x1400302a0`.
+  The manager traverses its free-list at `+28`, closes each OS handle, frees
+  each node, zeros fields `+28/+30/+38`, and tears down its critical section.
+- Nested mutex `J = Q +28` is destroyed by `0x1400308d0`; its nonnull `J +20`
+  OS record is closed and freed. Both the mutex and outer event then execute
+  their handler-container base cleanup through `0x14002f680`.
+- The current-null conditions `Q +10 = 0` and `J +10 = 0` skip the
+  handler-container destruction branches. The strongest admitted cleanup
+  profile additionally requires no active waiters and current empty waiter
+  lists. Imported `CloseHandle` and `DeleteCriticalSection`, and allocator
+  release, retain ordinary lifetime/nonreentry conditions. This is not a
+  claim about arbitrary concurrent notification or waiter teardown.
+
+The entry's string field `F +38` also has a real release. Its constructor
+retains the node initially selected at `0x142adb2f0`; the selected successful
+publication does not replace that field. Cleanup masks its low two bits,
+decrements the referenced node's count, and calls allocator release if that
+count reaches zero. The image's initial count is not substituted for a current
+reference-count invariant. Valid live-node ownership and ordinary allocator
+behavior remain explicit conditions, including the zero-count branch.
+
+Finally, releasing `F +10` cannot destroy `H` while the independent load-context
+hold survives. The selected outer loader caller keeps the newly created `B`
+alive across its `0x14004ef00(B)` call and releases it only after that call
+returns. Its selected nested `0x14004e4b0` calls therefore execute while
+`B +60` still retains `H`; the optional `O +28` hold is additional evidence,
+not the sole lifetime argument.
+
+**DERIVED conditional endpoint:** for the admitted successful fresh lookup,
+publication and cleanup path, execution returns the original `D` at
+`0x14004e6df` after the actual final `F` and `K` destruction. Their selected
+cleanup changes owned entry/key/event/string/refcount storage but does not
+change `D +20`, the definition bag's parent/local map, or the loader bag's
+parent/local map. This extends the earlier publication endpoint to the
+successful return; it does not include failure cleanup or existing-resource
+and existing-pending continuations.
+
+The endpoint retains the earlier concrete key/task/table identities, successful
+distinct allocation and ordinary reference-count/lock/import assumptions. The
+state-28 provider path, foreign-key/resolved-resource collision callbacks,
+nonnull notification containers, active waiters, allocator reentry and concurrent
+mutation remain explicit gates. It does not establish current state-4 absence,
+whole-engine preservation, or a completed `Mouse.hide` invocation.
+
+The joined private receipt is
+`evidence/rea-mouse-state-preservation/cleanup-receipt.json`, SHA-256
+`98e979ca50652158a88f2abaa46763a1078cf0e5719860ef0fba1b7bea005d2b`.
+It binds the caller selection, destructor mechanics, surviving ownership and
+prior publication receipts. The six new complete REA records cover 517
+instruction spans / 1,906 instruction bytes plus 32 data bytes. Reused
+base/refcount helpers add 16 spans / 52 bytes; caller and survivor checks cover
+267 and 1,759 spans respectively, with overlap explicitly recorded rather
+than summed as unique coverage. All selected bytes match the unchanged pinned
+PE. New native evidence was exported and the investigation reset; no native
+execution occurred.
+
+Canonical cleanup Evidence IDs:
+
+- `ev_9fa31832b6aa474b2abf75dce40f5aa34e351798fdcb3fca329c98d90e0ab925`
+- `ev_eb78d9244758e505acb47cfcbc29ca0ca28c5a49400a3405510783f83edf6bdb`
+- `ev_de9a484c35723c14e7fafbcaadfa0ef11a31319a4004c9f7b05f05cdac33f54f`
+- `ev_9cfa63deb575ec874e5433ff6a3094422110f143dca3bde0e10c2cf4dd9d046b`
+- `ev_d9c4acc91ad1c59e1065ec6064f33f4d6d699f787fb98c12552ccbfbf1f3335d`
+- `ev_62739bdc74d743882af1f506e8bae7494c500ef2430d1287bf1227a8477bd575`
+
+The survivor verifier rejected an invalid final decode in an older enclosing
+caller capture. Its accepted caller slice ends at `0x14004f4b2`, after both
+relevant calls; no whole enclosing-tail proof is claimed. The corrected
+binding-task continuation and semantic leaf bounds likewise remain explicit.
+Sources are the same proprietary owner-provided PE and retained project REA
+Evidence already recorded above, used only for interoperability study. No
+client bytes, extracted data, or implementation code enter this documentation
+commit.
