@@ -1,9 +1,14 @@
-//! Explicit native GLOBAL/context association for exact-Bool gfxExtensions.
+//! Explicit native GLOBAL/context association for bounded gfxExtensions values.
 //!
 //! Contract: docs/REA_GLOBAL_EXTENSIONS.md; retained verification.json SHA-256
 //! 83fca8b24ea8b80af9457413898be5ca3db47bd2120f18df8a775cc184b1d202 and
 //! setmember-review.json 2dab17ff8b0c8bad8f0388895e381294ce3d840d118c41b929e3c3425fac7e1c
-//! under private evidence/rea-global-extensions/. This opt-in subset does not
+//! under private evidence/rea-global-extensions/. Numeric conversion uses
+//! rea-global-extensions-numeric/verification.json, SHA-256
+//! 5b351c20fc1d488ea740098fbe540ebc35c7f30689e1e50371ce40de8776f188.
+//! Native Integer payloads and already-correct IEEE64 payloads are supported;
+//! nonzero f64 subnormals require a separate native FP-mode profile. This adds
+//! no Float32 literal-origin/promotion parity claim. This opt-in subset does not
 //! turn every Plain object into native GLOBAL or choose an initial context byte.
 //! Resource preflight is an engineering bound, not native allocation parity.
 
@@ -120,17 +125,12 @@ impl Vm {
         if !self.global_extensions_key(id, key) {
             return Ok(false);
         }
-        let Value::Bool(enabled) = value else {
-            return self.fail(ErrorKind::Unsupported(
-                "global extensions requires exact Boolean",
-            ));
-        };
+        let enabled = self.global_extensions_boolean(value)?;
         if self.current.is_some_and(|(_, opcode)| opcode != 0x4f) {
             return self.fail(ErrorKind::Unsupported(
                 "global extensions requires SetMember caller flags",
             ));
         }
-        let enabled = *enabled;
         let info = self.global_extensions_context()?;
         let extension_key = text(EXTENSIONS);
         let version_key = text(VERSION);
@@ -216,6 +216,32 @@ impl Vm {
                 Some(Property::NativeMarker(NativeMarker::GlobalExtensions))
             )
             && self.global_extensions_object_profile(id).is_ok()
+    }
+
+    // Native 17d730: tag4 tests its dword against zero. Signed32 integers are
+    // exact in the VM's f64 representation. Tag3 excludes NaNs by integer bits
+    // before its FP zero comparison. Classify represented bits without a
+    // signalling-NaN comparison or broader String/Object/display conversion.
+    fn global_extensions_boolean(&self, value: &Value) -> Result<bool> {
+        match value {
+            Value::Bool(boolean) => Ok(*boolean),
+            Value::Number(number) => {
+                let magnitude = number.to_bits() & 0x7fff_ffff_ffff_ffff;
+                let exponent = magnitude & 0x7ff0_0000_0000_0000;
+                let fraction = magnitude & 0x000f_ffff_ffff_ffff;
+                if exponent == 0 && fraction != 0 {
+                    // UCOMISD denormal handling depends on unproved MXCSR state.
+                    return self.fail(ErrorKind::Unsupported(
+                        "global extensions subnormal numeric profile",
+                    ));
+                }
+                let nan = exponent == 0x7ff0_0000_0000_0000 && fraction != 0;
+                Ok(magnitude != 0 && !nan)
+            }
+            _ => self.fail(ErrorKind::Unsupported(
+                "global extensions requires proved Boolean or numeric payload",
+            )),
+        }
     }
 
     fn global_extensions_key(&self, id: ObjectId, key: &Text) -> bool {
@@ -542,13 +568,13 @@ mod tests {
     }
 
     #[test]
-    fn global_extensions_context_and_boolean_fail_before_any_effects() {
+    fn global_extensions_context_and_unproved_values_fail_before_any_effects() {
         let mut vm = base();
         adopt(&mut vm, Some(0));
         let before = counts(&vm);
         let info = vm.global_extensions_info();
         for value in [
-            Value::Number(1.0),
+            Value::Number(f64::from_bits(1)),
             Value::String(text("true")),
             Value::Null,
             Value::Undefined,
@@ -696,6 +722,151 @@ mod tests {
             );
             assert_eq!(counts(&vm), before);
             assert_eq!(vm.global_extensions_info(), info);
+        }
+    }
+    // These are supplied-value state checks, not execution of the original
+    // Integer1 instruction, a native floating-point run, or source tag parity.
+    #[test]
+    fn global_extensions_numeric_matrix_preserves_input_and_sets_logical_state() {
+        let cases = [
+            (0.0, false),
+            (-0.0, false),
+            (f64::NAN, false),
+            (f64::from_bits(0x7ff0_0000_0000_0001), false),
+            (f64::from_bits(0xfff8_0000_0000_cafe), false),
+            (1.0, true),
+            (-1.0, true),
+            (f64::from(i32::MIN), true),
+            (f64::from(i32::MAX), true),
+            (f64::MIN_POSITIVE, true),
+            (-f64::MIN_POSITIVE, true),
+            (f64::MAX, true),
+            (-f64::MAX, true),
+            (f64::INFINITY, true),
+            (f64::NEG_INFINITY, true),
+        ];
+        for (number, enabled) in cases {
+            let mut vm = base();
+            adopt(&mut vm, None);
+            vm.current_code = Some(CodeId(0));
+            vm.current = Some((13566, 0x4f));
+            let value = Value::Number(number);
+            assert!(
+                vm.global_extensions_write(vm.global, &text(EXTENSIONS), &value)
+                    .unwrap()
+            );
+            assert_eq!(
+                vm.global_extensions_info().unwrap().current_byte,
+                Some(if enabled { 1 } else { 2 })
+            );
+            assert_eq!(
+                read(&vm),
+                GlobalExtensionsLookup::Present(Value::Bool(enabled))
+            );
+            assert_eq!(vm.global_extensions_info().unwrap().last_write, vm.origin());
+            assert_eq!(
+                vm.global_extensions_info().unwrap().marker_written,
+                Some(true)
+            );
+            assert!(is_marker(&vm));
+            assert_eq!(
+                version(&vm),
+                enabled.then(|| Value::String(text(VERSION_TEXT)))
+            );
+            let Value::Number(after) = value else {
+                unreachable!()
+            };
+            assert_eq!(after.to_bits(), number.to_bits());
+        }
+    }
+
+    #[test]
+    fn global_extensions_numeric_false_and_true_choose_exact_budgeted_effects() {
+        for number in [0.0, -0.0, f64::NAN] {
+            let mut vm = base();
+            adopt(&mut vm, None);
+            let before = counts(&vm);
+            vm.limits.properties = before.1 + 1;
+            vm.limits.string_units = before.2 + 13;
+            assert!(
+                vm.global_extensions_write(vm.global, &text(EXTENSIONS), &Value::Number(number))
+                    .unwrap()
+            );
+            assert_eq!(counts(&vm), (before.0, before.1 + 1, before.2 + 13));
+            assert_eq!(version(&vm), None);
+            assert_eq!(vm.global_extensions_info().unwrap().current_byte, Some(2));
+        }
+        let mut vm = base();
+        adopt(&mut vm, None);
+        let before = counts(&vm);
+        let info = vm.global_extensions_info();
+        vm.limits.properties = before.1 + 1;
+        vm.limits.string_units = before.2 + 28;
+        assert!(
+            vm.global_extensions_write(vm.global, &text(EXTENSIONS), &Value::Number(1.0))
+                .is_err()
+        );
+        assert_eq!(counts(&vm), before);
+        assert_eq!(vm.global_extensions_info(), info);
+        assert_eq!(version(&vm), None);
+        assert!(!is_marker(&vm));
+
+        let mut vm = base();
+        selected(&mut vm, EXTENSIONS, Property::Data(Value::Null), 4);
+        selected(&mut vm, VERSION, Property::Data(Value::Number(17.0)), 4);
+        adopt(&mut vm, None);
+        assert!(
+            vm.global_extensions_write(vm.global, &text(EXTENSIONS), &Value::Number(1.0))
+                .unwrap()
+        );
+        assert_eq!(version(&vm), Some(Value::String(text(VERSION_TEXT))));
+        assert_eq!(vm.own_flags(vm.global, &text(VERSION)), 4);
+        assert_eq!(
+            vm.global_extensions_info().unwrap().marker_written,
+            Some(false)
+        );
+        assert!(
+            vm.global_extensions_write(vm.global, &text(EXTENSIONS), &Value::Number(f64::NAN))
+                .unwrap()
+        );
+        assert_eq!(version(&vm), None); // ReadOnly is not DontDelete.
+        assert_eq!(vm.global_extensions_info().unwrap().current_byte, Some(2));
+        assert_eq!(
+            vm.global_extensions_info().unwrap().marker_written,
+            Some(false)
+        );
+        assert!(matches!(
+            vm.objects[vm.global.0].properties.get(&text(EXTENSIONS)),
+            Some(Property::Data(Value::Null))
+        ));
+    }
+
+    #[test]
+    fn global_extensions_subnormal_and_unproved_categories_fail_without_effects() {
+        let mut vm = base();
+        adopt(&mut vm, Some(0));
+        let before = counts(&vm);
+        let info = vm.global_extensions_info();
+        for value in [
+            Value::Number(f64::from_bits(1)),
+            Value::Number(-f64::from_bits(1)),
+            Value::Number(f64::from_bits(0x000f_ffff_ffff_ffff)),
+            Value::String(text("1")),
+            Value::String(text("")),
+            Value::Object(vm.global),
+            Value::Null,
+            Value::Undefined,
+        ] {
+            assert!(matches!(
+                vm.global_extensions_write(vm.global, &text(EXTENSIONS), &value)
+                    .unwrap_err()
+                    .kind,
+                ErrorKind::Unsupported(_)
+            ));
+            assert_eq!(counts(&vm), before);
+            assert_eq!(vm.global_extensions_info(), info);
+            assert_eq!(version(&vm), None);
+            assert!(!is_marker(&vm));
         }
     }
 }
