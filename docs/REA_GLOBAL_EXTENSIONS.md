@@ -270,3 +270,130 @@ native process or original script was executed by this study.
 | AS2_GLOBAL_BASELINE, FRESH_AVM1_ENVIRONMENT, FRESH_MOVIECLIP_PROTOTYPE, ATTACHED_VISIBILITY and their retained REA records | Original project analysis; target output stays private | Reuse constructor, context, builtin and normal/raw member evidence |
 | Existing generic enumeration/property evidence | Original project analysis | Reuse collision copy and property cleanup paths |
 | Installed REA skill/tool schemas and Rizin | Owner tooling; REA MIT, Rizin LGPL-3.0-only | Bounded static disassembly and evidence lifecycle only; no implementation copied |
+
+## Numeric RHS extension: original initializer SetMember 13566
+
+The exact-Boolean admission above is the initial bounded profile. This appendix
+extends only its scalar conversion step; the global identity, context,
+descriptor, source and ordered-effect guards remain necessary.
+
+**OBSERVED in the parent Rust probe:** manager increment 12, frozen source
+`bc320b30e341d31949fbd0d1696ecdd265d8033f`, completed one initializer (220
+instructions), then stopped after 112 instructions of initializer index 1,
+tag 383/sprite 34, at **SetMember 13566 / CodeId 1**. The error was the exact
+Boolean admission gate. The supplied extension byte was unknown (`None`), and
+remained unknown; no extension marker or last-write record was produced. The
+containing frame did not execute. This is not the earlier 452-initializer
+completion and is not native execution. The retained receipt is
+`avm1-attached-manager-frame-action-increment12/receipt.json`, SHA-256
+`85d8e4fead6ab94cecec88af7883b2c325bf53ac64b997dc1cd405427a5a05f4`.
+
+**VERIFIED original source:** the same pinned manager contains anonymous
+DefineFunction2 at **13523**, body **13534+135**, zero parameters, register
+count 4, flags **0x169**. Its preloads are this=r1, root=r2, global=r3. There
+is no preceding StoreRegister or branch in that body before the selected
+assignment. ConstantPool **12444+931** contains `gfxExtensions` at index 7.
+Push **13554** supplies `[Register(3), Constant8(7), Integer(1)]`, followed by
+SetMember **13566**. The selected 13 bytes have SHA-256
+`0a9103ed90726cb20e3c82c9e8fe584fc8f416ddba67d6016e8bfad8975035e9`.
+The body SHA-256 is
+`fb5a323085d45a36a03d026fc72de886429ce1379fb88a6cfe639a35927d4285`.
+These are source/context facts, not a runtime operand-register dump. No original
+script was rerun for this study.
+
+### Native Push and scalar conversion
+
+**VERIFIED:** native Push subtype 7 at **0x14020cba5** reconstructs the four
+little-endian source bytes into EDI, writes **Value tag 4** at
+**0x14020cc05**, and writes the 32-bit payload at Value+8 at
+**0x14020cc08**. Thus this original literal reaches the setter as native
+integer payload 1. It does not become native double tag 3 on that Push path.
+The Rust VM's represented Number(1.0) preserves this exact zero/nonzero value.
+Operand-stack page growth is a separate possible Push allocation, not an
+effect of the conversion helper below.
+
+The complete conversion helper is **0x14017d730..0x14017d87b**. The global
+setter calls it at **0x1401e9991**, retaining the original RHS pointer:
+
+- Tag 4 reaches **0x14017d828..0x14017d839**, compares the 32-bit payload
+  with zero and returns `setnz`. Every nonzero 32-bit pattern is true; zero
+  is false. Signed interpretation makes no difference to this conversion.
+- Tag 3 reaches **0x14017d7c9..0x14017d827**. It reads the 64-bit payload
+  and tests exponent/fraction bits. An all-ones exponent with a nonzero
+  fraction returns false before floating-point comparison, including signed,
+  quiet and signaling NaN encodings. Otherwise **UCOMISD at 0x14017d805**
+  compares against the byte-checked positive-zero constant at
+  **0x1425040c0**. Equality returns false; nonzero returns true, subject to
+  the denormal caveat below.
+- Tag 2 retains the previously established Boolean payload path.
+
+The selected numeric arms contain no calls, no Environment/receiver
+dereferences, and no non-stack object/state writes. Only the conversion is
+scalar and free of external callbacks. On actual Integer(1), it returns true;
+the enclosing setter then performs the earlier context-byte=1, raw version
+write and final marker attempt in their established order. An old unknown
+context byte does not prevent that admitted write from establishing byte 1;
+it does not establish any earlier state or native default.
+
+| Admitted represented input | Bounded Boolean result |
+| --- | --- |
+| Native 32-bit integer zero | false |
+| Native 32-bit integer, any nonzero bits | true |
+| Native tag-3 positive or negative zero | false |
+| Native tag-3 NaN, any sign/fraction payload | false |
+| Native tag-3 nonzero finite normal | true |
+| Native tag-3 positive or negative infinity | true |
+| Nonzero f64 subnormal | Unsupported until native floating-point mode is known |
+
+This supports the existing Rust Number representation for exact native
+32-bit integers and the admitted tag-3 payload categories. It does not admit
+String, Object, DisplayClip, Null, Undefined or arbitrary conversion callbacks.
+A bounded implementation must reject nonzero f64 subnormals before context,
+version, marker or budget mutation. Integer-bit NaN/zero classification also
+avoids introducing a new floating-point comparison for those classifications.
+
+### Floating-point and origin limits
+
+The current native MXCSR mode was not captured. DAZ can convert denormal source
+operands to signed zero before computation; therefore this study does not
+assert that every nonzero subnormal compares unequal to zero in retail.
+See the primary [Intel SetDenormAreZeros documentation](https://www.intel.com/content/www/us/en/docs/ipp/developer-guide-reference/2021-12/setdenormarezeros.html).
+No MXCSR investigation is needed for the selected integer literal 1.
+
+The retained Push subtype 1 path uses **CVTPS2PD at 0x14020cac4** to promote
+float32 to native tag 3. A float32 subnormal may be affected by that earlier
+native hardware mode even when an independently widened Rust f64 would be
+normal. This appendix therefore does not establish every float-literal origin
+or all prior arithmetic results. Push subtype 6 reconstructs the SWF swapped
+32-bit words into the 64-bit tag-3 payload at **0x14020cb50..0x14020cba5**;
+conversion admission still depends on that resulting payload category. No
+whole-VM numeric or native allocation-failure parity is claimed.
+
+### Numeric evidence and provenance
+
+Private `rea-global-extensions-numeric/verify.py` byte-checks **450 instruction
+spans** across four canonical records, the 8-byte zero constant, the exact
+original source slice and the unchanged parent receipt. It includes 40
+call-free numeric-arm spans and derived checks for five integer patterns and
+15 double payload cases, with subnormals explicitly gated. These are static
+checks of retained bytes and derived outcomes, not native executions.
+
+Its `verification.json` SHA-256 is
+`5b351c20fc1d488ea740098fbe540ebc35c7f30689e1e50371ce40de8776f188`.
+`selected-instructions.json` and `source-actions.json` retain the private
+selected evidence. One new bounded REA capture closes the Push numeric tail:
+**ev_0c47a81028c3ba523d26836a981e87f204fe3a201c0646573e41a72a1bb79cb7**.
+`complete.bundle.json` SHA-256 is
+`9a1cf1c493232c6011a15772d140d6962c82e0c34eef103a9c9f4a4e45df0290`.
+It is exit-zero, untruncated and unchanged-artifact; the exported reset bundle
+is byte-identical. Retained Push, complete conversion and global-setter record
+IDs, full ranges and bundle hashes are recorded in the verification receipt.
+
+This reuses the owned executable/movie and original REA tooling provenance
+above. The additional outside source is Intel's copyrighted primary hardware
+documentation, used only to preserve the unproved DAZ boundary; no code or
+substantial text was copied. The source reference is retained privately in
+`rea-global-extensions-numeric/intel-daz-reference.json`. No native client,
+original script, host callback or cursor operation was executed. This appendix
+is a single-agent byte/source audit; attempted helper reuse hit the agent-thread
+limit and is not claimed as independent review.
