@@ -959,3 +959,10 @@ The dev24 Linux/window notice collection contains 121 registry dependencies and
 231 selected licence/notice files without collection issues. Private manifest:
 `evidence/dependency-notices-dev24-linux/manifest.json`, SHA-256
 `80eb1d7cd1dc8327311a3359456e5bb68c1df354b88a29c043c2d9976e3e242d`.
+
+[Primary record packing](SCALE9_PRIMARY_PACKING.md) composes the already proved
+position packer with exact owned flag-byte-table and color-store evidence.
+Colors remain explicit resolved native words, and the selected schema/stride
+must match exactly. The original writer preserves padding and rejects unsupported
+profiles atomically. Its five focused tests and nine independent byte fixtures
+are private; no bitmap color, cache state or live format association is inferred.

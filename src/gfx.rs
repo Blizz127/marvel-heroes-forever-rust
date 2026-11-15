@@ -32,6 +32,8 @@ pub mod native_scale9_antialias;
 pub mod native_vertex_format;
 #[path = "gfx/native_primary_export.rs"]
 pub mod native_primary_export;
+#[path = "gfx/native_primary_packing.rs"]
+pub mod native_primary_packing;
 #[path = "gfx/scene.rs"]
 pub mod scene;
 #[path = "gfx/shapes.rs"]
