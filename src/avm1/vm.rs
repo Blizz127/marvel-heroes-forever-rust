@@ -11,8 +11,13 @@ pub fn text(value: &str) -> Text {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ObjectId(pub usize);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CodeId(pub usize);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CodeOrigin {
+    pub code: CodeId,
+    pub source_offset: usize,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Undefined,
@@ -88,6 +93,7 @@ pub enum ErrorKind {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error {
+    pub origin: Option<CodeOrigin>,
     pub source_offset: Option<usize>,
     pub opcode: Option<u8>,
     pub kind: ErrorKind,
@@ -96,8 +102,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "AVM1 {:?} at {:?} (opcode {:?})",
-            self.kind, self.source_offset, self.opcode
+            "AVM1 {:?} at {:?} (code {:?}, opcode {:?})",
+            self.kind,
+            self.source_offset,
+            self.origin.map(|origin| origin.code),
+            self.opcode
         )
     }
 }
@@ -132,6 +141,7 @@ pub enum HostCommand {
 }
 #[derive(Debug, Clone)]
 pub struct HostCall<'a> {
+    pub origin: Option<CodeOrigin>,
     pub binding: u32,
     pub this: Value,
     pub args: &'a [Value],
@@ -166,10 +176,21 @@ pub enum MovieProperty {
 }
 #[derive(Debug, Clone)]
 pub struct PropertyRequest {
+    pub origin: Option<CodeOrigin>,
     pub context: ObjectId,
     pub target: Value,
     pub property: MovieProperty,
     pub source_offset: Option<usize>,
+}
+#[derive(Debug, Clone)]
+pub struct ClassRegistration {
+    pub name: Text,
+    /// None means explicit null/unregister; undefined is never converted to it.
+    pub constructor: Option<ObjectId>,
+    /// Registration call site identifies the movie whose linkage namespace applies.
+    pub origin: Option<CodeOrigin>,
+    /// Definition may belong to an earlier-loaded movie. None for native/builtin functions.
+    pub constructor_origin: Option<CodeOrigin>,
 }
 pub trait Host {
     fn call(&mut self, call: HostCall<'_>) -> std::result::Result<Value, String>;
@@ -178,6 +199,13 @@ pub trait Host {
         target: ObjectId,
         command: HostCommand,
     ) -> std::result::Result<(), String>;
+    /// Return true only after applying the association/removal to a real registry.
+    fn register_class(
+        &mut self,
+        _registration: ClassRegistration,
+    ) -> std::result::Result<bool, String> {
+        Err("unhandled Object.registerClass registry request".into())
+    }
     fn get_property(&mut self, request: PropertyRequest) -> std::result::Result<Value, String> {
         Err(format!(
             "unhandled movie-property read {:?}",
@@ -234,6 +262,7 @@ enum Kind {
     Native(u32),
     ObjectConstructor,
     AddProperty,
+    RegisterClass,
     FunctionMethod(FunctionMethod),
 }
 #[derive(Debug, Clone)]
@@ -277,6 +306,7 @@ pub struct Vm {
     host_calls: usize,
     depth: usize,
     current: Option<(usize, u8)>,
+    current_code: Option<CodeId>,
     global: ObjectId,
     root: ObjectId,
     object_constructor: Option<ObjectId>,
@@ -295,6 +325,7 @@ impl Vm {
             host_calls: 0,
             depth: 0,
             current: None,
+            current_code: None,
             global: ObjectId(0),
             root: ObjectId(0),
             object_constructor: None,
@@ -328,8 +359,17 @@ impl Vm {
     pub fn object_count(&self) -> usize {
         self.objects.len()
     }
+    fn origin(&self) -> Option<CodeOrigin> {
+        self.current_code
+            .zip(self.current)
+            .map(|(code, (source_offset, _))| CodeOrigin {
+                code,
+                source_offset,
+            })
+    }
     fn fail<T>(&self, kind: ErrorKind) -> Result<T> {
         Err(Error {
+            origin: self.origin(),
             source_offset: self.current.map(|v| v.0),
             opcode: self.current.map(|v| v.1),
             kind,
@@ -337,6 +377,7 @@ impl Vm {
     }
     fn error(&self, kind: ErrorKind) -> Error {
         Error {
+            origin: self.origin(),
             source_offset: self.current.map(|v| v.0),
             opcode: self.current.map(|v| v.1),
             kind,
@@ -384,6 +425,8 @@ impl Vm {
         self.set(prototype, "constructor", Value::Object(constructor))?;
         let add_property = self.alloc(Kind::AddProperty, None)?;
         self.set(prototype, "addProperty", Value::Object(add_property))?;
+        let register_class = self.alloc(Kind::RegisterClass, None)?;
+        self.set(constructor, "registerClass", Value::Object(register_class))?;
         self.set(self.global, "Object", Value::Object(constructor))?;
         self.object_constructor = Some(constructor);
         Ok(constructor)
@@ -521,6 +564,7 @@ impl Vm {
                         | Kind::Native(_)
                         | Kind::ObjectConstructor
                         | Kind::AddProperty
+                        | Kind::RegisterClass
                         | Kind::FunctionMethod(_)
                 )
             })
@@ -843,6 +887,7 @@ impl Vm {
         self.host_calls = 0;
         self.depth = 0;
         self.current = None;
+        self.current_code = None;
     }
     pub fn execute(
         &mut self,
@@ -922,9 +967,12 @@ impl Vm {
         if self.depth >= self.limits.call_depth {
             return self.fail(ErrorKind::Budget("function call depth"));
         }
+        let caller = (self.current, self.current_code);
         self.depth += 1;
         let result = self.invoke_inner(callable, this, args, host);
         self.depth -= 1;
+        self.current = caller.0;
+        self.current_code = caller.1;
         result
     }
     fn invoke_inner(
@@ -950,6 +998,7 @@ impl Vm {
                 self.host_budget()?;
                 let value = host
                     .call(HostCall {
+                        origin: self.origin(),
                         binding,
                         this,
                         args,
@@ -1006,6 +1055,51 @@ impl Vm {
                     }
                 };
                 return self.invoke(this, Value::Object(*receiver), &forwarded, host);
+            }
+            Kind::RegisterClass => {
+                if args.len() != 2 {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Object.registerClass argument-count profile",
+                    ));
+                }
+                let Value::String(name) = &args[0] else {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Object.registerClass nonstring name",
+                    ));
+                };
+                if name.is_empty() {
+                    return self.fail(ErrorKind::Unsupported(
+                        "Object.registerClass empty-name profile",
+                    ));
+                }
+                let constructor = match &args[1] {
+                    Value::Null => None,
+                    value @ Value::Object(id) if self.callable(value) => Some(*id),
+                    _ => {
+                        return self.fail(ErrorKind::Unsupported(
+                            "Object.registerClass requires function or explicit null",
+                        ));
+                    }
+                };
+                let constructor_origin =
+                    constructor.and_then(|id| match &self.objects[id.0].kind {
+                        Kind::Script(function) => Some(CodeOrigin {
+                            code: function.code,
+                            source_offset: function.offset,
+                        }),
+                        _ => None,
+                    });
+                let registration = ClassRegistration {
+                    name: name.clone(),
+                    constructor,
+                    origin: self.origin(),
+                    constructor_origin,
+                };
+                self.host_budget()?;
+                let accepted = host
+                    .register_class(registration)
+                    .map_err(|message| self.error(ErrorKind::Host(message)))?;
+                return Ok(Value::Bool(accepted));
             }
             Kind::AddProperty => {
                 if args.len() != 3 {
@@ -1234,6 +1328,7 @@ impl Vm {
         let mut pc = 0;
         while let Some(instruction) = program.instructions.get(pc) {
             self.current = Some((instruction.span.offset, instruction.opcode));
+            self.current_code = Some(code);
             if self.instructions >= self.limits.instructions {
                 return self.fail(ErrorKind::Budget("instructions"));
             }
@@ -1529,6 +1624,7 @@ impl Vm {
                                     | Kind::Native(_)
                                     | Kind::ObjectConstructor
                                     | Kind::AddProperty
+                                    | Kind::RegisterClass
                                     | Kind::FunctionMethod(_)
                             ) {
                                 return self.fail(ErrorKind::UnboundCall);
@@ -1546,6 +1642,10 @@ impl Vm {
                         self.host_budget()?;
                         let value = host
                             .get_property(PropertyRequest {
+                                origin: Some(CodeOrigin {
+                                    code,
+                                    source_offset: instruction.span.offset,
+                                }),
                                 context: frame.target,
                                 target,
                                 property,
@@ -1562,6 +1662,10 @@ impl Vm {
                         self.host_budget()?;
                         host.set_property(
                             PropertyRequest {
+                                origin: Some(CodeOrigin {
+                                    code,
+                                    source_offset: instruction.span.offset,
+                                }),
                                 context: frame.target,
                                 target,
                                 property,
@@ -1695,6 +1799,7 @@ impl Vm {
                                         | Kind::Native(_)
                                         | Kind::ObjectConstructor
                                         | Kind::AddProperty
+                                        | Kind::RegisterClass
                                         | Kind::FunctionMethod(_)
                                 ) {
                                     "function"
@@ -2301,5 +2406,200 @@ mod tests {
             ErrorKind::Unsupported(_)
         ));
         assert_eq!(vm.host_calls, 0);
+    }
+    #[derive(Default)]
+    struct RegistryHost {
+        classes: BTreeMap<Text, ObjectId>,
+        requests: Vec<ClassRegistration>,
+    }
+    impl Host for RegistryHost {
+        fn call(&mut self, _: HostCall<'_>) -> std::result::Result<Value, String> {
+            Err("unbound".into())
+        }
+        fn command(&mut self, _: ObjectId, _: HostCommand) -> std::result::Result<(), String> {
+            Err("unbound".into())
+        }
+        fn register_class(
+            &mut self,
+            registration: ClassRegistration,
+        ) -> std::result::Result<bool, String> {
+            let accepted = if registration.name.as_ref() == text("rejected").as_ref() {
+                false
+            } else if let Some(constructor) = registration.constructor {
+                self.classes.insert(registration.name.clone(), constructor);
+                true
+            } else {
+                self.classes.remove(&registration.name).is_some()
+            };
+            self.requests.push(registration);
+            Ok(accepted)
+        }
+    }
+    fn registration_bytes(unregister: bool) -> Vec<u8> {
+        let mut bytes = if unregister {
+            push(&[Value::Null])
+        } else {
+            let mut value = push(&[Value::string("Ctor")]);
+            value.push(0x1c);
+            value
+        };
+        bytes.extend(push(&[
+            Value::string("linkage"),
+            Value::Number(2.0),
+            Value::string("Object"),
+        ]));
+        bytes.push(0x1c);
+        bytes.extend(push(&[Value::string("registerClass")]));
+        bytes.push(0x52);
+        bytes
+    }
+    #[test]
+    fn class_registry_replaces_removes_and_distinguishes_definition_code_origins() {
+        let mut vm = setup();
+        vm.install_object_constructor().unwrap();
+        let root = vm.root();
+        let first_code = vm
+            .register(Arc::new(Program::parse(&function("Ctor", &[])).unwrap()))
+            .unwrap();
+        vm.execute(first_code, root, &mut RejectHost).unwrap();
+        let Value::Object(first) = vm.get(root, "Ctor").unwrap() else {
+            panic!()
+        };
+        let registration = vm
+            .register(Arc::new(
+                Program::parse(&registration_bytes(false)).unwrap(),
+            ))
+            .unwrap();
+        let mut host = RegistryHost::default();
+        let result = vm.execute(registration, root, &mut host).unwrap();
+        assert_eq!(result.stack, vec![Value::Bool(true)]);
+        assert_eq!(host.classes.get(&text("linkage")), Some(&first));
+        assert_eq!(host.requests[0].origin.unwrap().code, registration);
+        assert_eq!(
+            host.requests[0].constructor_origin,
+            Some(CodeOrigin {
+                code: first_code,
+                source_offset: 0
+            })
+        );
+        let second_code = vm
+            .register(Arc::new(Program::parse(&function("Ctor", &[])).unwrap()))
+            .unwrap();
+        vm.execute(second_code, root, &mut RejectHost).unwrap();
+        let Value::Object(second) = vm.get(root, "Ctor").unwrap() else {
+            panic!()
+        };
+        assert_ne!(first, second);
+        vm.execute(registration, root, &mut host).unwrap();
+        assert_eq!(host.classes.get(&text("linkage")), Some(&second));
+        assert_eq!(
+            host.requests[1].constructor_origin,
+            Some(CodeOrigin {
+                code: second_code,
+                source_offset: 0
+            })
+        );
+        let unregister = vm
+            .register(Arc::new(Program::parse(&registration_bytes(true)).unwrap()))
+            .unwrap();
+        vm.execute(unregister, root, &mut host).unwrap();
+        assert!(host.classes.is_empty());
+        assert_eq!(host.requests[2].constructor, None);
+        assert_eq!(host.requests[2].constructor_origin, None);
+        // Removing a registry entry neither destroys the old constructor nor mutates its prototype.
+        assert!(matches!(
+            vm.get(first, "prototype").unwrap(),
+            Value::Object(_)
+        ));
+    }
+    #[test]
+    fn class_registry_is_not_a_success_stub_and_unverified_argument_cases_stop() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let method = vm.get(object, "registerClass").unwrap();
+        let native = vm.native(31).unwrap();
+        assert!(matches!(
+            vm.call(
+                method.clone(),
+                Value::Object(object),
+                &[Value::string("name"), Value::Object(native)],
+                &mut RejectHost
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Host(_)
+        ));
+        let mut host = RegistryHost::default();
+        for args in [
+            vec![Value::string(""), Value::Object(native)],
+            vec![Value::Number(1.0), Value::Object(native)],
+            vec![Value::string("name"), Value::Undefined],
+            vec![Value::string("name")],
+            vec![Value::string("name"), Value::Null, Value::Null],
+        ] {
+            assert!(matches!(
+                vm.call(method.clone(), Value::Object(object), &args, &mut host)
+                    .unwrap_err()
+                    .kind,
+                ErrorKind::Unsupported(_)
+            ));
+        }
+        assert!(host.requests.is_empty());
+        let result = vm
+            .call(
+                method,
+                Value::Object(object),
+                &[Value::string("rejected"), Value::Object(native)],
+                &mut host,
+            )
+            .unwrap();
+        assert_eq!(result.value, Value::Bool(false));
+        assert!(host.classes.is_empty());
+        assert_eq!(host.requests[0].constructor, Some(native));
+        assert_eq!(host.requests[0].constructor_origin, None);
+    }
+    #[test]
+    fn registry_call_origin_is_restored_after_cross_program_accessor_lookup() {
+        let mut vm = setup();
+        let object = vm.install_object_constructor().unwrap();
+        let root = vm.root();
+        let method = vm.get(object, "registerClass").unwrap();
+        vm.set(root, "registry_target", method).unwrap();
+        let mut getter = push(&[Value::string("registry_target")]);
+        getter.extend([0x1c, 0x3e]);
+        let mut definitions = function("Ctor", &[]);
+        definitions.extend(function("registry_getter", &getter));
+        let definitions = vm
+            .register(Arc::new(Program::parse(&definitions).unwrap()))
+            .unwrap();
+        vm.execute(definitions, root, &mut RejectHost).unwrap();
+        let getter = vm.get(root, "registry_getter").unwrap();
+        let Value::Object(prototype) = vm.get(object, "prototype").unwrap() else {
+            panic!()
+        };
+        let add = vm.get(prototype, "addProperty").unwrap();
+        vm.call(
+            add,
+            Value::Object(object),
+            &[Value::string("registerClass"), getter, Value::Null],
+            &mut RejectHost,
+        )
+        .unwrap();
+        let program = Program::parse(&registration_bytes(false)).unwrap();
+        let call_offset = program.instructions.last().unwrap().span.offset;
+        let registration = vm.register(Arc::new(program)).unwrap();
+        let mut host = RegistryHost::default();
+        vm.execute(registration, root, &mut host).unwrap();
+        assert_eq!(
+            host.requests[0].origin,
+            Some(CodeOrigin {
+                code: registration,
+                source_offset: call_offset
+            })
+        );
+        assert_eq!(
+            host.requests[0].constructor_origin.unwrap().code,
+            definitions
+        );
     }
 }

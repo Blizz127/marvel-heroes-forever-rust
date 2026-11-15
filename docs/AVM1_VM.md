@@ -17,7 +17,7 @@ host)` invokes an already created function. `Execution` reports the return value
 remaining root stack, instruction count and host-call count. `get`, `set`,
 `object`, `native`, `global` and `root` support explicit integration/setup.
 
-Errors include the source movie offset, opcode and a typed reason. An error
+Errors include a VM-local CodeId/source-offset origin, opcode and a typed reason. An error
 stops execution immediately; earlier writes remain visible. Execution is not
 transactional, and retrying a stream is not an automatic recovery strategy.
 `instruction_count()` remains available after failure.
@@ -64,7 +64,8 @@ property flags, movieclip paths, super and parent preloads, automatic
 primitive boxing, and uninstalled standard-library/native functions. Missing
 ordinary properties correctly yield undefined; attempting to call that value
 stops with `UnboundCall`. The optional `install_object_constructor()` installs the documented Object
-constructor, prototype and documented `Object.prototype.addProperty` method.
+constructor, prototype, documented `Object.prototype.addProperty`, and the
+`Object.registerClass` host seam.
 Primitive boxing remains unsupported. It does not install other native methods or
 Function, MovieClip, Stage, Mouse or Scaleform libraries.
 
@@ -118,7 +119,7 @@ Private evidence under `~/.local/share/marvel-heroes-forever-rust/evidence/avm1-
 - `vm-tests.txt`: focused synthetic execution checks.
 - `*-private.txt`: private source-coordinate disassembly and dependency evidence.
 
-**VERIFIED:** Fourteen focused VM tests pass for operand ordering, pool capture,
+**VERIFIED:** Seventeen focused VM tests pass for operand ordering, pool capture,
 function calls, later code registration, property/prototype behavior, explicit
 native bindings, unsupported paths, shadowing, and instruction/call/stack/heap
 budgets. These tests supplement the owned probes; they do not prove retail parity.
@@ -254,6 +255,76 @@ retail pointer transforms or automatic event dispatch.
 and `vm-tests-movie-properties.txt` retain the private probe and fourteen passing
 focused tests. The integrating frontend must supply actual geometry/event state;
 returning invented values from a default host would be incorrect.
+
+## Class-registration host seam
+
+`Object.registerClass` now calls `Host::register_class(ClassRegistration)`, whose
+default implementation rejects the request. The host returns an explicit Boolean
+only after applying its registry policy; the VM does not report universal success,
+look up exports, fabricate classes, instantiate a constructor or mutate old
+instances. A supported call has a nonempty String name and a callable function
+object or explicit null. Null means unregister; undefined never means unregister.
+
+Adobe documents replacement, registration before a matching symbol exists,
+unregistration without changing existing instances, and Boolean success/failure.
+It does not document the precise invalid-argument behavior. Empty/nonstring names,
+missing/excess arguments and undefined/nonfunction constructors therefore stop
+explicitly. The addProperty validation table must not be reused for registerClass.
+The host also owns the Boolean outcome of removing an absent entry.
+
+`ClassRegistration` retains the constructor ObjectId, the calling `CodeOrigin`,
+and a separate constructor-definition origin for script functions. Native/builtin
+constructors have no script definition origin. `CodeOrigin` combines the VM-local
+CodeId and movie source offset; offsets alone are not unique across movies.
+`HostCall`, `PropertyRequest` and VM errors also expose this origin while retaining
+their earlier offset field. Caller origins are restored after accessor/function
+calls, so a getter in another program cannot misattribute the eventual native
+request. Hosts associate CodeIds with loaded movie identities; this provenance is
+not a substitute for establishing the native registration namespace rules.
+
+**OBSERVED:** Two original owned registration snippets each execute eight
+instructions against a real controlled in-memory registry:
+
+| Registration stream | Linkage | Constructor's original manager definition |
+| --- | --- | --- |
+| Manager 2055420+64, call 2055481 | `Cursor` | `MarvelCursor`, definition 55654 |
+| Login 167848+76, call 167921 | `TextOnlyButtonWide` | `MarvelButton`, definition 152783 |
+
+The harness selects each original enclosing constant pool and constructor
+definition, binds the resulting function to the identified variable explicitly,
+and runs the unmodified registration stream. Those constructor bodies and full
+class initializers are not executed. The registry retains the exact function
+objects; login registration and manager definition have distinct CodeIds. The
+same manager snippet with RejectHost stops at call 2055481 with its original code
+origin, proving there is no default success path.
+
+`run-owned-register-class.rs`, `owned-register-class-results.tsv`,
+`register-class-evidence.json` and `vm-tests-register-class.txt` retain the probe
+and seventeen passing focused tests. Registry tests cover actual replacement and
+removal, retained constructor objects, explicit host rejection/false responses,
+unsupported arguments, overlapping definition offsets in different programs,
+and call-origin restoration after cross-program accessor lookup. The integrating
+frontend still owns export association and later instance construction.
+
+## Exact initialization timing reference
+
+Adobe SWF19, Chapter 5, SWF 6 action model, DoInitAction, printed page 108
+([PDF page 110](https://open-flash.github.io/mirrors/swf-spec-19.pdf#page=110)) ties
+initialization to the containing frame's first encounter, not an additional
+first-placement gate. Same-frame initializers run in serialized order before
+normal frame actions and before implicit ActionScript sprite-object creation.
+Later visits to that frame skip them; one DoInitAction is allowed per sprite per
+SWF. This should not be expanded into a claim about every display placement phase.
+
+The detailed Adobe v9 section, printed pages 126–127
+([PDF reference](https://www.mobilefish.com/download/flash/swf_file_format_spec_v9.pdf#page=126)), agrees.
+Its overview at page 28 also describes encounter-time processing, leaving precise
+streaming/load-phase reconciliation outside these paragraphs. Neither detailed
+section establishes reload/reset lifecycle or a per-loaded-movie ledger key.
+Those remain scheduler design questions requiring additional evidence. A flattened
+structural tag/action inventory is not runtime order. Private
+`doinit-timing-and-registration-private.json` records exact sections, observed
+manager/login root-frame distributions and registration dependencies.
 
 ## Source and licence ledger
 
